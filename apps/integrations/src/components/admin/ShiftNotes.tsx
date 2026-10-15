@@ -60,8 +60,8 @@ import type {
   ShiftNoteStatus,
 } from '@/lib/db';
 import {
+  canEditNote,
   canReply,
-  canSeeNote,
   canSetStatus,
   canTouchReply,
   SHIFT_NOTE_STATUSES,
@@ -137,14 +137,25 @@ function describeEvent(entry: ShiftNoteReplyRow): string {
         ? `moved this from ${statusLabel(data.from)} to ${statusLabel(data.to)}`
         : `marked this ${statusLabel(data.to)}`;
     case 'edit': {
-      const parts = (data.fields ?? []).map((f) =>
-        f === 'body'
-          ? 'the text'
-          : data.before?.note_date && data.after?.note_date
-            ? `the shift date from ${formatDay(data.before.note_date)} to ${formatDay(data.after.note_date)}`
-            : 'the shift date'
-      );
-      return parts.length > 0 ? `edited ${parts.join(' and ')}` : 'edited the note';
+      // A visibility flip reads as its own action; text and date as edits.
+      const fields = data.fields ?? [];
+      const shared =
+        fields.includes('admin_only') && data.after?.admin_only !== undefined
+          ? data.after.admin_only
+            ? 'made this admins only'
+            : 'shared this with everyone'
+          : null;
+      const parts = fields
+        .filter((f) => f !== 'admin_only')
+        .map((f) =>
+          f === 'body'
+            ? 'the text'
+            : data.before?.note_date && data.after?.note_date
+              ? `the shift date from ${formatDay(data.before.note_date)} to ${formatDay(data.after.note_date)}`
+              : 'the shift date'
+        );
+      const edited = parts.length > 0 ? `edited ${parts.join(' and ')}` : null;
+      return [edited, shared].filter(Boolean).join(' and ') || 'edited the note';
     }
     case 'suggestion':
       return data.action === 'approved'
@@ -161,13 +172,25 @@ function StatusBadge({ status }: { status: ShiftNoteStatus }) {
   return <span className={`${CHIP_CLASS} ${statusBadgeClass[status]}`}>{statusLabel(status)}</span>;
 }
 
+/** Marks a note only the admins (and its author) can see; shared notes carry no chip. */
+function AdminOnlyBadge() {
+  return (
+    <span
+      className={`${CHIP_CLASS} border-[var(--pyre-red)]/40 text-[var(--pyre-red)]`}
+      title="Only admins and the note's author can see this note"
+    >
+      Admins only
+    </span>
+  );
+}
+
 interface Viewer {
   email: string;
   isAdmin: boolean;
 }
 
-/** Whose notes came back: the whole log, or only this person's. */
-type Scope = 'all' | 'mine';
+/** Whose notes came back: the whole log (admins), or the shared notes plus this person's own. */
+type Scope = 'all' | 'shared';
 
 export function ShiftNotes() {
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
@@ -178,7 +201,7 @@ export function ShiftNotes() {
   // Which note's media is open in the lightbox, and which item within it.
   const [lightbox, setLightbox] = useState<{ noteId: string; index: number } | null>(null);
   const [viewer, setViewer] = useState<Viewer>({ email: '', isAdmin: false });
-  const [scope, setScope] = useState<Scope>('mine');
+  const [scope, setScope] = useState<Scope>('shared');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -488,7 +511,34 @@ export function ShiftNotes() {
     }
   };
 
-  const canTouch = (note: ShiftNoteRow) => canSeeNote(note, viewer);
+  const canTouch = (note: ShiftNoteRow) => canEditNote(note, viewer);
+
+  /** Switch who can see a note: everyone with the page, or the admins (re-checked server-side). */
+  const setAdminOnly = async (note: ShiftNoteRow, adminOnly: boolean) => {
+    if (adminOnly === note.admin_only) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/shift-notes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: note.id, adminOnly }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        activity?: ShiftNoteReplyRow[];
+        people: PeopleNames;
+      };
+      mergeNote(data.note, data.people);
+      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to change who can see the note');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   /** Admin triage: flip a note's status (re-checked server-side). */
   const setStatus = async (note: ShiftNoteRow, status: ShiftNoteStatus) => {
@@ -642,7 +692,7 @@ export function ShiftNotes() {
 
   const visible = useMemo(() => {
     return notes.filter((note) => {
-      if (scope === 'all' && personFilter.size > 0 && !personFilter.has(note.author_email)) {
+      if (personFilter.size > 0 && !personFilter.has(note.author_email)) {
         return false;
       }
       if (statusFilter.size > 0 && !statusFilter.has(note.status)) return false;
@@ -656,7 +706,7 @@ export function ShiftNotes() {
       if (term && !matchesTerm(note.body, term)) return false;
       return true;
     });
-  }, [notes, personFilter, statusFilter, signalFilter, signals.classifications, term, scope]);
+  }, [notes, personFilter, statusFilter, signalFilter, signals.classifications, term]);
 
   // The lightbox browses one note's photos and videos (PDFs open in a tab).
   const viewable = useCallback(
@@ -707,15 +757,13 @@ export function ShiftNotes() {
 
       {notes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
-          {scope === 'all' && (
-            <FilterMultiSelect
-              placeholder="Person"
-              options={authorOptions}
-              selected={personFilter}
-              onChange={setPersonFilter}
-              className={compactSelectClass}
-            />
-          )}
+          <FilterMultiSelect
+            placeholder="Person"
+            options={authorOptions}
+            selected={personFilter}
+            onChange={setPersonFilter}
+            className={compactSelectClass}
+          />
           <FilterMultiSelect
             placeholder="Status"
             options={STATUS_OPTIONS}
@@ -771,8 +819,8 @@ export function ShiftNotes() {
               ? 'No notes yet — feedback, issues, and anything worth passing along land here as the team adds them.'
               : 'Every note anyone has left, newest first.'
             : notes.length === 0
-              ? 'You have not left a note yet — add one above whenever something comes up, no need to wait for the end of your shift. Only admins read the whole log.'
-              : 'The notes you have left, newest first. Only admins read the whole log.'}
+              ? 'No notes yet — add one above whenever something comes up, no need to wait for the end of your shift.'
+              : 'Notes shared with the team, and your own, newest first. Notes marked admins only stay with the admins and their author.'}
       </p>
 
       {byDay.map(([date, dayNotes]) => (
@@ -798,6 +846,7 @@ export function ShiftNotes() {
                     one line: the status is often the classifier's call. */}
                 <span className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={note.status} />
+                  {note.admin_only && <AdminOnlyBadge />}
                   {viewer.isAdmin && signals.classifications[note.id] && (
                     <>
                       <span
@@ -879,6 +928,19 @@ export function ShiftNotes() {
                           {statusLabel(status)}
                         </button>
                       ))}
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy}
+                      title={
+                        note.admin_only
+                          ? 'Let everyone with Shift Notes see this note'
+                          : "Keep this note to the admins and the note's author"
+                      }
+                      onClick={() => void setAdminOnly(note, !note.admin_only)}
+                    >
+                      {note.admin_only ? 'Share with everyone' : 'Make admins only'}
+                    </button>
                     <button
                       type="button"
                       className={buttonClass}

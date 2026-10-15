@@ -33,7 +33,7 @@ export async function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope
     role,
     email,
     // Shift notes: only with the page; then admins read every note, everyone
-    // else only their own.
+    // else the shared notes plus their own admin-only ones ('mine').
     shiftNotes: canViewPage(gate.access, SHIFT_NOTES_HREF)
       ? gate.access.isAdmin
         ? 'all'

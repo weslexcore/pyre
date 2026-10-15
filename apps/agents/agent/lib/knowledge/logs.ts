@@ -147,7 +147,10 @@ export interface ShiftNotesInput {
   limit?: number;
 }
 
-/** Shift notes in a date window, newest shift first. Admins read all, others their own. */
+/**
+ * Shift notes in a date window, newest shift first. Admins read all; everyone
+ * else reads the shared notes plus their own admin-only ones.
+ */
 export async function getShiftNotes(scope: KnowledgeScope, input: ShiftNotesInput) {
   if (!scope.shiftNotes) {
     return {
@@ -164,7 +167,15 @@ export async function getShiftNotes(scope: KnowledgeScope, input: ShiftNotesInpu
     .limit(limit);
   if (input.from) query = query.gte('note_date', input.from);
   if (input.to) query = query.lte('note_date', input.to);
-  if (scope.shiftNotes === 'mine') query = query.eq('author_email', scope.email);
+  if (scope.shiftNotes === 'mine') {
+    // Mirrors visibleNotesFilter in apps/integrations lib/shift-notes/access:
+    // an email that can't be quoted as a PostgREST value matches no author.
+    query = query.or(
+      !scope.email || /["\\,()]/.test(scope.email)
+        ? 'admin_only.eq.false'
+        : `admin_only.eq.false,author_email.eq."${scope.email}"`
+    );
+  }
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 

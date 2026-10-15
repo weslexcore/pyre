@@ -77,18 +77,20 @@ export function recordClassifierStatusChange(
 }
 
 /**
- * The note's text or date changed: what changed, from what, to what — so the
+ * The note's text, date, or visibility changed: what changed, from what, to what — so the
  * history keeps every version of the note, not just the latest. Returns null
  * (records nothing) when neither field actually changed. Shared with the
  * author, who may have made it.
  */
 export function recordEdit(
   db: SupabaseClient,
-  before: Pick<ShiftNoteRow, 'id' | 'body' | 'note_date'>,
-  after: Pick<ShiftNoteRow, 'body' | 'note_date'>,
+  before: Pick<ShiftNoteRow, 'id' | 'body' | 'note_date' | 'admin_only'>,
+  after: Pick<ShiftNoteRow, 'body' | 'note_date' | 'admin_only'>,
   by: string
 ): Promise<ShiftNoteReplyRow | null> {
-  const fields = (['body', 'note_date'] as const).filter((f) => before[f] !== after[f]);
+  const fields = (['body', 'note_date', 'admin_only'] as const).filter(
+    (f) => before[f] !== after[f]
+  );
   if (fields.length === 0) return Promise.resolve(null);
   return record(db, {
     note_id: before.id,

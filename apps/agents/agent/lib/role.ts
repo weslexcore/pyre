@@ -65,7 +65,7 @@ export interface KnowledgeScope {
   role: SopRole;
   /** Their session email, lowercased; empty when the session has none. */
   email: string;
-  /** Shift notes: admins read all, everyone else their own, null = no page grant. */
+  /** Shift notes: admins read all, 'mine' = the shared notes plus their own, null = no page grant. */
   shiftNotes: LogScope;
   /** Incident reports: incidents:manage reads all, reporters their own, null = no page grant. */
   incidents: LogScope;

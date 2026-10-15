@@ -11,9 +11,9 @@
 //
 // Nothing in the bucket is publicly readable: every read passes the same
 // gate as the log itself. Permissions mirror the notes exactly — media
-// belongs to the note it backs, so an admin reaches all of it and everyone
-// else only what hangs off their own notes, for viewing as much as for
-// attaching and removing (lib/shift-notes/access). A staged row belongs to
+// belongs to the note it backs, so whoever can see a note can view its media,
+// and whoever can edit it (the author, an admin) can attach and remove
+// (lib/shift-notes/access). A staged row belongs to
 // nobody's note yet, so it is reachable only by its uploader — admin reach
 // starts once a note claims it. Uploads go through the function rather than
 // a direct-to-storage signed URL so size, MIME type, and per-note count are
@@ -33,7 +33,7 @@ import {
   signedAttachmentResponse,
   storeUpload,
 } from '@/lib/media/route';
-import { canSeeNote } from '@/lib/shift-notes/access';
+import { canEditNote, canSeeNote } from '@/lib/shift-notes/access';
 import {
   buildNoteStoragePath,
   buildStagedStoragePath,
@@ -46,15 +46,19 @@ const BUCKET = 'shift-note-media';
 /** Original names come from phone cameras and can be anything; keep them sane. */
 const FILE_NAME_MAX = 200;
 
+/** Viewing a note's media, or changing it (attaching, removing). */
+type Reach = 'see' | 'edit';
+
 /**
- * The note `noteId` backs, if this caller may reach it at all. Same rule as
- * reading and editing the note itself (shift-notes.ts), and the same silence
- * about other people's notes: not theirs reads as not there.
+ * The note `noteId` backs, if this caller may reach it for `reach`. Same
+ * rules as reading and editing the note itself (shift-notes.ts), and the same
+ * silence about notes they can't see: not visible reads as not there.
  */
-async function loadOwnNote(
+async function loadNote(
   db: NonNullable<ReturnType<typeof getDb>>,
   noteId: string,
-  gate: AdminGate
+  gate: AdminGate,
+  reach: Reach
 ): Promise<ShiftNoteRow | Response> {
   const { data, error } = await db.from('shift_notes').select('*').eq('id', noteId).maybeSingle();
   if (error) return dbError(error);
@@ -62,19 +66,23 @@ async function loadOwnNote(
   const note = (data as ShiftNoteRow) ?? null;
   const viewer = { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
   if (!note || !canSeeNote(note, viewer)) return json({ error: 'Note not found' }, 404);
+  if (reach === 'edit' && !canEditNote(note, viewer)) {
+    return json({ error: "Only the note's author or an admin can change its files" }, 403);
+  }
   return note;
 }
 
 /**
- * Whether this caller may reach `row` at all (for signing, deleting). Claimed
- * media takes its note's own rule; a staged row (note_id null) is a private
+ * Whether this caller may reach `row` for `reach` (signing is 'see',
+ * deleting is 'edit'). Claimed media takes its note's own rules; a staged row (note_id null) is a private
  * composer-session thing, reachable only by whoever uploaded it — with the
  * usual silence: not yours reads as not there.
  */
 async function assertCanReachAttachment(
   db: NonNullable<ReturnType<typeof getDb>>,
   row: ShiftNoteAttachmentRow,
-  gate: AdminGate
+  gate: AdminGate,
+  reach: Reach
 ): Promise<Response | null> {
   if (row.note_id === null) {
     if (row.uploaded_by !== normalizeEmail(gate.user.email)) {
@@ -82,7 +90,7 @@ async function assertCanReachAttachment(
     }
     return null;
   }
-  const note = await loadOwnNote(db, row.note_id, gate);
+  const note = await loadNote(db, row.note_id, gate, reach);
   return note instanceof Response ? note : null;
 }
 
@@ -111,7 +119,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   if (noteId) {
-    const note = await loadOwnNote(db, noteId, gate);
+    const note = await loadNote(db, noteId, gate, 'edit');
     if (note instanceof Response) return note;
   }
 
@@ -195,7 +203,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Media is only as visible as the note it backs (or, staged, as its
   // uploader): signing a URL here is a read, so it takes the same check.
-  const denied = await assertCanReachAttachment(db, row, gate);
+  const denied = await assertCanReachAttachment(db, row, gate, 'see');
   if (denied) return denied;
 
   return signedAttachmentResponse(db, BUCKET, row, url);
@@ -224,7 +232,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const attachment = (data as ShiftNoteAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Attachment not found' }, 404);
 
-  const denied = await assertCanReachAttachment(db, attachment, gate);
+  const denied = await assertCanReachAttachment(db, attachment, gate, 'edit');
   if (denied) return denied;
 
   await removeStoredFile(db, BUCKET, attachment.storage_path, 'shift-notes');

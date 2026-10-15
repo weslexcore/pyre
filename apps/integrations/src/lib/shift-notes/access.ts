@@ -1,17 +1,19 @@
 // Who may see and do what on shift notes. Everyone on the roster writes them,
-// but the log is not a shared feed: an admin reads every note, and everyone
-// else reads only the ones they wrote themselves. Reading and editing a note
-// land on the same rule — if you can see a note you may edit or delete it,
-// and there is nothing you can edit that you cannot see — so the notes route
-// and the media route gate on this one predicate.
+// and by default everyone who holds the page reads them: the log is a shared
+// feed. A note marked admin-only (the writer's checkbox, or flipped later by
+// the author or an admin) stays with its author and the admins. Seeing and
+// changing are separate rules: anyone who can see a note can read it and its
+// media, but editing, deleting, and switching who can see it stay with the
+// author and the admins. The notes route and the media route gate reads on
+// canSeeNote, and every change on canEditNote.
 //
 // On top of a note sit two things only the thread needs rules for:
 //
 //   * status — open / todo / resolved, set by admins only (the classifier
 //     also triages notes no admin has yet, server-side: ./triage); the
 //     author sees it.
-//   * activity — the note's thread. Anyone who can see the note may comment
-//     (an admin, or the author on their own note); an entry is visible to
+//   * activity — the note's thread. The author and the admins may comment
+//     (it is their conversation, shared note or not); an entry is visible to
 //     whoever sees the note, unless it is private, in which case only admins
 //     read it. Editing or deleting a comment is its author or an admin. The
 //     other entries are events the app recorded (status changes, edits,
@@ -28,9 +30,15 @@ export interface NoteViewer {
   isAdmin: boolean;
 }
 
-/** The author attribution of a note — the part of the row this rule reads. */
+/** The author attribution of a note — the part of the row the edit rule reads. */
 export interface AuthoredNote {
   author_email: string;
+}
+
+/** The parts of a note the visibility rule reads. */
+export interface VisibleNote extends AuthoredNote {
+  /** Only admins (and the author) see it. */
+  admin_only: boolean;
 }
 
 /** The parts of a reply row the visibility and edit rules read. */
@@ -41,13 +49,31 @@ export interface ReplyLike {
   kind?: ShiftNoteActivityKind;
 }
 
-/**
- * Whether `viewer` may read this note (and, identically, edit or delete it):
- * admins on the whole log, everyone else on their own notes only.
- */
-export function canSeeNote(note: AuthoredNote, viewer: NoteViewer): boolean {
-  if (viewer.isAdmin) return true;
+/** Whether this is the viewer's own note. A session without an email owns nothing. */
+function isAuthor(note: AuthoredNote, viewer: NoteViewer): boolean {
   return !!viewer.email && note.author_email === viewer.email;
+}
+
+/**
+ * Whether `viewer` may read this note and its media: a shared note is
+ * everyone's (who holds the page — the route checks that), an admin-only one
+ * is the admins' and its author's.
+ */
+export function canSeeNote(note: VisibleNote, viewer: NoteViewer): boolean {
+  return !note.admin_only || viewer.isAdmin || isAuthor(note, viewer);
+}
+
+/**
+ * Whether `viewer` may edit or delete this note, or change who can see it:
+ * its author and the admins. Everything you can edit you can also see.
+ */
+export function canEditNote(note: AuthoredNote, viewer: NoteViewer): boolean {
+  return viewer.isAdmin || isAuthor(note, viewer);
+}
+
+/** The label for a note's visibility, as the log shows it. */
+export function visibilityLabel(note: Pick<VisibleNote, 'admin_only'>): string {
+  return note.admin_only ? 'Admins only' : 'Everyone';
 }
 
 /** Matches the shift_notes status check constraint. */
@@ -72,9 +98,13 @@ export function canSetStatus(viewer: NoteViewer): boolean {
   return viewer.isAdmin;
 }
 
-/** Replying is the same circle as seeing: the admins, and the author on their own note. */
+/**
+ * Replying is the author's conversation with the admins, so it follows the
+ * edit rule — on a shared note, everyone else reads the thread but does not
+ * write in it.
+ */
 export function canReply(note: AuthoredNote, viewer: NoteViewer): boolean {
-  return canSeeNote(note, viewer);
+  return canEditNote(note, viewer);
 }
 
 /**
@@ -90,4 +120,15 @@ export function canTouchReply(reply: ReplyLike, viewer: NoteViewer): boolean {
   if (reply.kind !== undefined && reply.kind !== 'comment') return false;
   if (viewer.isAdmin) return true;
   return !!viewer.email && reply.author_email === viewer.email;
+}
+
+/**
+ * The PostgREST `or` filter for the notes a non-admin may see: the shared
+ * ones, plus their own. The email is quoted as a PostgREST value; one that
+ * can't be quoted safely (or a session with none) matches no author, so the
+ * viewer gets the shared notes alone.
+ */
+export function visibleNotesFilter(email: string): string {
+  if (!email || /["\\,()]/.test(email)) return 'admin_only.eq.false';
+  return `admin_only.eq.false,author_email.eq."${email}"`;
 }

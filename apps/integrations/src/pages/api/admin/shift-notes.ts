@@ -1,9 +1,10 @@
 // Shift notes: the running log behind /admin/shift-notes where whoever worked
 // a shift writes down how it went. Everyone who can see the page — admins,
 // everyone active on the roster (implicit grant in lib/auth/access), and
-// anyone granted the page from /admin/users — may add notes. What they read
-// back splits by role: an admin sees every note, everyone else sees only the
-// ones they wrote, and editing and deleting follow the same line
+// anyone granted the page from /admin/users — may add notes. A note is shared
+// with everyone who holds the page unless its writer marks it admin-only, in
+// which case only the admins and the author see it; editing, deleting, and
+// switching that visibility are the author's and the admins'
 // (lib/shift-notes/access). Author identity always comes from the session,
 // never the request body.
 //
@@ -31,8 +32,8 @@
 //
 //   GET                          → { notes, attachments, replies, people, viewer, scope,
 //                                    classifications (admins) }
-//   POST   { noteDate, body, attachmentIds? } → { note, attachments, people, classification? }
-//   PATCH  { id, noteDate?, body?, status? } → { note, activity, people, classification? }
+//   POST   { noteDate, body, adminOnly?, attachmentIds? } → { note, attachments, people, classification? }
+//   PATCH  { id, noteDate?, body?, adminOnly?, status? } → { note, activity, people, classification? }
 //   DELETE ?id=<uuid>            → { ok: true }
 
 import type { APIRoute } from 'astro';
@@ -52,11 +53,13 @@ import { dbError, isUuid, json } from '@/lib/http/route';
 import { deleteBySource } from '@/lib/notifications/notify';
 import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
+  canEditNote,
   canSeeNote,
   canSeeReply,
   canSetStatus,
   isShiftNoteStatus,
   SHIFT_NOTE_STATUSES,
+  visibleNotesFilter,
 } from '@/lib/shift-notes/access';
 import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
@@ -147,11 +150,12 @@ function viewerOf(gate: AdminGate) {
 }
 
 /**
- * Load the note `id` for a caller who is about to change it. Non-admins can't
- * see other people's notes at all, so one that isn't theirs comes back the
- * same way a nonexistent one does — a 403 here would confirm it exists.
+ * Load the note `id` for a caller who is about to change it. A note the
+ * caller can't see comes back the same way a nonexistent one does — a 403
+ * there would confirm an admin-only note exists. One they can see but didn't
+ * write (a shared note, for a non-admin) is a 403.
  */
-async function loadOwnNote(
+async function loadEditableNote(
   db: NonNullable<ReturnType<typeof getDb>>,
   id: string,
   gate: AdminGate
@@ -160,7 +164,11 @@ async function loadOwnNote(
   if (error) return dbError(error);
 
   const note = (data as ShiftNoteRow) ?? null;
-  if (!note || !canSeeNote(note, viewerOf(gate))) return json({ error: 'Note not found' }, 404);
+  const viewer = viewerOf(gate);
+  if (!note || !canSeeNote(note, viewer)) return json({ error: 'Note not found' }, 404);
+  if (!canEditNote(note, viewer)) {
+    return json({ error: "Only the note's author or an admin can change it" }, 403);
+  }
   return note;
 }
 
@@ -184,14 +192,15 @@ export const GET: APIRoute = async ({ cookies }) => {
     .order('created_at', { ascending: false })
     .limit(LIST_LIMIT);
 
-  // Admins read the whole log; everyone else reads what they wrote. A session
-  // without an email can't have written anything, so it reads nothing.
-  if (!viewer.isAdmin) query = query.eq('author_email', viewer.email);
+  // Admins read the whole log; everyone else reads the shared notes plus
+  // their own admin-only ones.
+  if (!viewer.isAdmin) query = query.or(visibleNotesFilter(viewer.email));
 
   const { data, error } = await query;
   if (error) return dbError(error);
 
-  const notes = (data ?? []) as ShiftNoteRow[];
+  // The filter above is the query; this is the rule, so the two can't drift.
+  const notes = ((data ?? []) as ShiftNoteRow[]).filter((note) => canSeeNote(note, viewer));
 
   // Each note's media, keyed by note id, in upload order.
   const attachments: Record<string, ShiftNoteAttachmentRow[]> = {};
@@ -253,11 +262,11 @@ export const GET: APIRoute = async ({ cookies }) => {
           suggestionsEnabled: await suggestionsEnabled(),
         }
       : {}),
-    // So the island knows whether it is showing the whole log or just this
-    // person's, and which notes to offer edit/delete on. Both are UX only —
-    // every read and every mutation re-checks the same rule here.
+    // So the island knows whether it is showing the whole log or the shared
+    // one, and which notes to offer edit/delete on. Both are UX only — every
+    // read and every mutation re-checks the same rules here.
     viewer,
-    scope: viewer.isAdmin ? 'all' : 'mine',
+    scope: viewer.isAdmin ? 'all' : 'shared',
   });
 };
 
@@ -288,6 +297,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
   const noteBody = normalizeBody(body.body);
   if (!noteBody) return json({ error: 'body must be non-empty text' }, 400);
+  // Shared unless the writer asks for admins only.
+  if (body.adminOnly !== undefined && typeof body.adminOnly !== 'boolean') {
+    return json({ error: 'adminOnly must be a boolean' }, 400);
+  }
+  const adminOnly = body.adminOnly === true;
 
   // Staged uploads (media route, null note_id) this note should claim.
   let attachmentIds: string[] = [];
@@ -309,7 +323,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data, error } = await db
     .from('shift_notes')
-    .insert({ note_date: body.noteDate, body: noteBody, author_email: email })
+    .insert({
+      note_date: body.noteDate,
+      body: noteBody,
+      author_email: email,
+      admin_only: adminOnly,
+    })
     .select('*')
     .single();
   if (error) return dbError(error);
@@ -377,7 +396,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<
-    Pick<ShiftNoteRow, 'note_date' | 'body' | 'updated_by' | 'status' | 'status_by' | 'status_at'>
+    Pick<
+      ShiftNoteRow,
+      'note_date' | 'body' | 'admin_only' | 'updated_by' | 'status' | 'status_by' | 'status_at'
+    >
   > = {};
   if (body.noteDate !== undefined) {
     if (!isNoteDate(body.noteDate)) {
@@ -390,6 +412,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (!noteBody) return json({ error: 'body must be non-empty text' }, 400);
     patch.body = noteBody;
   }
+  if (body.adminOnly !== undefined) {
+    if (typeof body.adminOnly !== 'boolean') {
+      return json({ error: 'adminOnly must be a boolean' }, 400);
+    }
+    patch.admin_only = body.adminOnly;
+  }
   // A status flip is triage, not an edit: it records who triaged and when,
   // and leaves the note's own edit attribution alone.
   if (body.status !== undefined) {
@@ -401,24 +429,26 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     }
     patch.status = body.status;
   }
-  if (patch.note_date === undefined && patch.body === undefined && patch.status === undefined) {
+  // Whether this PATCH touches the note itself (its edit attribution and history).
+  const edits = () =>
+    patch.note_date !== undefined || patch.body !== undefined || patch.admin_only !== undefined;
+  if (!edits() && patch.status === undefined) {
     return json({ error: 'Nothing to update' }, 400);
   }
-  if (patch.note_date !== undefined || patch.body !== undefined) patch.updated_by = email;
 
-  const existing = await loadOwnNote(db, id, gate);
+  const existing = await loadEditableNote(db, id, gate);
   if (existing instanceof Response) return existing;
 
+  // Flipping visibility to where it already is changes nothing.
+  if (patch.admin_only === existing.admin_only) delete patch.admin_only;
+  if (patch.status === existing.status) delete patch.status;
+  if (!edits() && patch.status === undefined) {
+    return json({ note: existing, activity: [], people: await peopleFor([existing]) });
+  }
+  if (edits()) patch.updated_by = email;
   if (patch.status !== undefined) {
-    if (patch.status === existing.status) {
-      delete patch.status;
-      if (patch.note_date === undefined && patch.body === undefined) {
-        return json({ note: existing, activity: [], people: await peopleFor([existing]) });
-      }
-    } else {
-      patch.status_by = email;
-      patch.status_at = new Date().toISOString();
-    }
+    patch.status_by = email;
+    patch.status_at = new Date().toISOString();
   }
 
   const { data, error } = await db
@@ -433,7 +463,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   // Every action lands in the note's activity, in the order it happened.
   const activity: ShiftNoteReplyRow[] = [];
-  // An edit keeps the old and new text/date, so no version of a note is lost.
+  // An edit keeps the old and new text/date/visibility, so no version of a note is lost.
   const edit = await recordEdit(db, existing, note, email);
   if (edit) activity.push(edit);
   if (patch.status !== undefined) {
@@ -460,7 +490,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id') ?? '';
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  const existing = await loadOwnNote(db, id, gate);
+  const existing = await loadEditableNote(db, id, gate);
   if (existing instanceof Response) return existing;
 
   // Deleting the note cascades its attachment rows, but the objects in the

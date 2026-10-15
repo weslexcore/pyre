@@ -401,6 +401,11 @@ export interface ShiftNoteRow {
   note_date: string;
   body: string;
   author_email: string;
+  /**
+   * Only admins and the author see it; otherwise everyone who holds the page
+   * does (lib/shift-notes/access). Notes written before sharing are all true.
+   */
+  admin_only: boolean;
   /** Session email of the last editor (author or admin); null until edited. */
   updated_by: string | null;
   /**
@@ -445,6 +450,7 @@ export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classificat
 export interface ShiftNoteEditValues {
   body?: string;
   note_date?: string;
+  admin_only?: boolean;
 }
 
 /** The payload of an activity event, by kind (the jsonb `data` column). */
@@ -455,7 +461,7 @@ export interface ShiftNoteActivityData {
   /** status: set when the classifier triaged the note rather than an admin. */
   source?: 'classifier';
   /** edit: which of the note's fields changed. */
-  fields?: Array<'body' | 'note_date'>;
+  fields?: Array<'body' | 'note_date' | 'admin_only'>;
   /** edit: those fields' values before and after (absent on edits recorded before this was kept). */
   before?: ShiftNoteEditValues;
   after?: ShiftNoteEditValues;

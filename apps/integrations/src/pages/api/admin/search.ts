@@ -38,7 +38,7 @@ import {
   type InventorySpotRow,
   type InventoryStockRow,
 } from '@/lib/inventory/types';
-import { canSeeNote } from '@/lib/shift-notes/access';
+import { canSeeNote, visibleNotesFilter } from '@/lib/shift-notes/access';
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { personName } from '@/lib/sops/names';
 import { type CategoryRank, sortSops } from '@/lib/sops/order';
@@ -120,9 +120,9 @@ async function searchNotes(
     .order('note_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(NOTE_SCAN_LIMIT);
-  // Same split as /api/admin/shift-notes: the whole log for admins, your own
-  // notes for everyone else — and nothing for a session with no email.
-  if (!viewer.isAdmin) query = query.eq('author_email', viewer.email || '\0');
+  // Same split as /api/admin/shift-notes: the whole log for admins, the
+  // shared notes plus your own for everyone else.
+  if (!viewer.isAdmin) query = query.or(visibleNotesFilter(viewer.email));
 
   const { data, error } = await query;
   if (error) return { notes: [], error: error.message };

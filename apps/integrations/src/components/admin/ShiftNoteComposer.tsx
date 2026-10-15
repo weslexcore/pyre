@@ -1,5 +1,7 @@
 // The shift-note composer: pick the shift date, write what the next crew or
-// the admins should know, attach photos or video backing what you saw. Used
+// the admins should know, attach photos or video backing what you saw. A note
+// is shared with everyone who holds the page unless the writer ticks "only
+// admins can see this". Used
 // in two places — the top of /admin/shift-notes and the quick-add modal the
 // header's plus button opens (QuickShiftNote) — so both write notes the same
 // way. Media uploads eagerly: each file starts uploading the moment it is
@@ -147,6 +149,7 @@ export function ShiftNoteComposer({
   const [error, setError] = useState<string | null>(null);
   const [draftDate, setDraftDate] = useState(todayEastern);
   const [draftBody, setDraftBody] = useState('');
+  const [adminOnly, setAdminOnly] = useState(false);
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [waitingUploads, setWaitingUploads] = useState(false);
 
@@ -271,11 +274,13 @@ export function ShiftNoteComposer({
       const res = await fetch('/api/admin/shift-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteDate: draftDate, body: draftBody, attachmentIds }),
+        body: JSON.stringify({ noteDate: draftDate, body: draftBody, adminOnly, attachmentIds }),
       });
       if (!res.ok) throw new Error(await readError(res));
       const created = (await res.json()) as CreatedShiftNote;
       setDraftBody('');
+      // Each note starts shared again; admins-only is a choice made per note.
+      setAdminOnly(false);
       updateStaged(() => []);
       document.dispatchEvent(
         new CustomEvent<CreatedShiftNote>(SHIFT_NOTE_CREATED_EVENT, { detail: created })
@@ -426,7 +431,15 @@ export function ShiftNoteComposer({
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
-      <div className="flex justify-end border-t border-white/10 pt-4">
+      <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/50">
+          <input
+            type="checkbox"
+            checked={adminOnly}
+            onChange={(e) => setAdminOnly(e.target.checked)}
+          />
+          Only admins can see this
+        </label>
         <button
           type="button"
           className={`${goldButtonClass} w-full py-2.5 sm:w-auto sm:px-5`}

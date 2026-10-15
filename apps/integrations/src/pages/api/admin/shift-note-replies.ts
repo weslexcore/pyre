@@ -1,9 +1,9 @@
 // Replies on a shift note: the thread under each entry of /admin/shift-notes
 // where an admin responds — "ordered the part", "good call, thanks" — and the
 // author replies back, so the conversation stays on the note it is about.
-// Whoever can see a note may reply to it (admins, and the author on their
-// own note); a reply is visible to the same people, unless an admin marked it
-// private, which keeps it among the admins. Editing and deleting a reply is
+// The author and the admins may reply; a reply is visible to whoever can see
+// the note (everyone, on a shared note), unless an admin marked it private,
+// which keeps it among the admins. Editing and deleting a reply is
 // its author or an admin. Author identity always comes from the session.
 //
 // The thread is the note's whole activity: these comments, plus the events
@@ -129,7 +129,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const note = await loadVisibleNote(db, noteId, gate);
   if (note instanceof Response) return note;
   const viewer = viewerOf(gate);
-  if (!canReply(note, viewer)) return json({ error: 'Note not found' }, 404);
+  // A shared note is visible, so saying so gives nothing away.
+  if (!canReply(note, viewer)) {
+    return json({ error: "Only the note's author and the admins can reply to it" }, 403);
+  }
 
   // Only an admin can keep a reply among the admins.
   const isPrivate = viewer.isAdmin && body.isPrivate === true;

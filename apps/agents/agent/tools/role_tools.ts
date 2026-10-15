@@ -213,7 +213,7 @@ export default defineDynamic({
         }),
         get_shift_notes: defineTool({
           description:
-            'Shift notes (/admin/shift-notes) in a date window, newest shift first: the running log staff add to as things come up on shift — feedback, issues, handoffs, and anything worth passing along. Admins read everyone\'s notes; everyone else reads only their own.',
+            'Shift notes (/admin/shift-notes) in a date window, newest shift first: the running log staff add to as things come up on shift — feedback, issues, handoffs, and anything worth passing along. Admins read every note; everyone else reads the notes shared with the team plus their own admin-only ones.',
           inputSchema: z.object({
             from: dateString.optional().describe('Earliest shift date, inclusive.'),
             to: dateString.optional().describe('Latest shift date, inclusive.'),
