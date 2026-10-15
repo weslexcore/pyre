@@ -1,5 +1,5 @@
 import centeredImg from '../assets/images/centered.webp';
-import guidedImg from '../assets/images/guided.webp';
+import hero from '../assets/images/humble-haven/hero.webp';
 import warmSaunaImg from '../assets/images/warm_sauna.webp';
 import type { PartnerContent } from './partner';
 
@@ -23,8 +23,8 @@ const humbleHaven: PartnerContent = {
   hero: {
     title: 'Off the mat. Into the heat.',
     subtitle:
-      "Pyre is Richmond's social sauna + cold plunge, now open just across the river from Carytown. Humble Haven members get 15% off sessions and credit packs.",
-    image: { src: guidedImg, alt: 'A guided sauna session, hands resting over hearts' },
+      "Pyre is Richmond's social sauna + cold plunge, now open just south of the river. Humble Haven members get 15% off sessions and credit packs.",
+    image: { src: hero, alt: 'A guided sauna session, hands resting over hearts' },
     primaryCta: {
       label: 'Claim your 15% off',
       href: '#offer',
