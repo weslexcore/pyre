@@ -101,7 +101,7 @@ const embody: PartnerContent = {
         body: "Embody believes Pilates is for every body. We feel the same way about heat and cold: every age, shape, and starting point is welcome, and nobody's keeping score.",
       },
     ],
-    note: 'Pregnant, postpartum, or working through an injury? Check with your provider before using the sauna or cold plunge, and take it at your own pace.',
+    note: '',
   },
   intro: {
     pillLabel: 'New here?',
