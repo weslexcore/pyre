@@ -1,0 +1,395 @@
+---
+import { Image } from 'astro:assets';
+import Layout from '../layouts/main.astro';
+import membership from '../lib/membership';
+import { type PartnerContent, partnerPrice } from '../lib/partner';
+import sessions from '../lib/sessions';
+import Button from './Button.astro';
+import CtaTracking from './CtaTracking.astro';
+import PartnerVerifyForm from './PartnerVerifyForm.astro';
+import SectionDivider from './SectionDivider.astro';
+import SignupForm from './SignupForm.astro';
+
+// Reciprocal-discount partner landing page. All copy comes from the partner's
+// config (lib/bft.ts, lib/humbleHaven.ts); the partner's logo goes in the
+// "logo" slot of the hero lockup.
+
+interface Props {
+  content: PartnerContent;
+}
+
+const { content } = Astro.props;
+
+const intro = sessions.items.find((item) => item.id === 'intro');
+const packs = sessions.items.filter((item) => item.id !== 'intro');
+
+const price = (amount: number): number => partnerPrice(amount, content.discountPercent);
+
+const packHref = (id: string, href?: string): string =>
+  id === 'single' ? content.eventsUrl : (href ?? content.eventsUrl);
+---
+
+<Layout
+  title={content.meta.title}
+  description={content.meta.description}
+  ogImage={content.hero.image.src.src}
+  ogImageWidth={content.hero.image.src.width}
+  ogImageHeight={content.hero.image.src.height}
+  noIndex={true}
+  hidePromos={true}
+  transparentNav={true}
+  logoOnly={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-dvh flex items-center justify-center overflow-hidden">
+      <Image
+        src={content.hero.image.src}
+        alt={content.hero.image.alt}
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center"
+        loading="eager"
+        decoding="async"
+      />
+
+      <div class="absolute inset-0 bg-gradient-to-b from-[var(--pyre-sky)]/30 via-transparent to-[var(--pyre-burnt-orange)]/25"></div>
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/60"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/30 to-[var(--pyre-black)]/50"></div>
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <div class="flex items-center justify-center gap-4 md:gap-6 mb-6">
+          <slot name="logo" />
+          <span class="font-primary-semibold text-3xl md:text-4xl leading-none text-[var(--pyre-muted-gold)]" aria-hidden="true">
+            ×
+          </span>
+          <span class="font-logo text-5xl md:text-6xl leading-none text-[var(--pyre-creme)]">
+            PYRE
+          </span>
+        </div>
+        <h1 class="font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4 md:mb-6">
+          {content.hero.title}
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto mb-8">
+          {content.hero.subtitle}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button
+            href={content.hero.primaryCta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={content.hero.primaryCta.ariaLabel}
+            data-track-placement={`${content.trackingPrefix}_hero`}
+          >
+            {content.hero.primaryCta.label}
+          </Button>
+          <Button
+            href={content.hero.secondaryCta.href}
+            variant="outline"
+            size="lg"
+            ariaLabel={content.hero.secondaryCta.ariaLabel}
+          >
+            {content.hero.secondaryCta.label}
+          </Button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Offer / membership verification -->
+    <section id="offer" aria-labelledby="offer-heading" class="py-16 md:py-24 px-4 scroll-mt-24">
+      <div class="max-w-4xl mx-auto">
+        <div
+          class="relative border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 md:p-10 shadow-lg"
+        >
+          <div
+            class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
+          >
+            {content.verify.pillLabel}
+          </div>
+
+          <div class="text-center mb-8">
+            <h2
+              id="offer-heading"
+              class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-2"
+            >
+              {content.verify.title}
+            </h2>
+            <p class="text-base md:text-lg opacity-80">{content.verify.subtitle}</p>
+          </div>
+
+          <div class="mb-10">
+            <PartnerVerifyForm partnerSlug={content.slug} copy={content.verify.form} />
+          </div>
+
+          <ol class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            {content.verify.steps.map((step, index) => (
+              <li class="border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 p-5">
+                <span class="font-primary-semibold text-3xl text-[var(--pyre-muted-gold)] leading-none block mb-2">
+                  {index + 1}
+                </span>
+                <h3 class="font-mono-bold text-sm uppercase tracking-wide mb-1">{step.title}</h3>
+                <p class="text-sm opacity-70">{step.description}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why sauna after strength training -->
+    <section
+      id="recovery"
+      aria-labelledby="recovery-heading"
+      class="relative border-t border-current/10 py-16 md:py-24 px-4 scroll-mt-24 overflow-hidden"
+    >
+      <Image
+        src={content.recovery.image.src}
+        alt={content.recovery.image.alt}
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/75"></div>
+      <div class="absolute inset-0 bg-gradient-to-b from-[var(--pyre-black)] via-transparent to-[var(--pyre-black)]"></div>
+
+      <div class="relative z-10 max-w-5xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+            {content.recovery.eyebrow}
+          </p>
+          <h2
+            id="recovery-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {content.recovery.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
+            {content.recovery.subtitle}
+          </p>
+          <SectionDivider
+            variant="wave"
+            revealAnimation="draw"
+            visibleAnimation="pulse"
+            class="mx-auto w-72 my-6"
+            scrollAware={true}
+          />
+        </div>
+
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6">
+          {content.recovery.cards.map((card) => (
+            <li class="border border-current/20 rounded-lg bg-[var(--pyre-black)]/60 p-5 md:p-6">
+              <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-2">
+                {card.title}
+              </h3>
+              <p class="text-sm md:text-base opacity-70">{card.body}</p>
+            </li>
+          ))}
+        </ul>
+
+        {content.recovery.note && (
+          <p class="mt-6 text-xs md:text-sm opacity-60 text-center italic max-w-2xl mx-auto">
+            {content.recovery.note}
+          </p>
+        )}
+      </div>
+    </section>
+
+    <!-- Intro offer + credit packs -->
+    <section
+      id="credits"
+      aria-labelledby="credits-heading"
+      class="border-t border-current/10 py-16 md:py-24 px-4"
+    >
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <h2
+            id="credits-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {content.packs.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">{content.packs.subtitle}</p>
+        </div>
+
+        {intro && (
+          <div
+            class="relative border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 md:p-8 mb-8 md:mb-10 text-center"
+          >
+            <div
+              class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
+            >
+              {content.intro.pillLabel}
+            </div>
+            <h3 class="font-primary-semibold text-2xl md:text-3xl uppercase tracking-[-0.02em] mb-2">
+              {content.intro.title}
+            </h3>
+            <p class="text-sm md:text-base opacity-80 max-w-xl mx-auto mb-4">{content.intro.subtitle}</p>
+            <div class="flex items-baseline justify-center gap-2 mb-1">
+              <span class="font-primary-semibold text-4xl text-[var(--pyre-muted-gold)] leading-none">
+                ${price(intro.price)}
+              </span>
+              <s class="text-sm opacity-60">${intro.price}</s>
+              <span class="text-sm opacity-70">for 2 credits</span>
+            </div>
+            <p class="font-mono-bold text-[10px] uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-5">
+              {content.packs.withDiscountLabel}
+            </p>
+            <Button
+              href={intro.href}
+              variant="primary"
+              size="lg"
+              ariaLabel={`${content.intro.ctaLabel} with the ${content.name} member discount`}
+              data-track-placement={`${content.trackingPrefix}_intro`}
+            >
+              {content.intro.ctaLabel}
+            </Button>
+          </div>
+        )}
+
+        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+          {packs.map((item) => (
+            <li class="flex flex-col border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 p-5 md:p-6">
+              <h3 class="font-mono-bold text-sm uppercase tracking-wide mb-3">{item.name}</h3>
+              <div class="flex items-baseline gap-2 mb-1">
+                <span class="font-primary-semibold text-3xl text-[var(--pyre-muted-gold)] leading-none">
+                  ${price(item.price)}
+                </span>
+                <s class="text-sm opacity-60">${item.price}</s>
+              </div>
+              <p class="font-mono-bold text-[10px] uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-3">
+                {content.packs.withDiscountLabel}
+              </p>
+              <p class="text-sm opacity-70 mb-5 flex-1">{item.description}</p>
+              <Button
+                href={packHref(item.id, item.href)}
+                variant="outline"
+                size="md"
+                ariaLabel={`Get ${item.name} with the ${content.name} member discount`}
+                data-track-placement={`${content.trackingPrefix}_credit_packs`}
+              >
+                {item.id === 'single' ? 'Book a session' : 'Get this pack'}
+              </Button>
+            </li>
+          ))}
+        </ul>
+
+        <p class="mt-6 text-xs md:text-sm opacity-60 text-center italic">
+          {content.packs.discountReminder}
+          {sessions.note && ` ${sessions.note}`}
+        </p>
+      </div>
+    </section>
+
+    <!-- Memberships -->
+    <section
+      id="membership"
+      aria-labelledby="membership-heading"
+      class="border-t border-current/10 py-16 md:py-24 px-4"
+    >
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+            {content.membershipSection.eyebrow}
+          </p>
+          <h2
+            id="membership-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {content.membershipSection.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">
+            {content.membershipSection.subtitle}
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch">
+          {membership.tiers.map((tier) => (
+            <div
+              class={`relative flex flex-col rounded-lg p-6 md:p-8 ${
+                tier.popular
+                  ? 'border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 shadow-lg'
+                  : 'border border-current/20 bg-[var(--pyre-creme)]/5'
+              }`}
+            >
+              {tier.popular && (
+                <div
+                  class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
+                >
+                  {content.membershipSection.popularPillLabel}
+                </div>
+              )}
+
+              <p class="font-mono-bold text-xs uppercase tracking-wide opacity-60 mb-3">
+                {tier.name}
+              </p>
+              <div class="flex items-baseline gap-1 mb-1">
+                <span class="font-primary-semibold text-5xl text-[var(--pyre-muted-gold)] leading-none">
+                  ${tier.price}
+                </span>
+                <span class="text-sm opacity-70">{tier.period}</span>
+              </div>
+              {tier.originalPrice ? (
+                <p class="text-xs md:text-sm opacity-60 mb-4">
+                  <s>${tier.originalPrice}/mo</s>
+                  <span> · Save ${tier.originalPrice - tier.price}/mo forever</span>
+                </p>
+              ) : (
+                <p class="text-xs md:text-sm opacity-60 mb-4">{tier.description}</p>
+              )}
+
+              <ul class="space-y-2.5 mb-6 flex-1">
+                {tier.features.map((feature) => (
+                  <li
+                    class={`flex items-start gap-2 ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}
+                  >
+                    <svg
+                      class="w-5 h-5 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span class="text-sm md:text-base">{feature.text}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                href={tier.cta.href}
+                variant={tier.popular ? 'primary' : 'outline'}
+                size="lg"
+                ariaLabel={tier.cta.ariaLabel}
+                class="w-full"
+                data-track-placement={`${content.trackingPrefix}_membership`}
+              >
+                {tier.cta.label}
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        {membership.note && (
+          <p class="mt-6 text-xs md:text-sm opacity-60 text-center italic">{membership.note}</p>
+        )}
+      </div>
+    </section>
+
+    <!-- Signup -->
+    <section aria-label="Mailing list signup" class="border-t border-current/10 py-16 md:py-24 px-4">
+      <div class="max-w-xl mx-auto">
+        <SignupForm
+          variant="compact"
+          formKey={content.slug}
+          posthogSource={content.posthogSource}
+          title={content.signupCopy.title}
+          subtitle={content.signupCopy.subtitle}
+          successMessage={content.signupCopy.successMessage}
+        />
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<CtaTracking />

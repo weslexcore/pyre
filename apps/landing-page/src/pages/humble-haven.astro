@@ -1,0 +1,18 @@
+---
+export const prerender = true;
+
+import PartnerLanding from '../components/PartnerLanding.astro';
+import humbleHaven from '../lib/humbleHaven';
+---
+
+<PartnerLanding content={humbleHaven}>
+  <span
+    slot="logo"
+    class="flex flex-col items-center font-primary-semibold text-2xl md:text-4xl uppercase tracking-[0.08em] leading-[0.95] text-[var(--pyre-creme)]"
+    role="img"
+    aria-label="Humble Haven Yoga"
+  >
+    <span>Humble</span>
+    <span>Haven</span>
+  </span>
+</PartnerLanding>

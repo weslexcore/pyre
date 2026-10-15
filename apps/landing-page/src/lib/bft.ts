@@ -1,89 +1,20 @@
-import type { ImageMetadata } from 'astro';
-
 import bftKettlebellsImg from '../assets/images/bft/bft-kettlebells.png';
 import bftTrainingImg from '../assets/images/bft/bft-training.png';
 import warmSaunaImg from '../assets/images/warm_sauna.webp';
-import type { ActionRef, PartnerVerifyCopy } from './types';
+import type { PartnerContent } from './partner';
 
-export interface BftImage {
-  src: ImageMetadata;
-  alt: string;
-}
-
-export interface BftStep {
-  title: string;
-  description: string;
-}
-
-export interface BftRecoveryCard {
-  title: string;
-  body: string;
-}
-
-export interface BftContent {
-  discountPercent: number;
-  posthogSource: string;
-  eventsUrl: string;
-  hero: {
-    title: string;
-    subtitle: string;
-    image: BftImage;
-    primaryCta: ActionRef;
-    secondaryCta: ActionRef;
-  };
-  verify: {
-    pillLabel: string;
-    title: string;
-    subtitle: string;
-    form: PartnerVerifyCopy;
-    steps: BftStep[];
-  };
-  recovery: {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-    image: BftImage;
-    cards: BftRecoveryCard[];
-  };
-  intro: {
-    pillLabel: string;
-    title: string;
-    subtitle: string;
-    ctaLabel: string;
-  };
-  packs: {
-    title: string;
-    subtitle: string;
-    withDiscountLabel: string;
-    discountReminder: string;
-  };
-  membershipSection: {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-    popularPillLabel: string;
-  };
-  signupCopy: {
-    title: string;
-    subtitle: string;
-    successMessage: string;
-  };
-  closing: {
-    title: string;
-    subtitle: string;
-    cta: ActionRef;
-    image: BftImage;
-  };
-  disclaimer: string;
-}
-
-/** Price after the BFT member discount, rounded to the nearest dollar for display. */
-export const bftPrice = (price: number): number => Math.round(price * 0.85);
-
-const bft: BftContent = {
+const bft: PartnerContent = {
+  slug: 'bft',
+  name: 'BFT',
   discountPercent: 15,
   posthogSource: 'bft',
+  trackingPrefix: 'bft',
   eventsUrl: '/events?utm_source=bft&utm_medium=partner&utm_campaign=bft-15',
+  meta: {
+    title: 'BFT Carytown x Pyre | 15% Off Sauna + Cold Plunge',
+    description:
+      'BFT Carytown members get 15% off Pyre sessions and credit packs — verify your membership once and the discount applies automatically. Train hard, recover at Pyre.',
+  },
   hero: {
     title: 'Train hard. Recover at Pyre.',
     subtitle:
