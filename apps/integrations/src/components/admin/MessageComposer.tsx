@@ -5,6 +5,7 @@
 // routes; the parent decides what "save" means (create or update).
 import { useState } from 'react';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
+import { roleIsNotified } from '@/lib/messages/access';
 import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
 import { LinkTextarea } from './LinkTextarea';
@@ -60,6 +61,14 @@ export function MessageComposer({
   const [draft, setDraft] = useState<MessageDraft>(initial);
   const [preview, setPreview] = useState(false);
   const canSubmit = draft.title.trim().length > 0 && draft.bodyMd.trim().length > 0 && !busy;
+  // Who a new message will ping, by the same rule the server fans out with.
+  const sent = {
+    audience_roles: withAdmins(draft.audience.roles),
+    audience_emails: draft.audience.emails,
+  };
+  const reached = staff.filter(
+    (person) => roleIsNotified(sent, person.role) || sent.audience_emails.includes(person.email)
+  );
 
   return (
     <form
@@ -132,6 +141,16 @@ export function MessageComposer({
         disabled={busy}
         onChange={(audience) => setDraft((d) => ({ ...d, audience }))}
       />
+
+      {offerEmail && (
+        <p className="font-mono text-[10px] text-white/40">
+          {reached.length === 0
+            ? 'Nobody will be notified yet.'
+            : `${draft.email ? 'Notifies and emails' : 'Notifies'} ${reached.length}: ${reached
+                .map((person) => person.name)
+                .join(', ')}`}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className={goldButtonClass} disabled={!canSubmit}>

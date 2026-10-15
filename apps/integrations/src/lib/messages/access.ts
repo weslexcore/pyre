@@ -11,7 +11,7 @@
 
 import type { AdminMessageReplyRow, AdminMessageRow, StaffRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
-import { canUseDashboard, roleForStaffRow, type SopViewer } from '@/lib/sops/levels';
+import { canUseDashboard, roleForStaffRow, type SopRole, type SopViewer } from '@/lib/sops/levels';
 
 /** The parts of a message row the access rules read. */
 export type MessageAccessFields = Pick<
@@ -48,11 +48,28 @@ export function canManageMessages(viewer: SopViewer): boolean {
 }
 
 /**
+ * Whether holders of a granted role are told about the message (bell and
+ * email). Every audience carries the admin role — admins see everything —
+ * so that grant says nothing about who it is *for*: admins are told only
+ * when the message also goes to another role (a team-wide note) or names
+ * nobody at all (an admins-only note). A message to named people reaches
+ * just them; the other admins can still open it, they just aren't pinged.
+ */
+export function roleIsNotified(
+  message: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>,
+  role: SopRole
+): boolean {
+  if (!message.audience_roles.includes(role)) return false;
+  if (role !== 'admin') return true;
+  return message.audience_roles.some((r) => r !== 'admin') || message.audience_emails.length === 0;
+}
+
+/**
  * Everyone on the roster this message reaches — the fan-out list for its
- * notifications. Rows that can use the dashboard (canUseDashboard — not just
- * the ones available to schedule) with an email, whose role is granted or
- * who are named personally; the author is included here and dropped by the
- * notifier.
+ * notifications and emails. Rows that can use the dashboard (canUseDashboard
+ * — not just the ones available to schedule) with an email, whose role is
+ * notified (roleIsNotified) or who are named personally; the author is
+ * included here and dropped by the notifier.
  */
 export function resolveAudience(
   rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead' | 'pages'>[],
@@ -64,7 +81,7 @@ export function resolveAudience(
     if (!canUseDashboard(row)) continue;
     const email = normalizeEmail(row.email);
     if (!email) continue;
-    if (message.audience_roles.includes(roleForStaffRow(row)) || named.has(email)) out.add(email);
+    if (roleIsNotified(message, roleForStaffRow(row)) || named.has(email)) out.add(email);
   }
   return [...out];
 }

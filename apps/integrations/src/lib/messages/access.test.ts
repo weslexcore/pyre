@@ -5,6 +5,7 @@ import {
   canTouchReply,
   canViewMessage,
   resolveAudience,
+  roleIsNotified,
 } from './access';
 
 const message = {
@@ -121,6 +122,19 @@ describe('resolveAudience', () => {
       'lead@pyre.test',
       'owner@pyre.test',
     ]);
+  });
+});
+
+describe('roleIsNotified', () => {
+  it('pings admins on team-wide and admins-only notes, not on notes to named people', () => {
+    const toOne = { audience_roles: ['admin' as const], audience_emails: ['named@pyre.test'] };
+    expect(roleIsNotified(toOne, 'admin')).toBe(false);
+    expect(resolveAudience(rows, toOne)).toEqual(['named@pyre.test']);
+
+    const adminsOnly = { audience_roles: ['admin' as const], audience_emails: [] };
+    expect(roleIsNotified(adminsOnly, 'admin')).toBe(true);
+    expect(roleIsNotified(message, 'admin')).toBe(true);
+    expect(roleIsNotified(message, 'staff')).toBe(false);
   });
 });
 
