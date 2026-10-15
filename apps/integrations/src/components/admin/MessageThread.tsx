@@ -202,6 +202,7 @@ export function MessageThread({
     bodyMd: message.body_md,
     audience: { roles: message.audience_roles, emails: message.audience_emails },
     pinned: message.pinned,
+    email: false,
   };
 
   return (

@@ -1,6 +1,7 @@
 // Writing (or editing) an admin message: a title, a markdown body with a
 // live preview through the same renderer the SOP library uses, the audience
-// picker the SOP access settings use, and a pin toggle. Admin-only by the
+// picker the SOP access settings use, a pin toggle, and — for a new message —
+// whether to email it to the audience too (on by default). Admin-only by the
 // routes; the parent decides what "save" means (create or update).
 import { useState } from 'react';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
@@ -21,6 +22,8 @@ export interface MessageDraft {
   bodyMd: string;
   audience: SopGrant;
   pinned: boolean;
+  /** Also email it to everyone it reaches; only a new message offers this. */
+  email: boolean;
 }
 
 export const EVERYONE: SopRole[] = ['staff', 'shift_lead', 'admin'];
@@ -31,6 +34,7 @@ export function emptyDraft(): MessageDraft {
     bodyMd: '',
     audience: { roles: EVERYONE.slice(), emails: [] },
     pinned: false,
+    email: true,
   };
 }
 
@@ -39,6 +43,7 @@ export function MessageComposer({
   staff,
   busy,
   submitLabel,
+  offerEmail = false,
   onSubmit,
   onCancel,
 }: {
@@ -47,6 +52,8 @@ export function MessageComposer({
   staff: GrantablePerson[];
   busy: boolean;
   submitLabel: string;
+  /** Show the "also email" switch (new messages only; edits never re-send). */
+  offerEmail?: boolean;
   onSubmit: (draft: MessageDraft) => void;
   onCancel?: () => void;
 }) {
@@ -135,7 +142,21 @@ export function MessageComposer({
             Cancel
           </button>
         )}
-        <label className="ml-auto flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
+        {offerEmail && (
+          <label className="ml-auto flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-[var(--pyre-gold)]"
+              checked={draft.email}
+              disabled={busy}
+              onChange={(e) => setDraft((d) => ({ ...d, email: e.target.checked }))}
+            />
+            also email
+          </label>
+        )}
+        <label
+          className={`${offerEmail ? '' : 'ml-auto '}flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40`}
+        >
           <input
             type="checkbox"
             className="h-3.5 w-3.5 accent-[var(--pyre-gold)]"

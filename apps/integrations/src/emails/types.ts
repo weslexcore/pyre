@@ -114,6 +114,18 @@ export interface ReferralRewardEarnedProps {
   bookUrl: string;
 }
 
+// Admin messages (/admin/messages) — transactional, to the message's audience.
+
+export interface AdminMessageEmailProps {
+  /** The admin who wrote it, as the roster names them. */
+  authorName: string;
+  title: string;
+  /** The message body, markdown, with relative links already made absolute. */
+  bodyMd: string;
+  /** The message's thread on the dashboard. */
+  messageUrl: string;
+}
+
 // Staff scheduling sub requests (all transactional — no unsubscribeUrl).
 
 export interface SubRequestNoticeProps {
@@ -336,6 +348,7 @@ export interface EmailPropsByTemplate {
   'partner-reconciliation': PartnerReconciliationProps;
   'referral-redeemed': ReferralRedeemedProps;
   'referral-reward-earned': ReferralRewardEarnedProps;
+  'admin-message': AdminMessageEmailProps;
   'sub-request-notice': SubRequestNoticeProps;
   'sub-open-notice': SubOpenNoticeProps;
   'sub-claimed-notice': SubClaimedNoticeProps;

@@ -7,12 +7,13 @@
 //
 //   GET  [?archived=1]         → { messages, people, viewer, staff? }
 //   GET  ?id=<uuid>            → { message, replies, people, viewer }
-//   POST { title, bodyMd, audienceRoles, audienceEmails, pinned? }
-//                              → { message, people, notified }
+//   POST { title, bodyMd, audienceRoles, audienceEmails, pinned?, email? }
+//                              → { message, people, notified, emailed }
 //   PATCH { id, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, archived? }
 //                              → { message, people, notified }
 //
-// Posting notifies the whole audience; an edit that widens it notifies the
+// Posting notifies the whole audience, and unless `email: false` also emails
+// them the message with a link to its thread; an edit that widens it notifies the
 // people it adds (lib/notifications/messages).
 //   DELETE ?id=<uuid>          → { ok: true }
 //
@@ -28,7 +29,11 @@ import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
 import { BODY_MAX, normalizeBody, normalizeTitle, parseAudience } from '@/lib/messages/validate';
-import { notifyMessageAudienceWidened, notifyMessagePosted } from '@/lib/notifications/messages';
+import {
+  emailMessagePosted,
+  notifyMessageAudienceWidened,
+  notifyMessagePosted,
+} from '@/lib/notifications/messages';
 import { deleteBySource, markSourceRead } from '@/lib/notifications/notify';
 import type { SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
@@ -115,6 +120,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
     return json({ error: 'pinned must be a boolean' }, 400);
   }
+  if (body.email !== undefined && typeof body.email !== 'boolean') {
+    return json({ error: 'email must be a boolean' }, 400);
+  }
 
   const { data, error } = await db
     .from('admin_messages')
@@ -132,7 +140,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const message = data as AdminMessageRow;
 
   const notified = await notifyMessagePosted(db, message);
-  return json({ message, people: await getPeopleNames([email]), notified }, 201);
+  const emailed =
+    body.email === false ? 0 : await emailMessagePosted(message, new URL(request.url).origin);
+  return json({ message, people: await getPeopleNames([email]), notified, emailed }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {

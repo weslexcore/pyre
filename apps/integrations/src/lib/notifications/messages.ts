@@ -3,10 +3,16 @@
 // in the thread (not every admin — the thread is a conversation, not a
 // broadcast). Both share the message as their source, so opening the thread
 // reads all of them at once. Best-effort like every notifier.
+//
+// A new message can also be emailed to its audience (on by default in the
+// composer): the whole message, with a link back to the thread for
+// questions and additions.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { addedAudience, resolveAudience } from '@/lib/messages/access';
 import { createNotifications } from './notify';
 import { nameFor } from './recipients';
@@ -29,6 +35,42 @@ export async function notifyMessagePosted(
     source: { type: 'admin_message', id: message.id },
     actorEmail: message.author_email,
   });
+}
+
+/** Markdown links to dashboard paths ("[SOP](/admin/sops/x)") made absolute. */
+export function absolutizeLinks(bodyMd: string, origin: string): string {
+  return bodyMd.replace(/\]\(\//g, `](${origin}/`);
+}
+
+/**
+ * Email a new message to everyone it reaches but its author. Returns how
+ * many emails went out; failures are logged per recipient and never thrown.
+ */
+export async function emailMessagePosted(
+  message: AdminMessageRow,
+  origin: string
+): Promise<number> {
+  const rows = (await listStaff()) ?? [];
+  const author = normalizeEmail(message.author_email);
+  const recipients = resolveAudience(rows, message).filter((email) => email !== author);
+  if (recipients.length === 0) return 0;
+  const props = {
+    authorName: nameFor(rows, message.author_email),
+    title: message.title,
+    bodyMd: absolutizeLinks(message.body_md, origin),
+    messageUrl: `${origin}${messageHref(message.id)}`,
+  };
+  const results = await sendToEach(
+    recipients,
+    (to) => ({
+      template: 'admin-message' as const,
+      props,
+      kind: 'transactional' as const,
+      sendKey: `admin-message:${message.id}:${to}`,
+    }),
+    'admin-message'
+  );
+  return deliveredTo(results).length;
 }
 
 /**

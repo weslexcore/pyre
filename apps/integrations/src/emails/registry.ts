@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ConfirmationEmail } from './components/ConfirmationEmail';
+import { AdminMessage } from './templates/AdminMessage';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
@@ -65,6 +66,10 @@ export const EMAIL_TEMPLATES: Registry = {
   'referral-reward-earned': {
     subject: (p) => `${p.friendFirstName} booked - your Pyre reward is live`,
     Component: ReferralRewardEarned,
+  },
+  'admin-message': {
+    subject: (p) => p.title,
+    Component: AdminMessage,
   },
   'sub-request-notice': {
     subject: (p) =>

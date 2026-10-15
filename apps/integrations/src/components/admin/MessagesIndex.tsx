@@ -47,6 +47,7 @@ export function MessagesIndex() {
           audienceRoles: draft.audience.roles,
           audienceEmails: draft.audience.emails,
           pinned: draft.pinned,
+          email: draft.email,
         }),
       });
       if (!res.ok) throw new Error(await readError(res));
@@ -89,6 +90,7 @@ export function MessagesIndex() {
             staff={feed.data?.staff ?? []}
             busy={busy}
             submitLabel="Send"
+            offerEmail
             onSubmit={(draft) => void create(draft)}
             onCancel={() => setComposing(false)}
           />

@@ -4,6 +4,7 @@
 // Typed against EmailPropsByTemplate so it cannot drift from the registry.
 
 import { sampleConfirmationProps } from './components/ConfirmationEmail';
+import { AdminMessage } from './templates/AdminMessage';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
@@ -32,6 +33,7 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'partner-reconciliation': PartnerReconciliation.PreviewProps,
   'referral-redeemed': ReferralRedeemed.PreviewProps,
   'referral-reward-earned': ReferralRewardEarned.PreviewProps,
+  'admin-message': AdminMessage.PreviewProps,
   'sub-request-notice': SubRequestNotice.PreviewProps,
   'sub-open-notice': SubOpenNotice.PreviewProps,
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
