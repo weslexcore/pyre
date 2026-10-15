@@ -1575,6 +1575,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource/crimson-text@npm:^5.3.0":
+  version: 5.3.0
+  resolution: "@fontsource/crimson-text@npm:5.3.0"
+  checksum: 10c0/dcccf33374ba32fc509ccf893afbb3e3e1f7fa69ce8f9fb6b8bcc226548a5ff30b75aec2d5d7d55bd88c5e7afa141bb40ad76eb2f86350edd34a7f7d98fc9bac
+  languageName: node
+  linkType: hard
+
+"@fontsource/open-sans@npm:^5.3.0":
+  version: 5.3.0
+  resolution: "@fontsource/open-sans@npm:5.3.0"
+  checksum: 10c0/c52a583617187cb731d2606b7f22337168db055df7600f79ad42a37d44764065ff1fe060069467c43a086296f43a6ffc0328dd2c8031c459bfb60d253f2522d6
+  languageName: node
+  linkType: hard
+
 "@img/colour@npm:^1.0.0, @img/colour@npm:^1.1.0":
   version: 1.1.0
   resolution: "@img/colour@npm:1.1.0"
@@ -2723,6 +2737,8 @@ __metadata:
     "@astrojs/sitemap": "npm:3.7.4"
     "@astrojs/vercel": "npm:^11.0.4"
     "@biomejs/biome": "npm:^2.5.5"
+    "@fontsource/crimson-text": "npm:^5.3.0"
+    "@fontsource/open-sans": "npm:^5.3.0"
     "@paper-design/shaders": "npm:^0.0.77"
     "@pyre/webhook-core": "workspace:^"
     "@tailwindcss/vite": "npm:^4.3.3"

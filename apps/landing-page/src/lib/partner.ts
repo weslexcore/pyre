@@ -41,6 +41,13 @@ export interface PartnerContent {
   hero: {
     title: string;
     subtitle: string;
+    /**
+     * Optional typography in the partner's brand, as full Tailwind class
+     * strings that replace Pyre's defaults (bold all-caps title, mono
+     * subtitle). Load any partner fonts on the partner's page.
+     */
+    titleClass?: string;
+    subtitleClass?: string;
     image: PartnerImage;
     primaryCta: ActionRef;
     secondaryCta: ActionRef;

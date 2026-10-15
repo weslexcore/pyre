@@ -1,5 +1,5 @@
 import coldSmileImg from '../assets/images/cold_smile.webp';
-import steppingOutImg from '../assets/images/stepping_out.webp';
+import hero from '../assets/images/embody/hero.webp';
 import warmSaunaImg from '../assets/images/warm_sauna.webp';
 import type { PartnerContent } from './partner';
 
@@ -22,13 +22,17 @@ const embody: PartnerContent = {
       "Embody Pilates members get 15% off Pyre sessions and credit packs. Verify once and the discount applies automatically. Embody's Forest Hill studio is a short walk from our door.",
   },
   hero: {
-    title: 'Reformer first. Then the heat.',
+    // Embody's site: Crimson Text headlines in sentence case, Open Sans Light
+    // body copy (fonts loaded in pages/embody.astro).
+    title: 'Come as you are.\nLeave a little warmer.',
+    titleClass:
+      "whitespace-pre-line font-['Crimson_Text',Georgia,serif] font-normal text-[clamp(2.75rem,6.5vw,5rem)] tracking-normal leading-[1.05]",
+    subtitleClass: "font-['Open_Sans',sans-serif] font-light text-lg md:text-xl opacity-90",
     subtitle:
       "Embody's new Forest Hill studio is a few hundred feet from Pyre, Richmond's social sauna + cold plunge. Embody members get 15% off sessions and credit packs.",
     image: {
-      src: steppingOutImg,
-      alt: 'Stepping out of the sauna into the fresh air',
-      position: 'center 15%',
+      src: hero,
+      alt: 'Two instructors holding a lunge on the reformers at Embody Pilates',
     },
     primaryCta: {
       label: 'Claim your 15% off',
@@ -98,7 +102,7 @@ const embody: PartnerContent = {
         body: 'Pilates teaches you to breathe with intention through every exercise. In the cold plunge, that same steady exhale is what turns a gasp into calm.',
       },
       {
-        title: 'Come as you are',
+        title: 'Built for every body',
         body: "Embody believes Pilates is for every body. We feel the same way about heat and cold: every age, shape, and starting point is welcome, and nobody's keeping score.",
       },
     ],
