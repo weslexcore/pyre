@@ -1,4 +1,5 @@
 import { withBase } from './paths';
+import { introOffer } from './sessions';
 
 export interface PromoPopupConfig {
   /** Unique ID used as the localStorage key. Change this to re-show the popup. */
@@ -76,9 +77,9 @@ const promoPopups: PromoPopupConfig[] = [
   {
     id: 'intro-offer-email',
     enabled: true,
-    headline: 'New Here? Buy 1, Get 1 Free',
+    headline: `New Here? ${introOffer.headline}`,
     body: 'Sign up for our mailing list to receive an exclusive intro offer. Available once per customer. Credits cannot be shared.',
-    promoText: 'Buy 1, Get 1',
+    promoText: introOffer.shortLabel,
     form: {
       submitLabel: 'Get Intro Offer',
       successMessage: "You're in! Check your email for details.",

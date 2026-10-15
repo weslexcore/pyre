@@ -1,3 +1,5 @@
+import { founding } from './membership';
+
 export interface BannerConfig {
   /** Unique ID used as the localStorage key. Change this to show a new announcement. */
   id: string;
@@ -20,8 +22,8 @@ export interface BannerConfig {
 
 const banner: BannerConfig = {
   id: 'founding-membership-30-launch',
-  text: 'Founding Memberships are here — $199/mo for life (normally $249). Only 30 available.',
-  href: 'https://momence.com/m/943595',
+  text: founding.announcement,
+  href: founding.unlimited.href,
   // expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };

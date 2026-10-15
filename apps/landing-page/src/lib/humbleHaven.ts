@@ -102,8 +102,7 @@ const humbleHaven: PartnerContent = {
   intro: {
     pillLabel: 'New here?',
     title: 'Start with the Intro',
-    subtitle:
-      'Buy 1 credit, get 1 free, and your Humble Haven discount still applies. Two sessions to feel how heat and cold fit into your practice.',
+    subtitle: 'Feel how heat and cold fit into your practice.',
     ctaLabel: 'Get the Intro Offer',
   },
   packs: {
@@ -114,10 +113,7 @@ const humbleHaven: PartnerContent = {
     discountReminder: "Once you're verified, 15% comes off automatically at checkout.",
   },
   membershipSection: {
-    eyebrow: 'Founding Memberships',
     title: 'Make it part of your practice',
-    subtitle:
-      'Founding rates are locked in for life, and only 30 of each exist. Go unlimited or keep a steady rhythm of 8 credits a month.',
     popularPillLabel: 'Most Popular',
   },
   signupCopy: {

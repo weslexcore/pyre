@@ -6,8 +6,9 @@ import type { ImageMetadata } from 'astro';
 import logoImg from '../assets/logos/creme/single-pine-tree-white.png';
 import giftCards from './gift-cards';
 import location from './location';
+import { founding } from './membership';
 import { withBase } from './paths';
-import sessions from './sessions';
+import { introOffer, introPriceNote, introValue } from './sessions';
 
 export interface HiLink {
   id: string;
@@ -59,13 +60,10 @@ export interface HiContent {
   };
 }
 
-const intro = sessions.items.find((item) => item.id === 'intro');
-
 const hi: HiContent = {
   meta: {
     title: 'Pyre Sauna + Cold Plunge | Richmond, VA',
-    description:
-      "Richmond's community sauna + cold plunge. First time? Buy 1 session, get 1 free. Book a session, browse events, or grab a gift card.",
+    description: `Richmond's community sauna + cold plunge. First time? ${introOffer.sentence}. Book a session, browse events, or grab a gift card.`,
   },
   header: {
     logo: { src: logoImg, alt: 'Pyre Sauna + Cold Plunge' },
@@ -74,15 +72,15 @@ const hi: HiContent = {
   },
   hero: {
     pillLabel: 'First time?',
-    title: 'Intro // Buy 1, Get 1 Free',
-    subtitle: 'Two sauna + cold plunge sessions for the price of one.',
-    price: 25,
-    originalPrice: 50,
-    priceNote: 'for 2 credits',
+    title: `Intro // ${introOffer.headline}`,
+    subtitle: `${introOffer.credits} sauna + cold plunge sessions for $${introOffer.price}.`,
+    price: introOffer.price,
+    originalPrice: introValue,
+    priceNote: introPriceNote,
     cta: {
       label: 'Claim Intro Offer',
-      href: intro?.href ?? withBase('/events'),
-      ariaLabel: 'Claim the intro offer — buy one session, get one free for $25',
+      href: introOffer.href,
+      ariaLabel: `Claim the intro offer — ${introOffer.sentence.toLowerCase()} for $${introOffer.price}`,
     },
   },
   events: {
@@ -100,7 +98,7 @@ const hi: HiContent = {
     {
       id: 'membership',
       label: 'Memberships',
-      sublabel: 'From $119/mo — founding rates locked for life',
+      sublabel: `From $${founding.fromPrice}/mo — founding rates locked for life`,
       href: withBase('#membership'),
       ariaLabel: 'View Pyre membership options',
     },

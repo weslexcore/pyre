@@ -1,9 +1,9 @@
 ---
 import { Image } from 'astro:assets';
 import Layout from '../layouts/main.astro';
-import membership from '../lib/membership';
+import membership, { founding } from '../lib/membership';
 import { type PartnerContent, partnerPrice } from '../lib/partner';
-import sessions from '../lib/sessions';
+import sessions, { introOffer, introPriceNote } from '../lib/sessions';
 import Button from './Button.astro';
 import CtaTracking from './CtaTracking.astro';
 import PartnerVerifyForm from './PartnerVerifyForm.astro';
@@ -24,6 +24,8 @@ const intro = sessions.items.find((item) => item.id === 'intro');
 const packs = sessions.items.filter((item) => item.id !== 'intro');
 
 const price = (amount: number): number => partnerPrice(amount, content.discountPercent);
+
+const introSubtitle = `${introOffer.sentence}, and your ${content.name} discount still applies. ${content.intro.subtitle}`;
 
 const packHref = (id: string, href?: string): string =>
   id === 'single' ? content.eventsUrl : (href ?? content.eventsUrl);
@@ -224,13 +226,13 @@ const packHref = (id: string, href?: string): string =>
             <h3 class="font-primary-semibold text-2xl md:text-3xl uppercase tracking-[-0.02em] mb-2">
               {content.intro.title}
             </h3>
-            <p class="text-sm md:text-base opacity-80 max-w-xl mx-auto mb-4">{content.intro.subtitle}</p>
+            <p class="text-sm md:text-base opacity-80 max-w-xl mx-auto mb-4">{introSubtitle}</p>
             <div class="flex items-baseline justify-center gap-2 mb-1">
               <span class="font-primary-semibold text-4xl text-[var(--pyre-muted-gold)] leading-none">
                 ${price(intro.price)}
               </span>
               <s class="text-sm opacity-60">${intro.price}</s>
-              <span class="text-sm opacity-70">for 2 credits</span>
+              <span class="text-sm opacity-70">{introPriceNote}</span>
             </div>
             <p class="font-mono-bold text-[10px] uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-5">
               {content.packs.withDiscountLabel}
@@ -290,7 +292,7 @@ const packHref = (id: string, href?: string): string =>
       <div class="max-w-5xl mx-auto">
         <div class="text-center mb-8 md:mb-12">
           <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
-            {content.membershipSection.eyebrow}
+            {founding.eyebrow}
           </p>
           <h2
             id="membership-heading"
@@ -299,7 +301,7 @@ const packHref = (id: string, href?: string): string =>
             {content.membershipSection.title}
           </h2>
           <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">
-            {content.membershipSection.subtitle}
+            {founding.pitch}
           </p>
         </div>
 

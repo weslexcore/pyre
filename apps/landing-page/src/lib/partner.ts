@@ -62,6 +62,11 @@ export interface PartnerContent {
   intro: {
     pillLabel: string;
     title: string;
+    /**
+     * Partner-voiced line that follows the generated offer sentence
+     * ("Buy 1 credit, get 1 free, and your BFT discount still applies.").
+     * Keep offer specifics (counts, prices) out of it; they live in sessions.ts.
+     */
     subtitle: string;
     ctaLabel: string;
   };
@@ -71,10 +76,9 @@ export interface PartnerContent {
     withDiscountLabel: string;
     discountReminder: string;
   };
+  /** The eyebrow and pitch underneath come from `founding` in membership.ts. */
   membershipSection: {
-    eyebrow: string;
     title: string;
-    subtitle: string;
     popularPillLabel: string;
   };
   signupCopy: {

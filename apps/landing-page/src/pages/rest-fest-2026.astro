@@ -11,7 +11,7 @@ import Button from '../components/Button.astro';
 import SectionDivider from '../components/SectionDivider.astro';
 import SignupForm from '../components/SignupForm.astro';
 import Layout from '../layouts/main.astro';
-import membership from '../lib/membership';
+import membership, { founding as foundingFacts } from '../lib/membership';
 import restFest from '../lib/restFest';
 
 const founding = membership.tiers.find((t) => t.id === 'unlimited') ?? membership.tiers[0];
@@ -150,17 +150,17 @@ const pageDescription =
       <div class="max-w-4xl mx-auto">
         <div class="text-center mb-8 md:mb-12">
           <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
-            Founding Memberships
+            {foundingFacts.eyebrow}
           </p>
           <h2
             id="founding-heading"
             class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
           >
-            $199/mo for life
+            ${founding.price}/mo for life
           </h2>
           <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">
-            Only 30 founding memberships. Lock in $199/mo (normally $249) — for life — and get unlimited access from
-            day one.
+            Only {foundingFacts.cap} founding memberships. Lock in ${founding.price}/mo (normally ${founding.originalPrice}) —
+            for life — and get unlimited access from day one.
           </p>
         </div>
 
@@ -170,7 +170,7 @@ const pageDescription =
           <div
             class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
           >
-            Only 30 Available
+            Only {foundingFacts.cap} Available
           </div>
 
           <div class="md:grid md:grid-cols-[minmax(0,18rem)_1fr] md:gap-10 md:items-center">

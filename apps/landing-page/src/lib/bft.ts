@@ -96,8 +96,7 @@ const bft: PartnerContent = {
   intro: {
     pillLabel: 'New here?',
     title: 'Start with the Intro',
-    subtitle:
-      'Buy 1 credit, get 1 free — and your BFT discount still applies. Two sessions to see how the heat and cold treat you.',
+    subtitle: 'See how the heat and cold treat you.',
     ctaLabel: 'Get the Intro Offer',
   },
   packs: {
@@ -108,10 +107,7 @@ const bft: PartnerContent = {
     discountReminder: "Once you're verified, 15% comes off automatically at checkout.",
   },
   membershipSection: {
-    eyebrow: 'Founding Memberships',
     title: 'Want to make it a part of your routine?',
-    subtitle:
-      'Founding rates are locked in for life, and only 30 of each exist. Go unlimited or keep a steady rhythm of 8 credits a month.',
     popularPillLabel: 'Most Popular',
   },
   signupCopy: {
