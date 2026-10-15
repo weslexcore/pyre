@@ -97,7 +97,7 @@ async function loadEmailedTo(db: SupabaseClient, id: string): Promise<string[]> 
     .select('email')
     .like('send_key', `admin-message:${id}:%`)
     .eq('status', 'sent')
-    .order('created_at', { ascending: true });
+    .order('sent_at', { ascending: true });
   if (error) {
     console.warn('[messages] emailed-to read failed:', error.message);
     return [];
