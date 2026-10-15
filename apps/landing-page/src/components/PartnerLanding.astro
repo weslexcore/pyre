@@ -51,6 +51,7 @@ const packHref = (id: string, href?: string): string =>
         widths={[768, 1280, 1920]}
         sizes="100vw"
         class="absolute inset-0 w-full h-full object-cover object-center"
+        style={content.hero.image.position && `object-position: ${content.hero.image.position}`}
         loading="eager"
         decoding="async"
       />

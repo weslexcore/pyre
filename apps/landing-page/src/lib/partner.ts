@@ -10,6 +10,8 @@ import type { ActionRef, PartnerVerifyCopy } from './types';
 export interface PartnerImage {
   src: ImageMetadata;
   alt: string;
+  /** CSS object-position focal point for cropped images; defaults to center. */
+  position?: string;
 }
 
 export interface PartnerStep {
