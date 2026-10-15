@@ -1,0 +1,133 @@
+---
+// Printable SOPs: /admin/sops/print?slugs=a,b,c renders those documents, in
+// that order, as plain black-on-white pages and opens the print dialog. Not
+// an AdminLayout page — no header, nav or dark theme belongs on paper — so it
+// repeats the layout's page gate itself. The middleware has already validated
+// the session; each document is filtered through canViewSop, and anything the
+// reader may not view is left out as if it didn't exist.
+import { canViewPath } from '@/components/admin/adminTools';
+import { type PrintableSop, SopPrint } from '@/components/admin/SopPrint';
+import Favicon from '@/components/Favicon.astro';
+import { getDb, type SopRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { canViewSop } from '@/lib/sops/levels';
+import { getPeopleNames } from '@/lib/sops/people';
+import { parsePrintSlugs, printFooter } from '@/lib/sops/print';
+import { getSopRole } from '@/lib/sops/role';
+import '@/styles/admin.css';
+
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+const user = Astro.locals.adminUser ?? null;
+const access = Astro.locals.adminAccess ?? null;
+const allowed = !!user && !!access && canViewPath(access, '/admin/sops');
+const slugs = parsePrintSlugs(Astro.url.searchParams.get('slugs'));
+
+let sops: PrintableSop[] = [];
+let error: string | null = null;
+
+const db = getDb();
+if (!allowed) {
+  Astro.response.status = 403;
+} else if (!db) {
+  error = 'Storage unavailable';
+  Astro.response.status = 503;
+} else if (slugs.length > 0) {
+  const viewer = {
+    role: await getSopRole(user.email ?? null, access),
+    email: normalizeEmail(user.email),
+  };
+  const { data, error: dbError } = await db.from('sops').select('*').in('slug', slugs);
+  if (dbError) {
+    error = dbError.message;
+    Astro.response.status = 500;
+  } else {
+    const rows = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(viewer, sop));
+    const bySlug = new Map(rows.map((sop) => [sop.slug, sop]));
+    const ordered = slugs.flatMap((slug) => bySlug.get(slug) ?? []);
+    const people = await getPeopleNames(ordered.map((sop) => sop.updated_by ?? ''));
+    sops = ordered.map((sop) => ({
+      id: sop.id,
+      title: sop.title,
+      category: sop.category,
+      content_md: sop.content_md,
+      footer: printFooter(sop, people),
+    }));
+  }
+}
+
+const title = sops.length === 1 ? sops[0].title : `${sops.length} SOPs`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Print — Pyre Admin</title>
+    <Favicon />
+    <style is:global>
+      @page {
+        size: letter;
+        margin: 0.6in 0.6in 0.5in;
+      }
+      @media print {
+        html,
+        body {
+          background: white !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-neutral-200 font-sans text-black antialiased print:bg-white">
+    {
+      !allowed ? (
+        <main class="mx-auto max-w-md px-4 py-16 text-center">
+          <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
+          <p class="text-black/60">You do not have access to this page.</p>
+        </main>
+      ) : (
+        <>
+          <div class="sticky top-0 z-10 border-b border-black/10 bg-white print:hidden">
+            <div class="mx-auto flex max-w-[8.5in] flex-wrap items-center gap-2 px-4 py-3">
+              <a href="/admin/sops" class="font-mono text-xs uppercase tracking-wide text-black/60 hover:text-black">
+                All SOPs
+              </a>
+              <span class="ml-auto font-mono text-xs text-black/60">
+                {sops.length === 1 ? '1 SOP' : `${sops.length} SOPs`}
+              </span>
+              {sops.length > 0 && (
+                <button
+                  type="button"
+                  data-print
+                  class="rounded border border-black bg-black px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white hover:bg-black/80"
+                >
+                  Print
+                </button>
+              )}
+            </div>
+          </div>
+          <main class="mx-auto my-6 max-w-[8.5in] bg-white px-[0.6in] py-[0.6in] shadow print:m-0 print:max-w-none print:p-0 print:shadow-none">
+            {error ? (
+              <p class="text-red-700">Couldn't load these SOPs: {error}</p>
+            ) : sops.length === 0 ? (
+              <p class="text-black/60">
+                No SOPs to print. Pick some from the library, or open one and press Print.
+              </p>
+            ) : (
+              <SopPrint sops={sops} />
+            )}
+          </main>
+        </>
+      )
+    }
+    <script>
+      // Open the print dialog once the page has laid out; the button is there
+      // for a second copy, or after the dialog was dismissed.
+      const print = () => window.print();
+      document.querySelector('[data-print]')?.addEventListener('click', print);
+      if (document.querySelector('[data-print]')) window.addEventListener('load', () => setTimeout(print, 150));
+    </script>
+  </body>
+</html>

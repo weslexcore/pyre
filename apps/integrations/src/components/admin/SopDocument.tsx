@@ -37,6 +37,7 @@ import { EVERYONE_LABEL } from '@/lib/sops/levels';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
+import { sopPrintHref } from '@/lib/sops/print';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
@@ -409,6 +410,15 @@ export function SopDocument({
             Runs
           </button>
         )}
+        <a
+          href={sopPrintHref([sop.slug])}
+          target="_blank"
+          rel="noopener"
+          className={buttonClass}
+          title="Open a printable copy"
+        >
+          Print
+        </a>
         {isAdmin && (
           <button type="button" className={buttonClass} onClick={() => setShowSettings((v) => !v)}>
             Settings

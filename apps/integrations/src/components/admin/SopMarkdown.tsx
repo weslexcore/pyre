@@ -101,7 +101,7 @@ const REQUIRED_TASK_RE = /^(\s*[-*+]\s+)\[!\]\s+/gm;
  * checklist never comes through here, since ChecklistView pulls task lines
  * out of the document and renders its own rows.
  */
-function renderable(content: string): string {
+export function renderable(content: string): string {
   if (!content.includes('[!]')) return content;
   return content.replace(REQUIRED_TASK_RE, '$1[ ] `Required` ');
 }

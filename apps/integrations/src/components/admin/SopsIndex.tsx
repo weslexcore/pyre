@@ -16,7 +16,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { assistNotesKey } from '@/components/admin/SopAssist';
-import { buttonClass, dragHandleClass, inputClass, selectClass } from '@/components/admin/ui';
+import {
+  buttonClass,
+  dragHandleClass,
+  goldButtonClass,
+  inputClass,
+  selectClass,
+} from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
 import { etStamp } from '@/lib/client/format';
 import { useLiveReorder } from '@/lib/client/useLiveReorder';
@@ -35,6 +41,7 @@ import {
   repositionCategory,
   repositionSop,
 } from '@/lib/sops/order';
+import { sopPrintHref } from '@/lib/sops/print';
 import type { ActiveRun } from '@/lib/sops/runs';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 import type { ShiftSops } from '@/lib/sops/shift-sops';
@@ -137,6 +144,9 @@ export function SopsIndex() {
   const [error, setError] = useState<string | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
+  // Slugs ticked for printing; null when the library isn't in print-select
+  // mode. In that mode a card tap ticks it instead of opening it.
+  const [printSelection, setPrintSelection] = useState<Set<string> | null>(null);
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   // Either an existing section name or NEW_SECTION, in which case the typed
@@ -531,6 +541,28 @@ export function SopsIndex() {
   const searchActive = query.trim().length >= MIN_QUERY_LENGTH;
   const term = query.trim();
   const pinnedSops = sops.filter((s) => pins.has(s.id));
+  const selecting = printSelection !== null;
+
+  const togglePrint = (slugs: string[], on: boolean) =>
+    setPrintSelection((prev) => {
+      const next = new Set(prev);
+      for (const slug of slugs) {
+        if (on) next.add(slug);
+        else next.delete(slug);
+      }
+      return next;
+    });
+
+  // Prints in library order (sections, then the order within each), however
+  // the documents were ticked.
+  const printSelected = () => {
+    if (!printSelection || printSelection.size === 0) return;
+    const ordered = categories
+      .flatMap((category) => sops.filter((s) => s.category === category))
+      .map((s) => s.slug)
+      .filter((slug) => printSelection.has(slug));
+    window.open(sopPrintHref(ordered), '_blank', 'noopener');
+  };
 
   // One card, used by both the category grid (draggable) and the Pinned strip
   // (plain). The star pins/unpins; a gold checklist badge marks runnable SOPs.
@@ -539,6 +571,7 @@ export function SopsIndex() {
     const isPinned = pins.has(sop.id);
     const activeRun = activeBySop.get(sop.id) ?? null;
     const activeIsMine = activeRun !== null && sameActor(activeRun.started_by, viewerEmail);
+    const ticked = printSelection?.has(sop.slug) ?? false;
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: passive drop target for the drag handles
       <div
@@ -548,16 +581,37 @@ export function SopsIndex() {
         className={`relative rounded border bg-white/5 transition-colors ${
           isDragged
             ? 'border-dashed border-white/40 opacity-40'
-            : activeIsMine
-              ? 'border-[var(--pyre-gold)] hover:border-[var(--pyre-gold)]'
-              : activeRun
-                ? 'border-[var(--pyre-gold)]/40 hover:border-[var(--pyre-gold)]'
-                : 'border-white/10 hover:border-white/30'
+            : ticked
+              ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/10'
+              : activeIsMine
+                ? 'border-[var(--pyre-gold)] hover:border-[var(--pyre-gold)]'
+                : activeRun
+                  ? 'border-[var(--pyre-gold)]/40 hover:border-[var(--pyre-gold)]'
+                  : 'border-white/10 hover:border-white/30'
         } ${sop.archived ? 'opacity-50' : ''}`}
       >
-        <a href={`/admin/sops/${sop.slug}`} className="block p-4" draggable={false}>
+        <a
+          href={`/admin/sops/${sop.slug}`}
+          className="block p-4"
+          draggable={false}
+          tabIndex={selecting ? -1 : undefined}
+        >
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-[var(--pyre-creme)]">{sop.title}</h3>
+            <h3 className="flex items-start gap-2 font-semibold text-[var(--pyre-creme)]">
+              {selecting && (
+                <span
+                  aria-hidden="true"
+                  className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border text-[10px] ${
+                    ticked
+                      ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)] text-[var(--pyre-black)]'
+                      : 'border-white/40'
+                  }`}
+                >
+                  {ticked ? '✓' : ''}
+                </span>
+              )}
+              {sop.title}
+            </h3>
             <span className="flex items-center gap-2 pr-0.5">
               {sop.archived && (
                 <span className="font-mono text-[10px] uppercase tracking-wide text-white/40">
@@ -595,6 +649,17 @@ export function SopsIndex() {
             <AccessBadge label={sop.access_label} />
           </div>
         </a>
+        {/* Select mode lays a toggle over the whole card, so a tap ticks the
+            document for printing instead of opening it. */}
+        {selecting && (
+          <button
+            type="button"
+            aria-pressed={ticked}
+            aria-label={`Print ${sop.title}`}
+            className="absolute inset-0 z-10 cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-[var(--pyre-gold)]"
+            onClick={() => togglePrint([sop.slug], !ticked)}
+          />
+        )}
         <span className="absolute top-3 right-3 flex gap-1">
           <button
             type="button"
@@ -609,7 +674,7 @@ export function SopsIndex() {
           >
             {isPinned ? '★' : '☆'}
           </button>
-          {draggable && isAdmin && (
+          {draggable && isAdmin && !selecting && (
             <button
               type="button"
               className={dragHandleClass}
@@ -626,6 +691,17 @@ export function SopsIndex() {
       </div>
     );
   };
+
+  const printButton = !selecting && (
+    <button
+      type="button"
+      className={buttonClass}
+      title="Pick several SOPs and print them together"
+      onClick={() => setPrintSelection(new Set())}
+    >
+      Print…
+    </button>
+  );
 
   return (
     <div
@@ -888,16 +964,52 @@ export function SopsIndex() {
               <a href="/admin/sops/runs" className={buttonClass}>
                 Runs
               </a>
+              {printButton}
             </div>
           )}
         </div>
       )}
 
       {!searchActive && !isAdmin && (
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
           <a href="/admin/sops/runs" className={buttonClass}>
             Runs
           </a>
+          {printButton}
+        </div>
+      )}
+
+      {!searchActive && printSelection && (
+        <div className="sticky top-16 z-30 flex flex-wrap items-center gap-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-black)] p-3">
+          <span className="font-mono text-xs text-white/70">
+            {printSelection.size === 0
+              ? 'Tap the SOPs to print'
+              : `${printSelection.size} selected`}
+          </span>
+          <span className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() =>
+                setPrintSelection(
+                  printSelection.size === sops.length ? new Set() : new Set(sops.map((s) => s.slug))
+                )
+              }
+            >
+              {printSelection.size === sops.length ? 'Select none' : 'Select all'}
+            </button>
+            <button
+              type="button"
+              className={goldButtonClass}
+              disabled={printSelection.size === 0}
+              onClick={printSelected}
+            >
+              Print {printSelection.size || ''}
+            </button>
+            <button type="button" className={buttonClass} onClick={() => setPrintSelection(null)}>
+              Cancel
+            </button>
+          </span>
         </div>
       )}
 
@@ -959,7 +1071,24 @@ export function SopsIndex() {
                     {category}
                   </h2>
                 )}
-                {isAdmin && renaming !== category && (
+                {printSelection && inCategory.length > 0 && (
+                  <button
+                    type="button"
+                    className={dragHandleClass}
+                    title={`Select every SOP in ${category} for printing`}
+                    onClick={() =>
+                      togglePrint(
+                        inCategory.map((s) => s.slug),
+                        !inCategory.every((s) => printSelection.has(s.slug))
+                      )
+                    }
+                  >
+                    {inCategory.every((s) => printSelection.has(s.slug))
+                      ? 'deselect section'
+                      : 'select section'}
+                  </button>
+                )}
+                {isAdmin && renaming !== category && !selecting && (
                   <>
                     <button
                       type="button"
