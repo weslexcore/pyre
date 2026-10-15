@@ -1,12 +1,13 @@
-// Read side of /admin/schedule/insights — one admin-only GET over a fixed
+// Read side of /admin/schedule/insights — one GET, gated on schedule:insights
+// (or an admin holding the schedule page), over a fixed
 // window (last 8 completed weeks through the end of the NEXT pay period)
 // returning weekly cost trends, pay-period costs with a forecast, per-person
 // consistency stats against their own weekly target, and unmet-demand stats.
 //
 // Separate from schedule-board on purpose: that route only ever ships
 // pending/open requests, while this one aggregates the full paper trail
-// (denied shift_requests, claimed sub_requests) — and it is admin-only, so
-// staff rows here carry unredacted pay rates and targets that must never be
+// (denied shift_requests, claimed sub_requests) — and it is gated on its own
+// grant, so staff rows here carry unredacted pay rates and targets that must never be
 // echoed back beyond the aggregates below.
 
 import {
@@ -26,7 +27,8 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { hasScheduleInsights } from '@/components/admin/adminTools';
+import { requireAccess } from '@/lib/auth/admin';
 import {
   getDb,
   type ShiftAssignmentRow,
@@ -114,7 +116,7 @@ export interface ScheduleInsightsPayload {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireAccess(cookies, hasScheduleInsights);
   if (gate instanceof Response) return gate;
 
   const db = getDb();

@@ -1,10 +1,12 @@
 // Read endpoint for the schedule change log (/admin/schedule/changes).
-// Admin-only — the log names who did what (including staff members' own
-// time-off edits), so it is not part of the schedule page grant. Newest
+// Gated on schedule:changes (or an admin holding the schedule page) — the log
+// names who did what (including staff members' own time-off edits), so it is
+// not part of the plain schedule page grant. Newest
 // first, keyset-paginated on created_at via `before`.
 
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { hasScheduleChanges } from '@/components/admin/adminTools';
+import { requireAccess } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import type { ChangeEntityType, ScheduleChangeRow } from '@/lib/schedule/change-log';
@@ -27,7 +29,7 @@ const ENTITY_TYPES: ChangeEntityType[] = [
 ];
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireAccess(cookies, hasScheduleChanges);
   if (gate instanceof Response) return gate;
 
   const db = getDb();

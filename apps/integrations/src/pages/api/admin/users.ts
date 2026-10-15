@@ -14,16 +14,7 @@
 // time off are deactivated instead of deleted, so schedule history survives.
 
 import type { APIRoute } from 'astro';
-import {
-  ADMIN_TOOLS,
-  GUESTS_MANAGE,
-  INCIDENTS_MANAGE,
-  LOST_FOUND_MANAGE,
-  PARTNERS_MANAGE,
-  REFERRALS_MANAGE,
-  SCHEDULE_MANAGE,
-  USERS_HREF,
-} from '@/components/admin/adminTools';
+import { ADMIN_TOOLS, CAPABILITIES_BY_PAGE, USERS_HREF } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { requirePage } from '@/lib/auth/admin';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
@@ -33,19 +24,13 @@ import { findMemberByEmail } from '@/lib/momence/host-api';
 
 export const prerender = false;
 
-// Tool hrefs plus the manage capabilities (see adminTools.ts).
-// Each manage capability implies view access to the page it governs, so a row
-// can never hold manage without the matching page grant. Every key offered
-// as a checkbox on /admin/users must be listed here, or saving that checkbox
-// is rejected as an unknown page.
-const MANAGE_IMPLIED_PAGE: Record<string, string> = {
-  [SCHEDULE_MANAGE]: '/admin/schedule',
-  [PARTNERS_MANAGE]: '/admin/partners',
-  [REFERRALS_MANAGE]: '/admin/referrals',
-  [INCIDENTS_MANAGE]: '/admin/incidents',
-  [LOST_FOUND_MANAGE]: '/admin/lost-found',
-  [GUESTS_MANAGE]: '/admin/guests',
-};
+// Tool hrefs plus the capabilities under them (adminTools.CAPABILITIES_BY_PAGE).
+// Each capability implies view access to the page it belongs to, so a row
+// can never hold one without the matching page grant. A key not listed
+// there is rejected as an unknown page.
+const MANAGE_IMPLIED_PAGE: Record<string, string> = Object.fromEntries(
+  Object.entries(CAPABILITIES_BY_PAGE).flatMap(([page, keys]) => keys.map((key) => [key, page]))
+);
 
 const GRANTABLE_PAGES = new Set([
   ...ADMIN_TOOLS.map((t) => t.href),

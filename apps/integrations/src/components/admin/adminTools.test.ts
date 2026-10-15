@@ -10,7 +10,12 @@ import {
   GOALS_HREF,
   HIDEABLE_TOOLS,
   hasIncidentsManage,
+  hasScheduleChanges,
+  hasScheduleInsights,
   hasScheduleManage,
+  hasScheduleTimesheet,
+  SCHEDULE_INSIGHTS,
+  SCHEDULE_TIMESHEET,
   SETTINGS_TOOL,
   STAFF_PAGES,
   SUGGESTIONS_TOOL,
@@ -99,7 +104,7 @@ describe('staff pages', () => {
   });
 
   it('lists them in the global search for everyone', () => {
-    const hrefs = searchablePages(toolsForAccess(rosterOnly), false).map((p) => p.href);
+    const hrefs = searchablePages(toolsForAccess(rosterOnly), rosterOnly).map((p) => p.href);
     expect(hrefs).toContain('/admin/messages');
     expect(hrefs).toContain('/admin/notifications');
   });
@@ -129,6 +134,32 @@ describe('every page is an explicit grant', () => {
     }
   });
 
+  it('splits the schedule back office from managing it', () => {
+    // The accountant: everyone's timesheet, nothing else.
+    const accountant = { isAdmin: false, pages: [SCHEDULE_TIMESHEET] };
+    expect(canViewPage(accountant, '/admin/schedule')).toBe(true);
+    expect(hasScheduleTimesheet(accountant)).toBe(true);
+    expect(hasScheduleManage(accountant)).toBe(false);
+    expect(hasScheduleInsights(accountant)).toBe(false);
+    expect(hasScheduleChanges(accountant)).toBe(false);
+    // Managing is not the back office.
+    const manager = { isAdmin: false, pages: ['/admin/schedule', 'schedule:manage'] };
+    expect(hasScheduleTimesheet(manager)).toBe(false);
+    expect(hasScheduleInsights(manager)).toBe(false);
+    // An admin holding the page has all of it.
+    const admin = { isAdmin: true, pages: ['/admin/schedule'] };
+    expect(hasScheduleTimesheet(admin)).toBe(true);
+    expect(hasScheduleInsights(admin)).toBe(true);
+    expect(hasScheduleChanges(admin)).toBe(true);
+    const insights = searchablePages(toolsForAccess(accountant), accountant).map((p) => p.href);
+    expect(insights).toContain('/admin/schedule/timesheet');
+    expect(insights).not.toContain('/admin/schedule/insights');
+    const analyst = { isAdmin: false, pages: [SCHEDULE_INSIGHTS] };
+    expect(searchablePages(toolsForAccess(analyst), analyst).map((p) => p.href)).toContain(
+      '/admin/schedule/insights'
+    );
+  });
+
   it('keeps admin manage powers inside the pages held', () => {
     expect(hasScheduleManage({ isAdmin: true, pages: ['/admin/schedule'] })).toBe(true);
     expect(hasScheduleManage({ isAdmin: true, pages: ['/admin/water'] })).toBe(false);
@@ -147,7 +178,7 @@ describe('global tool visibility', () => {
       expect(tools.map((tool) => tool.href)).not.toContain('/admin/schedule');
       expect(tools.map((tool) => tool.href)).toContain('/admin/water');
       expect(
-        searchablePages(tools, isAdmin).some(
+        searchablePages(tools, access).some(
           (page) => page.href === '/admin/schedule' || page.href.startsWith('/admin/schedule/')
         )
       ).toBe(false);
@@ -162,7 +193,7 @@ describe('global tool visibility', () => {
       SETTINGS_TOOL.href,
     ]);
     expect(tools).toEqual([SETTINGS_TOOL]);
-    expect(searchablePages(tools, true).map((page) => page.href)).toEqual(
+    expect(searchablePages(tools, everyPage).map((page) => page.href)).toEqual(
       expect.arrayContaining(['/admin', '/admin/settings', ...STAFF_PAGES.map((p) => p.href)])
     );
   });

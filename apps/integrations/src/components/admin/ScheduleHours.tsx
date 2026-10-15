@@ -41,9 +41,11 @@ interface BoardData {
   /** All stipends on the manage side; only the viewer's own otherwise. */
   stipends?: StaffStipendRow[];
   stipendOverrides?: StipendOverrideRow[];
-  /** Manage side (schedule:manage / admin) — false = own hours only. */
-  canManage?: boolean;
-  /** Admins additionally see the labor-cost column. */
+  /** Everyone's hours (manage side, or schedule:timesheet) — false = own only. */
+  canViewAllHours?: boolean;
+  /** Pay rates ship for everyone, so the labor-cost column can show. */
+  canViewPay?: boolean;
+  /** Admins edit one-week stipend adjustments here. */
   isAdmin?: boolean;
   selfStaffId?: string | null;
 }
@@ -121,7 +123,8 @@ export function ScheduleHours() {
   // for the first load and for every revalidation.
   const busy = loading || refreshing;
 
-  const canManage = data?.canManage ?? false;
+  const seesEveryone = data?.canViewAllHours ?? false;
+  const seesPay = data?.canViewPay ?? false;
   const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
 
@@ -144,13 +147,13 @@ export function ScheduleHours() {
     );
     // Managers see everyone with hours in range (roster order); employees see
     // only themselves.
-    const visible = canManage ? data.staff : data.staff.filter((s) => s.id === selfId);
+    const visible = seesEveryone ? data.staff : data.staff.filter((s) => s.id === selfId);
     const withHours = new Set(rolled.flatMap((w) => Object.keys(w.byStaff)));
     return {
       staffColumns: visible.filter((s) => withHours.has(s.id)),
       weeks: rolled,
     };
-  }, [data, canManage, selfId, start, end]);
+  }, [data, seesEveryone, selfId, start, end]);
 
   const totals = useMemo(() => {
     const byStaff: Record<string, number> = {};
@@ -220,7 +223,7 @@ export function ScheduleHours() {
       ...staffColumns.flatMap((s) =>
         paid(s) ? [s.display_name, `${s.display_name} due`] : [s.display_name]
       ),
-      ...(canManage ? ['Total', ...(isAdmin ? ['Cost'] : []), '% Founders'] : []),
+      ...(seesEveryone ? ['Total', ...(seesPay ? ['Cost'] : []), '% Founders'] : []),
     ];
     const csvRows = rows.map((row) => [
       rowLabel(row),
@@ -228,10 +231,10 @@ export function ScheduleHours() {
         const hours = fmtHours(row.byStaff[s.id] ?? 0);
         return paid(s) ? [hours, fmtMoney(rowAmounts[row.key]?.byStaff[s.id] ?? 0)] : [hours];
       }),
-      ...(canManage
+      ...(seesEveryone
         ? [
             fmtHours(row.total),
-            ...(isAdmin ? [fmtMoney(rowAmounts[row.key]?.total ?? 0)] : []),
+            ...(seesPay ? [fmtMoney(rowAmounts[row.key]?.total ?? 0)] : []),
             row.founderShare == null ? '' : `${(row.founderShare * 100).toFixed(1)}%`,
           ]
         : []),
@@ -242,8 +245,8 @@ export function ScheduleHours() {
         const hours = fmtHours(totals.byStaff[s.id] ?? 0);
         return paid(s) ? [hours, fmtMoney(totalAmounts.byStaff[s.id] ?? 0)] : [hours];
       }),
-      ...(canManage
-        ? [fmtHours(totals.total), ...(isAdmin ? [fmtMoney(totalAmounts.total)] : []), '']
+      ...(seesEveryone
+        ? [fmtHours(totals.total), ...(seesPay ? [fmtMoney(totalAmounts.total)] : []), '']
         : []),
     ]);
     const csv = [header, ...csvRows].map((r) => r.join(',')).join('\n');
@@ -255,7 +258,7 @@ export function ScheduleHours() {
     URL.revokeObjectURL(url);
   };
 
-  const labelColClass = canManage ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : '';
+  const labelColClass = seesEveryone ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : '';
 
   return (
     <div className="space-y-4">
@@ -346,7 +349,7 @@ export function ScheduleHours() {
 
       {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
-      {!canManage && !selfId && !busy && (
+      {!seesEveryone && !selfId && !busy && (
         <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
           Your login isn't linked to a roster entry yet, so there are no hours to show — ask an
           admin to set your Momence email on the roster.
@@ -371,10 +374,10 @@ export function ScheduleHours() {
                       {s.is_founder && <span title="Founder"> ✦</span>}
                     </th>
                   ))}
-                  {canManage && (
+                  {seesEveryone && (
                     <>
                       <th className="whitespace-nowrap py-2 pr-3 text-right">Total</th>
-                      {isAdmin && (
+                      {seesPay && (
                         <th
                           className="whitespace-nowrap py-2 pr-3 text-right"
                           title="Sum of each person's hours × their hourly rate"
@@ -434,12 +437,12 @@ export function ScheduleHours() {
                         </td>
                       );
                     })}
-                    {canManage && (
+                    {seesEveryone && (
                       <>
                         <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
                           {fmtHours(row.total)}
                         </td>
-                        {isAdmin && (
+                        {seesPay && (
                           <td className="whitespace-nowrap py-2 pr-3 text-right font-mono text-white/60">
                             {fmtMoney(rowAmounts[row.key]?.total ?? 0)}
                           </td>
@@ -475,12 +478,12 @@ export function ScheduleHours() {
                       </td>
                     );
                   })}
-                  {canManage && (
+                  {seesEveryone && (
                     <>
                       <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
                         {fmtHours(totals.total)}
                       </td>
-                      {isAdmin && (
+                      {seesPay && (
                         <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
                           {fmtMoney(totalAmounts.total)}
                         </td>

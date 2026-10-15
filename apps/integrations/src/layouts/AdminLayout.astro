@@ -56,7 +56,7 @@ const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
 const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 // Pages the global search (cmd+K, or the magnifier in the header) can open:
 // the same tools plus their sub-pages, filtered the same way.
-const searchPages = access ? searchablePages(tools, access.isAdmin) : [];
+const searchPages = access ? searchablePages(tools, access) : [];
 // The header's plus button writes a shift note from any page — offered to
 // whoever may open the shift-notes page (everyone on the roster, by default).
 const canAddShiftNote = !!access && canViewPath(access, SHIFT_NOTES_HREF);

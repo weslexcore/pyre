@@ -7,7 +7,11 @@
 
 import { addDays, HOURS_CHANGE_LOOKBACK_DAYS, utcToEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
+import {
+  canViewPage,
+  hasScheduleManage,
+  hasScheduleTimesheet,
+} from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
@@ -51,15 +55,23 @@ export interface ScheduleBoardPayload {
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
   /**
+   * Whether the timesheet shows everyone, not just the caller: the manage
+   * side, or schedule:timesheet (read-only — the accountant's grant).
+   */
+  canViewAllHours: boolean;
+  /**
+   * Whether other people's pay rates ship, for the timesheet's cost column:
+   * schedule:timesheet, or an admin holding the schedule page. The manage
+   * side alone gets hours but no pay.
+   */
+  canViewPay: boolean;
+  /**
    * Whether the caller may open /admin/sops — the board links each duty to
    * the SOP defining it, and a viewer without that grant gets a plain label
    * instead of a link that would bounce them.
    */
   canViewSops: boolean;
-  /**
-   * Whether the caller is an admin — gates the hours report's cost column,
-   * and only admins receive other people's pay_rate (see redactPay below).
-   */
+  /** Whether the caller is an admin — the board's settings and stipend edits. */
   isAdmin: boolean;
   /** The staff row matching the caller's login email, if any. */
   selfStaffId: string | null;
@@ -116,6 +128,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   const canManage = hasScheduleManage(gate.access);
+  const canViewPay = hasScheduleTimesheet(gate.access);
+  const canViewAllHours = canManage || canViewPay;
 
   // Drafts (agent proposals under review) are only returned to the review UI,
   // and only for callers on the manage side.
@@ -296,23 +310,23 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     );
   }
 
-  // Pay rate is payroll data: admins see everyone's; each person only their
-  // own. Redacted here, server-side, in BOTH branches below — pay is stricter
-  // than canManage (a non-admin schedule manager gets hours but no rates),
-  // and unlike hours it never reaches the client for other people.
-  // Stipend hours are hours data, not pay data — same visibility as timeOff:
-  // the manage side sees everyone's, employees only their own.
+  // Pay rate is payroll data: canViewPay sees everyone's; each person only
+  // their own. Redacted here, server-side, in BOTH branches below — pay is
+  // stricter than canManage (a non-admin schedule manager gets hours but no
+  // rates), and unlike hours it never reaches the client for other people.
+  // Stipend hours are hours data, not pay data — everyone's for whoever sees
+  // the whole timesheet, otherwise only the caller's own.
   const stipends = ((stipendsRes.data ?? []) as StaffStipendRow[]).filter(
-    (s) => canManage || (selfStaffId !== null && s.staff_id === selfStaffId)
+    (s) => canViewAllHours || (selfStaffId !== null && s.staff_id === selfStaffId)
   );
   const stipendIds = new Set(stipends.map((s) => s.id));
 
-  // Pay rate is admin-only. Scheduling preferences (target hours, shifts per
+  // Pay rate follows canViewPay. Scheduling preferences (target hours, shifts per
   // week) are what a manager plans around and edits on the Availability tab,
   // so the manage side sees everyone's; employees see only their own.
   const redactPay = (s: StaffRow): StaffRow => {
     if (s.id === selfStaffId) return s;
-    const out = gate.access.isAdmin ? s : { ...s, pay_rate: null };
+    const out = canViewPay ? s : { ...s, pay_rate: null };
     return canManage
       ? out
       : {
@@ -350,6 +364,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       stipendIds.has(o.stipend_id)
     ),
     canManage,
+    canViewAllHours,
+    canViewPay,
     canViewSops: canViewPage(gate.access, '/admin/sops'),
     isAdmin: gate.access.isAdmin,
     selfStaffId,

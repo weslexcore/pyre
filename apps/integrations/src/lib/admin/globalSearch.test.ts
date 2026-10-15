@@ -13,10 +13,12 @@ import {
 } from './globalSearch';
 
 const ALL_TOOLS = ADMIN_TOOLS;
+const ADMIN = { isAdmin: true, pages: ADMIN_TOOLS.map((tool) => tool.href) };
+const STAFF = { isAdmin: false, pages: ['/admin/water', '/admin/schedule'] };
 
 describe('searchablePages', () => {
   it('lists the dashboard, every tool, and the sub-pages under held tools', () => {
-    const pages = searchablePages(ALL_TOOLS, true);
+    const pages = searchablePages(ALL_TOOLS, ADMIN);
     const hrefs = pages.map((page) => page.href);
     expect(hrefs[0]).toBe('/admin');
     expect(hrefs).toContain('/admin/water');
@@ -33,18 +35,18 @@ describe('searchablePages', () => {
 
   it('drops sub-pages whose tool the user does not hold, and admin-only ones', () => {
     const water = ADMIN_TOOLS.filter((tool) => tool.href === '/admin/water');
-    const hrefs = searchablePages(water, false).map((page) => page.href);
+    const hrefs = searchablePages(water, STAFF).map((page) => page.href);
     expect(hrefs).toEqual(['/admin', '/admin/messages', '/admin/notifications', '/admin/water']);
 
     const schedule = ADMIN_TOOLS.filter((tool) => tool.href === '/admin/schedule');
-    const staffHrefs = searchablePages(schedule, false).map((page) => page.href);
+    const staffHrefs = searchablePages(schedule, STAFF).map((page) => page.href);
     expect(staffHrefs).toContain('/admin/schedule/timesheet');
     expect(staffHrefs).not.toContain('/admin/schedule/insights');
   });
 });
 
 describe('matchPages', () => {
-  const pages = searchablePages(ALL_TOOLS, true);
+  const pages = searchablePages(ALL_TOOLS, ADMIN);
 
   it('finds the water log by its cold plunge alias', () => {
     const [first] = matchPages(pages, 'Cold Plunge');

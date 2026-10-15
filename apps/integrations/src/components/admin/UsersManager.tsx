@@ -25,7 +25,10 @@ import {
   LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
+  SCHEDULE_CHANGES,
+  SCHEDULE_INSIGHTS,
   SCHEDULE_MANAGE,
+  SCHEDULE_TIMESHEET,
   SHIFT_NOTES_HREF,
   USERS_HREF,
 } from './adminTools';
@@ -80,34 +83,73 @@ const todayLocal = (): string => {
   ).padStart(2, '0')}`;
 };
 
-// Pages that split view from manage: granting the page is the read/participate
-// level, and the extra "manage" box is the privileged half. Each entry is only
-// offered once the page itself is granted, and is dropped with it.
-const MANAGE_CAPABILITIES: Record<string, { key: string; hint: string }> = {
-  '/admin/schedule': {
-    key: SCHEDULE_MANAGE,
-    hint: "Edit shifts and the roster, sync Momence, review AI drafts, and manage everyone's time off. Without it: view the schedule and manage own blackout dates only.",
-  },
-  '/admin/partners': {
-    key: PARTNERS_MANAGE,
-    hint: 'Edit partners and act on verification requests. Without it: browse the registry and the queue read-only.',
-  },
-  '/admin/referrals': {
-    key: REFERRALS_MANAGE,
-    hint: 'Create and edit referrers and tiers, and revoke redemptions and rewards. Without it: read-only.',
-  },
-  '/admin/incidents': {
-    key: INCIDENTS_MANAGE,
-    hint: 'Read the whole incident log, review and edit reports, and resolve them. Without it: file reports and read back the ones you were part of.',
-  },
-  '/admin/guests': {
-    key: GUESTS_MANAGE,
-    hint: 'Add, rename, re-order, and retire the questions on a guest profile. Without it: look guests up, edit their preferences and notes, and see who is booked into each session.',
-  },
-  '/admin/lost-found': {
-    key: LOST_FOUND_MANAGE,
-    hint: 'Email guests to ask whether a found item is theirs, and record donations to Furbish. Without it: log what you find, browse the log, and hand things back at the desk.',
-  },
+// Pages that split the plain grant from extra powers: granting the page is
+// the read/participate level, and each box under it adds one thing. Each is
+// only offered once the page itself is granted, and is dropped with it.
+interface Capability {
+  key: string;
+  label: string;
+  hint: string;
+}
+
+const MANAGE_CAPABILITIES: Record<string, Capability[]> = {
+  '/admin/schedule': [
+    {
+      key: SCHEDULE_MANAGE,
+      label: 'can manage',
+      hint: "Edit shifts and the roster, sync Momence, review AI drafts, and manage everyone's time off. Without it: view the schedule and manage own blackout dates only.",
+    },
+    {
+      key: SCHEDULE_TIMESHEET,
+      label: "everyone's timesheet",
+      hint: "Read-only: everyone's hours, stipends, pay rates, and labor cost on the Timesheet, with CSV export. Without it: own hours only (can manage shows everyone's hours, but no pay).",
+    },
+    {
+      key: SCHEDULE_INSIGHTS,
+      label: 'insights',
+      hint: "Read-only: the Insights tab — labor cost trends, the payroll forecast, and everyone's hours against their target.",
+    },
+    {
+      key: SCHEDULE_CHANGES,
+      label: 'change log',
+      hint: 'Read-only: the Change Log tab — every schedule edit and who made it.',
+    },
+  ],
+  '/admin/partners': [
+    {
+      key: PARTNERS_MANAGE,
+      label: 'can manage',
+      hint: 'Edit partners and act on verification requests. Without it: browse the registry and the queue read-only.',
+    },
+  ],
+  '/admin/referrals': [
+    {
+      key: REFERRALS_MANAGE,
+      label: 'can manage',
+      hint: 'Create and edit referrers and tiers, and revoke redemptions and rewards. Without it: read-only.',
+    },
+  ],
+  '/admin/incidents': [
+    {
+      key: INCIDENTS_MANAGE,
+      label: 'can manage',
+      hint: 'Read the whole incident log, review and edit reports, and resolve them. Without it: file reports and read back the ones you were part of.',
+    },
+  ],
+  '/admin/guests': [
+    {
+      key: GUESTS_MANAGE,
+      label: 'can manage',
+      hint: 'Add, rename, re-order, and retire the questions on a guest profile. Without it: look guests up, edit their preferences and notes, and see who is booked into each session.',
+    },
+  ],
+  '/admin/lost-found': [
+    {
+      key: LOST_FOUND_MANAGE,
+      label: 'can manage',
+      hint: 'Email guests to ask whether a found item is theirs, and record donations to Furbish. Without it: log what you find, browse the log, and hand things back at the desk.',
+    },
+  ],
 };
 
 /**
@@ -385,15 +427,14 @@ function PagePicker({
   locked?: string[];
   onChange: (next: string[]) => void;
 }) {
-  // Dropping a page drops its manage capability with it, so a revoked page
-  // can't leave a dangling privilege behind. The Boards page is every board,
+  // Dropping a page drops its capabilities with it, so a revoked page can't
+  // leave a dangling privilege behind. The Boards page is every board,
   // so granting it clears the per-board grants rather than leaving dead keys
   // nobody would think to untick later.
   const apply = (grant: string[], revoke: string[]) => {
     const revoked = new Set(revoke.filter((key) => !locked.includes(key)));
     for (const key of revoke) {
-      const capability = MANAGE_CAPABILITIES[key];
-      if (capability) revoked.add(capability.key);
+      for (const capability of MANAGE_CAPABILITIES[key] ?? []) revoked.add(capability.key);
     }
     let next = [...pages.filter((p) => !revoked.has(p)), ...grant];
     if (grant.includes(BOARDS_HREF)) next = next.filter((p) => !isBoardGrantKey(p));
@@ -442,7 +483,7 @@ function PagePicker({
             <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {tools.map((tool) => {
                 const on = pages.includes(tool.href);
-                const capability = MANAGE_CAPABILITIES[tool.href];
+                const capabilities = MANAGE_CAPABILITIES[tool.href] ?? [];
                 // One checkbox per board under Boards, so a community manager
                 // can be given the rental pipeline and nothing else. Hidden
                 // once the whole page is granted — that covers every board.
@@ -458,20 +499,22 @@ function PagePicker({
                       />
                       <span className={on ? 'text-[var(--pyre-creme)]' : ''}>{tool.navLabel}</span>
                     </label>
-                    {capability && on && (
-                      <label
-                        className="ml-5 flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
-                        title={capability.hint}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={pages.includes(capability.key)}
-                          disabled={disabled}
-                          onChange={(e) => toggle(capability.key, e.target.checked)}
-                        />
-                        can manage
-                      </label>
-                    )}
+                    {on &&
+                      capabilities.map((capability) => (
+                        <label
+                          key={capability.key}
+                          className="ml-5 flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
+                          title={capability.hint}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={pages.includes(capability.key)}
+                            disabled={disabled}
+                            onChange={(e) => toggle(capability.key, e.target.checked)}
+                          />
+                          {capability.label}
+                        </label>
+                      ))}
                     {perBoard.length > 0 && (
                       <div className="ml-5 space-y-1">
                         <p className="font-mono text-[10px] text-white/30">or only these boards:</p>

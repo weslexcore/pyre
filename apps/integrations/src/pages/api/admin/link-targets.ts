@@ -26,7 +26,7 @@ export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requireStaff(cookies);
   if (gate instanceof Response) return gate;
 
-  const pages: LinkTarget[] = searchablePages(toolsForAccess(gate.access), gate.access.isAdmin)
+  const pages: LinkTarget[] = searchablePages(toolsForAccess(gate.access), gate.access)
     // The dashboard home is where everyone already starts; it is noise here.
     .filter((page) => page.href !== '/admin')
     .map((page) => ({

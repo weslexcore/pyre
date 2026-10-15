@@ -370,6 +370,35 @@ export function hasScheduleManage(access: PageAccess): boolean {
   return holdsManage(access, '/admin/schedule', SCHEDULE_MANAGE);
 }
 
+// Read-only views on the schedule's back office, each its own grant so they
+// can be handed out without the manage side — an accountant gets the
+// timesheet, not the power to move shifts. Each implies view access to the
+// schedule page; admins holding the schedule page have all three.
+//
+//   schedule:timesheet — everyone's hours, stipends, pay rates, and labor
+//                        cost on the Timesheet (a plain grant shows only
+//                        your own hours; schedule:manage shows everyone's
+//                        hours but no pay).
+//   schedule:insights  — the Insights tab: labor cost trends, payroll
+//                        forecast, and hours against each person's target.
+//   schedule:changes   — the Change Log tab: every schedule edit and who
+//                        made it.
+export const SCHEDULE_TIMESHEET = 'schedule:timesheet';
+export const SCHEDULE_INSIGHTS = 'schedule:insights';
+export const SCHEDULE_CHANGES = 'schedule:changes';
+
+export function hasScheduleTimesheet(access: PageAccess): boolean {
+  return holdsManage(access, '/admin/schedule', SCHEDULE_TIMESHEET);
+}
+
+export function hasScheduleInsights(access: PageAccess): boolean {
+  return holdsManage(access, '/admin/schedule', SCHEDULE_INSIGHTS);
+}
+
+export function hasScheduleChanges(access: PageAccess): boolean {
+  return holdsManage(access, '/admin/schedule', SCHEDULE_CHANGES);
+}
+
 // Same split for partners: a plain '/admin/partners' grant is read-only —
 // browse the registry and the verification queue. This key (or admin) unlocks
 // editing partners and acting on requests (confirm/deny/resend/revoke), all of
@@ -426,14 +455,14 @@ export function hasGuestsManage(access: PageAccess): boolean {
   return holdsManage(access, '/admin/guests', GUESTS_MANAGE);
 }
 
-/** Manage capabilities that imply view access to the page they govern. */
-const MANAGE_IMPLIES_VIEW: Record<string, string> = {
-  '/admin/schedule': SCHEDULE_MANAGE,
-  '/admin/partners': PARTNERS_MANAGE,
-  '/admin/referrals': REFERRALS_MANAGE,
-  '/admin/incidents': INCIDENTS_MANAGE,
-  '/admin/lost-found': LOST_FOUND_MANAGE,
-  '/admin/guests': GUESTS_MANAGE,
+/** Capabilities that imply view access to the page they belong to. */
+export const CAPABILITIES_BY_PAGE: Record<string, string[]> = {
+  '/admin/schedule': [SCHEDULE_MANAGE, SCHEDULE_TIMESHEET, SCHEDULE_INSIGHTS, SCHEDULE_CHANGES],
+  '/admin/partners': [PARTNERS_MANAGE],
+  '/admin/referrals': [REFERRALS_MANAGE],
+  '/admin/incidents': [INCIDENTS_MANAGE],
+  '/admin/lost-found': [LOST_FOUND_MANAGE],
+  '/admin/guests': [GUESTS_MANAGE],
 };
 
 // Grants that used to be issued under a page this tool replaced. A staff row
@@ -459,8 +488,7 @@ export function canViewPage(access: PageAccess, href: string): boolean {
   // manager would hold a board they could not navigate to.
   if (href === BOARDS_HREF && access.pages.some(isBoardGrantKey)) return true;
   if (LEGACY_PAGE_GRANTS[href]?.some((legacy) => access.pages.includes(legacy))) return true;
-  const manageKey = MANAGE_IMPLIES_VIEW[href];
-  return manageKey !== undefined && access.pages.includes(manageKey);
+  return (CAPABILITIES_BY_PAGE[href] ?? []).some((key) => access.pages.includes(key));
 }
 
 /** The tools this user's nav and directory cards should show. */
@@ -510,12 +538,18 @@ interface AdminSubpage {
   /** The tool href this page lives under; viewing the tool is viewing this. */
   parent: string;
   keywords?: string[];
-  /** Admin-only pages nested under a grantable tool (their pages self-check). */
-  adminOnly?: boolean;
+  /**
+   * Sub-pages that need more than the tool's view grant (a capability, or
+   * admin); their pages self-check, and the search hides them unless this
+   * passes.
+   */
+  canView?: (access: PageAccess) => boolean;
 }
 
+const adminOnly = (access: PageAccess) => access.isAdmin;
+
 // Pages nested under a tool. They inherit the tool's view grant (AdminLayout's
-// prefix rule), except the admin-only ones, whose pages redirect non-admins.
+// prefix rule), except the ones with canView, whose pages redirect the rest.
 const ADMIN_SUBPAGES: AdminSubpage[] = [
   { href: '/admin/schedule/calendar', title: 'Calendar', parent: '/admin/schedule' },
   {
@@ -553,14 +587,15 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     href: '/admin/schedule/insights',
     title: 'Schedule Insights',
     parent: '/admin/schedule',
-    adminOnly: true,
+    keywords: ['labor cost', 'payroll forecast', 'target hours'],
+    canView: hasScheduleInsights,
   },
   {
     href: '/admin/schedule/changes',
     title: 'Schedule Changes',
     parent: '/admin/schedule',
     keywords: ['audit', 'history', 'log'],
-    adminOnly: true,
+    canView: hasScheduleChanges,
   },
   {
     href: '/admin/sops/runs',
@@ -609,16 +644,14 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'Plunge Setup',
     parent: '/admin/water',
     keywords: ['tubs', 'gallons', 'volume', 'add plunge', 'configure'],
-    adminOnly: true,
+    canView: adminOnly,
   },
   {
     href: '/admin/guests/fields',
     title: 'Profile Fields',
     parent: '/admin/guests',
     keywords: ['questions', 'preferences', 'configure', 'options'],
-    // Needs guests:manage rather than admin; the page itself checks, and the
-    // search only knows the admin flag, so it stays out of non-admin results.
-    adminOnly: true,
+    canView: hasGuestsManage,
   },
   {
     href: ALL_TASKS_HREF,
@@ -658,7 +691,7 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'Question Log',
     parent: '/admin/ask',
     keywords: ['audit', 'history', 'assistant'],
-    adminOnly: true,
+    canView: adminOnly,
   },
 ];
 
@@ -667,7 +700,7 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
  * they hold (already filtered by toolsForAccess), the dashboard itself, and
  * the sub-pages under those tools.
  */
-export function searchablePages(tools: AdminTool[], isAdmin: boolean): SearchPage[] {
+export function searchablePages(tools: AdminTool[], access: PageAccess): SearchPage[] {
   const sectionLabel = new Map(ADMIN_TOOL_SECTIONS.map((s) => [s.key, s.label]));
   const byHref = new Map(tools.map((tool) => [tool.href, tool]));
   const pages: SearchPage[] = [
@@ -689,7 +722,7 @@ export function searchablePages(tools: AdminTool[], isAdmin: boolean): SearchPag
   for (const sub of ADMIN_SUBPAGES) {
     const parent = byHref.get(sub.parent);
     if (!parent) continue;
-    if (sub.adminOnly && !isAdmin) continue;
+    if (sub.canView && !sub.canView(access)) continue;
     pages.push({
       href: sub.href,
       title: sub.title,

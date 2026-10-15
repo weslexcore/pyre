@@ -15,7 +15,12 @@ export interface AdminGate {
   access: DashboardAccess;
 }
 
-async function requireAccess(
+/**
+ * The gate every require* below is built from: passes when `isAllowed`
+ * accepts the caller's access. Exported for routes gated on a capability
+ * check from adminTools (hasScheduleInsights and friends).
+ */
+export async function requireAccess(
   cookies: AstroCookies,
   isAllowed: (access: DashboardAccess) => boolean
 ): Promise<AdminGate | Response> {
