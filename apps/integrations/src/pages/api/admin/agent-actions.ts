@@ -10,7 +10,8 @@
 // A refused or failed change puts the row back to pending with the route's
 // error, so the card can say why and be tried again.
 //
-//   GET  ?sessionId=…               → { actions }
+//   GET  ?sessionId=…               → { actions } — every session of the
+//                                     conversation that session is in
 //   POST { id, action: 'apply' }   → { action }   (409 when it is no longer pending)
 //   POST { id, action: 'dismiss' } → { action }
 
@@ -19,6 +20,7 @@ import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type PyreAgentActionRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, json } from '@/lib/http/route';
+import { conversationOf, sessionsOf } from '@/lib/knowledge/conversation';
 import { actionView, replayAction, type StepResponse } from '@/lib/pyre-agent/actions';
 import { type ApplyStep, PYRE_AGENT_HREF } from '@/lib/pyre-agent/types';
 import * as boardCards from './board-cards';
@@ -50,11 +52,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const sessionId = (url.searchParams.get('sessionId') ?? '').trim();
   if (!sessionId) return json({ error: 'sessionId is required' }, 400);
 
+  const email = normalizeEmail(gate.user.email);
+  const sessions = await sessionsOf(db, email, await conversationOf(db, email, sessionId));
   const { data, error } = await db
     .from('pyre_agent_actions')
     .select('*')
-    .eq('session_id', sessionId)
-    .eq('asked_by', normalizeEmail(gate.user.email))
+    .in('session_id', sessions)
+    .eq('asked_by', email)
     .order('created_at', { ascending: true })
     .limit(MAX_ACTIONS);
   if (error) return dbError(error);

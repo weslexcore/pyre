@@ -5,7 +5,8 @@
 // admin-only review of everyone's is /api/admin/knowledge-log.
 //
 //   GET                → { conversations } — the caller's conversations, newest activity first
-//   GET ?sessionId=…   → { sessionId, token, turns, routine } — one conversation's questions,
+//   GET ?sessionId=…   → { sessionId, conversationId, token, turns, routine } — one
+//                        conversation's questions,
 //                        answers and trails in order, plus a signed token that lets the caller
 //                        continue it (the ask route decides whether the session is
 //                        still there; if not, the next question starts fresh)
@@ -17,6 +18,13 @@
 // run starts, before its first turn is logged (turns: []), so Run now can
 // open it and stream the answer in.
 //
+// A conversation can span sessions: when its agent session ended and the
+// person wrote again, it carried on in a new session linked to the first
+// (lib/knowledge/conversation). The list shows it once, under its first
+// session's id; reading it returns every session's turns in order, marks
+// where a new session picked up, and hands back the live (newest) session
+// with its token, so the next question goes there.
+//
 // The token is minted here because the log proves ownership: a row with
 // this session id and the caller's email means they opened it. Same gate as
 // the ask route — the Ask page grant on /admin/users.
@@ -27,6 +35,7 @@ import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, json } from '@/lib/http/route';
 import { createAskSessionToken } from '@/lib/knowledge/ask-token';
+import { conversationMap, conversationOf, sessionsOf } from '@/lib/knowledge/conversation';
 import {
   type ConversationTurn,
   groupConversations,
@@ -50,6 +59,7 @@ const MAX_TURNS = 200;
 
 interface TurnRow {
   id: string;
+  session_id: string;
   question: string;
   answer: string | null;
   status: ConversationTurn['status'];
@@ -78,7 +88,13 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       .order('asked_at', { ascending: false })
       .limit(MAX_ROWS);
     if (error) return dbError(error);
-    const conversations = groupConversations((data ?? []) as HistoryRow[], MAX_CONVERSATIONS);
+    // Continuing sessions fold into the conversation they continue.
+    const rows = (data ?? []) as HistoryRow[];
+    const folded = await conversationMap(db, email, [...new Set(rows.map((r) => r.session_id))]);
+    const conversations = groupConversations(
+      rows.map((row) => ({ ...row, session_id: folded.get(row.session_id) ?? row.session_id })),
+      MAX_CONVERSATIONS
+    );
     if (conversations.length > 0) {
       const { data: runs } = await db
         .from('pyre_agent_routine_runs')
@@ -101,21 +117,27 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     return json({ conversations });
   }
 
-  const routine = await routineOrigin(db, email, sessionId);
+  // Any session of a conversation opens the whole conversation.
+  const conversationId = await conversationOf(db, email, sessionId);
+  const sessions = await sessionsOf(db, email, conversationId);
+  const live = sessions[sessions.length - 1];
+  const routine = await routineOrigin(db, email, conversationId);
 
   const { data, error } = await db
     .from('knowledge_queries')
-    .select('id, question, answer, status, error, trail, asked_at')
+    .select('id, session_id, question, answer, status, error, trail, asked_at')
     .eq('asked_by', email)
-    .eq('session_id', sessionId)
+    .in('session_id', sessions)
     .order('asked_at', { ascending: true })
     .limit(MAX_TURNS);
   if (error) return dbError(error);
 
   const rows = (data ?? []) as TurnRow[];
-  if (rows.length === 0 && !routine) return json({ error: 'Conversation not found' }, 404);
+  if (rows.length === 0 && !routine && sessions.length === 1) {
+    return json({ error: 'Conversation not found' }, 404);
+  }
 
-  const turns: ConversationTurn[] = rows.map((row) => ({
+  const turns: ConversationTurn[] = rows.map((row, index) => ({
     id: row.id,
     question: row.question,
     answer: row.answer,
@@ -123,9 +145,19 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     error: row.error,
     trail: trailFromJson(row.trail),
     askedAt: row.asked_at,
+    // The first question a new session took, after the one before it ended.
+    ...(index > 0 && row.session_id !== rows[index - 1].session_id
+      ? { continuesConversation: true }
+      : {}),
   }));
 
-  return json({ sessionId, token: createAskSessionToken(sessionId, email), turns, routine });
+  return json({
+    sessionId: live,
+    conversationId,
+    token: createAskSessionToken(live, email),
+    turns,
+    routine,
+  });
 };
 
 /** The routine run that opened this conversation, when it is one of the caller's. */

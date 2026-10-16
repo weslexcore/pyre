@@ -145,3 +145,19 @@ describe('RoutineBanner', () => {
     expect(gone).not.toContain('Manage routine');
   });
 });
+
+describe('turnFromHistory across sessions', () => {
+  it('marks the question a new session picked the conversation back up on', () => {
+    const base = {
+      id: 'row-2',
+      question: 'And tomorrow?',
+      answer: 'Same as today.',
+      status: 'answered' as const,
+      error: null,
+      trail: [],
+      askedAt: '2026-10-16T12:00:00Z',
+    };
+    expect(turnFromHistory({ ...base, continuesConversation: true }).continued).toBe(true);
+    expect(turnFromHistory(base).continued).toBeUndefined();
+  });
+});

@@ -9,7 +9,13 @@ export const STORAGE_KEY = 'pyre-agent:conversation';
 export const CONVERSATION_PARAM = 'c';
 
 export interface StoredConversation {
+  /** The live agent session — the one a follow-up or a reattach goes to. */
   sessionId: string;
+  /**
+   * The conversation it belongs to (its first session), when that is a
+   * different session: the conversation carried on after its session ended.
+   */
+  conversationId?: string;
   token: string;
   /** A question sent but maybe not logged yet — shown if the history has nothing. */
   pending?: string;
@@ -21,7 +27,14 @@ export function readStored(): StoredConversation | null {
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<StoredConversation>;
     return typeof value.sessionId === 'string' && typeof value.token === 'string'
-      ? { sessionId: value.sessionId, token: value.token, pending: value.pending }
+      ? {
+          sessionId: value.sessionId,
+          token: value.token,
+          pending: value.pending,
+          ...(typeof value.conversationId === 'string'
+            ? { conversationId: value.conversationId }
+            : {}),
+        }
       : null;
   } catch {
     return null;
