@@ -49,6 +49,11 @@ export interface StaffRow {
 	 */
 	calendar_token: string | null;
 	/**
+	 * Whether paydays (see payday.ts) ride along in their personal calendar
+	 * feed as all-day events. Their own choice, from the Subscribe panel.
+	 */
+	calendar_payday: boolean;
+	/**
 	 * Hourly wage in dollars. Never null in the database (default 20; founders
 	 * 0) — null here means "redacted": the API only ships the real value to
 	 * admins and to the row's own person.

@@ -19,6 +19,7 @@ const person = (id: string, over: Partial<StaffRow> = {}): StaffRow => ({
   momence_member_id: null,
   added_by: null,
   calendar_token: null,
+  calendar_payday: false,
   pay_rate: null,
   target_hours_per_week: null,
   min_shifts_per_week: null,

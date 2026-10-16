@@ -250,6 +250,31 @@ export function buildTeamEvents(args: {
   return events;
 }
 
+/**
+ * One all-day event per payday, for people who chose to have them
+ * (staff.calendar_payday). Keyed on the date, so when the pay schedule
+ * changes the old dates drop out of the feed and the new ones appear.
+ */
+export function buildPaydayEvents(args: {
+  paydays: string[];
+  origin: string;
+}): AllDayCalendarEvent[] {
+  const url = `${args.origin}/admin/schedule/calendar`;
+  return args.paydays.map((date) => ({
+    uid: `pyre-payday-${date}@pyresauna.com`,
+    date,
+    allDay: true,
+    summary: 'Pyre — Payday',
+    location: '',
+    description: describe([
+      'Payday. You can turn these off from the Subscribe panel on the schedule calendar.',
+      url,
+    ]),
+    url,
+    status: 'CONFIRMED',
+  }));
+}
+
 /** Join the non-empty description lines (escaping happens in the generator). */
 function describe(parts: Array<string | null>): string {
   return parts.filter((p): p is string => Boolean(p)).join('\n');

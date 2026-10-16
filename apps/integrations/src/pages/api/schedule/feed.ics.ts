@@ -15,22 +15,30 @@
 // convenience — the board's Add-to-calendar button and the shift emails stay
 // the fast path for anything time-sensitive.
 
-import { addDays, lastConfirmedDate, todayEastern } from '@pyre/schedule-core';
+import { addDays, lastConfirmedDate, paydaysBetween, todayEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { generateIcsCalendar } from '@/lib/calendar/ics';
 import { getDb, type ShiftAssignmentRow, type StaffRow } from '@/lib/db';
 import {
+  buildPaydayEvents,
   buildPersonalEvents,
   buildTeamEvents,
   type ShiftWithAssignments,
 } from '@/lib/schedule/calendar-feed';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { getPaySchedule } from '@/lib/schedule/pay-schedule';
 
 export const prerender = false;
 
 /** How much history to carry, so the calendar doubles as a record of hours worked. */
 const PAST_DAYS = 60;
+
+/**
+ * How far ahead paydays run. Unlike shifts they don't wait for the week to
+ * lock — the pay schedule is the commitment — so they go out half a year.
+ */
+const PAYDAY_DAYS_AHEAD = 183;
 
 function text(body: string, status: number): Response {
   return new Response(body, {
@@ -114,17 +122,26 @@ export const GET: APIRoute = async ({ request, url }) => {
   const staffById = new Map(((allStaffRes.data ?? []) as StaffRow[]).map((s) => [s.id, s]));
   const origin = new URL(request.url).origin;
 
+  // Paydays only ride in the personal feed, and only for people who asked.
+  const paySchedule = !wantsTeam && person.calendar_payday ? await getPaySchedule() : null;
+  const paydays = paySchedule
+    ? paydaysBetween(paySchedule, start, addDays(today, PAYDAY_DAYS_AHEAD))
+    : [];
+
   const ics = generateIcsCalendar({
     calendarName: wantsTeam ? 'Pyre — Team Coverage' : 'Pyre — My Shifts',
     events: wantsTeam
       ? buildTeamEvents({ shifts, staffById, origin })
-      : buildPersonalEvents({
-          staffId: person.id,
-          shifts,
-          staffById,
-          origin,
-          dutyCatalog: await loadDutyCatalog(db),
-        }),
+      : [
+          ...buildPersonalEvents({
+            staffId: person.id,
+            shifts,
+            staffById,
+            origin,
+            dutyCatalog: await loadDutyCatalog(db),
+          }),
+          ...buildPaydayEvents({ paydays, origin }),
+        ],
   });
 
   return new Response(ics, {

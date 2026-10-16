@@ -66,6 +66,7 @@ import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
 import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
+import { PayScheduleSettings } from './PayScheduleSettings';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
@@ -106,6 +107,8 @@ interface BoardData {
   canViewSops?: boolean;
   /** Admins additionally see the employee-action toggles. */
   isAdmin?: boolean;
+  /** Paydays in the fetched range, per the admin's pay schedule. */
+  paydays?: string[];
   selfStaffId?: string | null;
   /** Pending requests (all of them on the manage side, own only otherwise). */
   shiftRequests?: ShiftRequestRow[];
@@ -459,6 +462,7 @@ export function ScheduleBoard() {
   const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
   const settings = data?.settings ?? DEFAULT_SETTINGS;
+  const paydays = useMemo(() => new Set(data?.paydays ?? []), [data]);
   const pendingRequestCount = data?.pendingRequestCount ?? 0;
 
   // Pull the standing instructions once, when an admin first opens the panel.
@@ -1415,6 +1419,22 @@ export function ScheduleBoard() {
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                  Payday
+                </p>
+                <p className="font-mono text-xs text-white/50">
+                  When pay lands. Paydays show on the Week and Calendar views, and anyone can add
+                  them to their own calendar from the Subscribe panel on the Calendar tab.
+                </p>
+                <PayScheduleSettings
+                  onSaved={() => {
+                    invalidateJson('/api/admin/schedule-board');
+                    void load();
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
                   Standing instructions for the AI drafter
                 </p>
                 <p className="font-mono text-xs text-white/50">
@@ -1540,6 +1560,14 @@ export function ScheduleBoard() {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <h2 className="flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide text-white/70">
                       {formatChipDate(date)}
+                      {paydays.has(date) && (
+                        <span
+                          className="rounded bg-[var(--pyre-creme)]/15 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-creme)]"
+                          title="Pay lands today"
+                        >
+                          Payday
+                        </span>
+                      )}
                       {beyondHorizon && !dayConfirmed && (
                         <span
                           className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"

@@ -150,7 +150,7 @@ export interface TimedCalendarEvent extends LocalCalendarEventBase {
 }
 
 /**
- * An all-day event on `date` (on-call days). Shown in the calendar's all-day
+ * An all-day event on `date` (on-call days, paydays). Shown in the calendar's all-day
  * strip and marked free, so it doesn't block the day out as busy.
  */
 export interface AllDayCalendarEvent extends LocalCalendarEventBase {
@@ -210,7 +210,8 @@ export function generateIcsCalendar(args: {
       `DTSTAMP:${stamp}`,
       ...eventTimes(event),
       `SUMMARY:${escapeText(event.summary)}`,
-      `LOCATION:${escapeText(event.location)}`,
+      // Paydays happen nowhere in particular.
+      ...(event.location ? [`LOCATION:${escapeText(event.location)}`] : []),
       `DESCRIPTION:${escapeText(event.description)}`,
       ...(event.url ? [`URL:${event.url}`] : []),
       `STATUS:${event.status ?? 'CONFIRMED'}`,

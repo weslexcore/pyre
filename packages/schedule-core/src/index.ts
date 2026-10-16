@@ -8,6 +8,7 @@ export * from "./insights";
 export * from "./labels";
 export * from "./leads";
 export * from "./on-call";
+export * from "./payday";
 export * from "./rest";
 export * from "./standing-instructions";
 export * from "./stipends";

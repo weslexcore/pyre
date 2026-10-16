@@ -5,7 +5,12 @@
 // date filtering, just ownership). Availability and conflicts are computed
 // locally by the islands via lib/schedule.
 
-import { addDays, HOURS_CHANGE_LOOKBACK_DAYS, utcToEastern } from '@pyre/schedule-core';
+import {
+  addDays,
+  HOURS_CHANGE_LOOKBACK_DAYS,
+  paydaysBetween,
+  utcToEastern,
+} from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import {
   canViewPage,
@@ -29,6 +34,7 @@ import {
   type TimeOffRow,
 } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
+import { getPaySchedule } from '@/lib/schedule/pay-schedule';
 import { getScheduleSettings, type ScheduleSettings } from '@/lib/schedule/settings';
 
 export const prerender = false;
@@ -99,6 +105,8 @@ export interface ScheduleBoardPayload {
   pendingRequestCount: number;
   /** The admin toggles for the employee-facing actions. */
   settings: ScheduleSettings;
+  /** Paydays from start through end (YYYY-MM-DD), per the admin's pay schedule. */
+  paydays: string[];
   /**
    * Live assignments on the day before `start` and the day after `end`, so
    * the board's rest-rule check (an evening close followed by next-morning
@@ -339,6 +347,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         };
   };
 
+  const paySchedule = await getPaySchedule();
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
     // dashboard access stay on the manage side. The calendar feed token is
@@ -374,6 +383,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     subRequests,
     pendingRequestCount,
     settings: await getScheduleSettings(),
+    paydays: paySchedule ? paydaysBetween(paySchedule, start, end) : [],
     neighborAssignments,
   };
 

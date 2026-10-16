@@ -1,5 +1,6 @@
 // "Subscribe to my shifts": hands the employee their personal .ics feed URL
-// so their own calendar app keeps itself current.
+// so their own calendar app keeps itself current, and lets them choose
+// whether paydays come along with the shifts.
 //
 // The URL is the credential — anyone holding it can read that person's
 // schedule — so it's minted on first view rather than for the whole roster up
@@ -15,6 +16,8 @@ interface FeedUrls {
   teamFeedUrl: string | null;
   teamWebcalUrl: string | null;
   canManage: boolean;
+  paydays: boolean;
+  paydaysAvailable: boolean;
 }
 
 export function CalendarSubscribe() {
@@ -72,6 +75,27 @@ export function CalendarSubscribe() {
     }
   };
 
+  const setPaydays = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/admin/calendar-feed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'payday', enabled }),
+      });
+      const body = await res.json();
+      if (!res.ok) setError(body.error ?? 'Could not save your payday choice');
+      else {
+        setUrls(body as FeedUrls);
+        setError(null);
+      }
+    } catch {
+      setError('Could not save your payday choice');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copy = async (value: string, key: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -113,6 +137,18 @@ export function CalendarSubscribe() {
         copied={copied === 'mine'}
         onCopy={() => void copy(urls.feedUrl, 'mine')}
       />
+
+      {urls.paydaysAvailable && (
+        <label className="mt-3 flex items-center gap-2 font-mono text-xs text-white/70">
+          <input
+            type="checkbox"
+            checked={urls.paydays}
+            disabled={busy}
+            onChange={(e) => void setPaydays(e.target.checked)}
+          />
+          Include paydays in my calendar, as all-day events
+        </label>
+      )}
 
       {urls.canManage && urls.teamFeedUrl && urls.teamWebcalUrl && (
         <div className="mt-4">

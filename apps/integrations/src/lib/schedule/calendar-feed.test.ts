@@ -5,8 +5,14 @@
 
 import { DEFAULT_DUTY_CATALOG } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
+import { generateIcsCalendar } from '@/lib/calendar/ics';
 import type { ShiftAssignmentRow, StaffRow } from '@/lib/db';
-import { buildPersonalEvents, buildTeamEvents, type ShiftWithAssignments } from './calendar-feed';
+import {
+  buildPaydayEvents,
+  buildPersonalEvents,
+  buildTeamEvents,
+  type ShiftWithAssignments,
+} from './calendar-feed';
 
 const ORIGIN = 'https://pyre-integrations.vercel.app';
 const ME = 'staff-me';
@@ -229,5 +235,22 @@ describe('buildTeamEvents', () => {
 
   it('excludes drafts', () => {
     expect(team(shift({ is_draft: true }))).toEqual([]);
+  });
+});
+
+describe('buildPaydayEvents', () => {
+  const events = buildPaydayEvents({ paydays: ['2026-10-26', '2026-11-09'], origin: ORIGIN });
+
+  it('makes one all-day event per payday, keyed on the date', () => {
+    expect(events.map((e) => [e.uid, e.date, e.allDay, e.summary])).toEqual([
+      ['pyre-payday-2026-10-26@pyresauna.com', '2026-10-26', true, 'Pyre — Payday'],
+      ['pyre-payday-2026-11-09@pyresauna.com', '2026-11-09', true, 'Pyre — Payday'],
+    ]);
+  });
+
+  it('leaves the location off the event', () => {
+    const ics = generateIcsCalendar({ calendarName: 'Pyre — My Shifts', events });
+    expect(ics).toContain('DTSTART;VALUE=DATE:20261026');
+    expect(ics).not.toMatch(/^LOCATION:/m);
   });
 });

@@ -1,7 +1,9 @@
 // The caller's own calendar subscription URL, for the Subscribe panel on
 // /admin/schedule/calendar. GET mints the token on first ask (nobody who never
 // subscribes carries a live credential); POST {action:'rotate'} replaces it,
-// which is how a leaked or stale subscription link is revoked.
+// which is how a leaked or stale subscription link is revoked. POST
+// {action:'payday', enabled} is the person's own choice of whether paydays
+// ride along in their feed (staff.calendar_payday).
 //
 // Both methods act only on the row matching the caller's login email — there
 // is no staffId parameter, so this can't be pointed at anyone else.
@@ -13,6 +15,7 @@ import { hasScheduleManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type StaffRow } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
+import { getPaySchedule } from '@/lib/schedule/pay-schedule';
 
 export const prerender = false;
 
@@ -26,9 +29,13 @@ interface FeedUrls {
   teamFeedUrl: string | null;
   teamWebcalUrl: string | null;
   canManage: boolean;
+  /** Paydays are included in their personal feed. */
+  paydays: boolean;
+  /** An admin has a pay schedule switched on — otherwise there's nothing to include. */
+  paydaysAvailable: boolean;
 }
 
-function urlsFor(request: Request, person: StaffRow, token: string): FeedUrls {
+async function urlsFor(request: Request, person: StaffRow, token: string): Promise<FeedUrls> {
   const origin = new URL(request.url).origin;
   const feedUrl = `${origin}/api/schedule/feed.ics?t=${token}`;
   const teamUrl = `${feedUrl}&scope=team`;
@@ -44,6 +51,8 @@ function urlsFor(request: Request, person: StaffRow, token: string): FeedUrls {
     teamFeedUrl: canManage ? teamUrl : null,
     teamWebcalUrl: canManage ? webcal(teamUrl) : null,
     canManage,
+    paydays: person.calendar_payday,
+    paydaysAvailable: (await getPaySchedule())?.enabled ?? false,
   };
 }
 
@@ -99,7 +108,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     }
   }
 
-  return json(urlsFor(request, person, token));
+  return json(await urlsFor(request, person, token));
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -119,13 +128,29 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
-  if ((body as { action?: string })?.action !== 'rotate') {
-    return json({ error: "action must be 'rotate'" }, 400);
+  const { action, enabled } = (body ?? {}) as { action?: string; enabled?: unknown };
+
+  if (action === 'payday') {
+    if (typeof enabled !== 'boolean') return json({ error: 'enabled must be true or false' }, 400);
+    // The panel only offers this once a link exists (GET mints it).
+    if (!person.calendar_token) return json({ error: 'Open your calendar link first' }, 409);
+    const { error } = await db
+      .from('staff')
+      .update({ calendar_payday: enabled })
+      .eq('id', person.id);
+    if (error) return dbError(error);
+    return json(
+      await urlsFor(request, { ...person, calendar_payday: enabled }, person.calendar_token)
+    );
+  }
+
+  if (action !== 'rotate') {
+    return json({ error: "action must be 'rotate' or 'payday'" }, 400);
   }
 
   const token = mintToken();
   const { error } = await db.from('staff').update({ calendar_token: token }).eq('id', person.id);
   if (error) return dbError(error);
 
-  return json(urlsFor(request, person, token));
+  return json(await urlsFor(request, person, token));
 };

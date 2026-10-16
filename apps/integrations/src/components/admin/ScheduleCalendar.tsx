@@ -2,8 +2,8 @@
 // coverage-colored blocks in each day cell (label, window, who's on) and time
 // off as per-person colored markers along the cell bottom — so the month's
 // shape and everyone's availability read at a glance. Days the viewer works
-// are tinted gold, with their own name first in the block. Read-only; editing
-// happens on the Week board.
+// are tinted gold, with their own name first in the block, and paydays carry
+// a label by the date. Read-only; editing happens on the Week board.
 
 import {
   addDays,
@@ -37,6 +37,8 @@ interface BoardData {
    * time off back from the API anyway). */
   canManage?: boolean;
   selfStaffId?: string | null;
+  /** Paydays in the fetched range, per the admin's pay schedule. */
+  paydays?: string[];
 }
 
 // Distinct per-person hues for the time-off markers, assigned by roster order.
@@ -171,6 +173,7 @@ export function ScheduleCalendar() {
   }, [data]);
 
   const selfId = data?.selfStaffId ?? null;
+  const paydays = useMemo(() => new Set(data?.paydays ?? []), [data]);
 
   // Shifts the viewer is on — those blocks get the gold ring (the shift, not
   // its whole day cell: a day can hold slots they aren't working).
@@ -362,10 +365,15 @@ export function ScheduleCalendar() {
                     }`}
                   >
                     <div
-                      className={`mb-1 text-right font-mono text-[11px] ${
+                      className={`mb-1 flex items-center justify-end gap-1 font-mono text-[11px] ${
                         date === today ? 'font-bold text-[var(--pyre-red)]' : 'text-white/40'
                       }`}
                     >
+                      {paydays.has(date) && (
+                        <span className="mr-auto rounded-sm bg-[var(--pyre-creme)]/15 px-1 text-[9px] font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
+                          Payday
+                        </span>
+                      )}
                       {date >= firstTentative &&
                         (shifts.length === 0 || shifts.some((s) => isTentativeShift(s, today))) && (
                           <span
@@ -477,6 +485,14 @@ export function ScheduleCalendar() {
           dashed = tentative (not locked or confirmed yet)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
+        {paydays.size > 0 && (
+          <span className="text-[var(--pyre-creme)]">
+            <span className="mr-1 rounded-sm bg-[var(--pyre-creme)]/15 px-1 text-[9px] font-bold uppercase">
+              Payday
+            </span>
+            = pay lands that day
+          </span>
+        )}
         {selfId && (
           <span className="text-[var(--pyre-gold)]">
             <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[var(--pyre-gold)]/25 ring-1 ring-inset ring-[var(--pyre-gold)]/60 align-middle" />
