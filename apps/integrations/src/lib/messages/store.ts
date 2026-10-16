@@ -31,8 +31,10 @@ export type LoadResult =
 const LIST_LIMIT = 200;
 
 /**
- * The messages `viewer` may read, pinned first then newest first, with each
- * thread's reply count and last activity. Archived messages only for admins.
+ * The messages `viewer` may read, pinned first then newest sent first, with
+ * each thread's reply count and last activity. Archived messages only for
+ * admins. Drafts the viewer may work on are included (sent_at null); the
+ * page shows them apart.
  */
 export async function listMessagesForViewer(
   db: SupabaseClient,
@@ -43,7 +45,7 @@ export async function listMessagesForViewer(
     .from('admin_messages')
     .select('*')
     .order('pinned', { ascending: false })
-    .order('created_at', { ascending: false })
+    .order('sent_at', { ascending: false, nullsFirst: true })
     .limit(LIST_LIMIT);
   if (!options.includeArchived) query = query.is('archived_at', null);
   const { data, error } = await query;
@@ -77,10 +79,10 @@ export async function listMessagesForViewer(
   const messages: MessageSummary[] = visible.map((m) => ({
     ...m,
     reply_count: counts.get(m.id) ?? 0,
-    last_activity_at: latest.get(m.id) ?? m.created_at,
+    last_activity_at: latest.get(m.id) ?? m.sent_at ?? m.updated_at,
   }));
   const people = await getPeopleNames([
-    ...visible.flatMap((m) => [m.author_email, m.updated_by ?? '']),
+    ...visible.flatMap((m) => [m.author_email, m.updated_by ?? '', ...m.shared_with]),
     ...authors,
   ]);
   return { messages, people, error: null };
@@ -133,6 +135,7 @@ export async function loadMessageForViewer(
   const people = await getPeopleNames([
     message.author_email,
     message.updated_by ?? '',
+    ...message.shared_with,
     ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
     ...emailedTo,
   ]);

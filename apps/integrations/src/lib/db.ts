@@ -599,6 +599,10 @@ export interface AdminMessageRow {
   pinned: boolean;
   /** Set when archived: hidden from staff, read-only. */
   archived_at: string | null;
+  /** When it went out to its audience; null while it's a draft. */
+  sent_at: string | null;
+  /** Admins besides the author who may open and edit the draft; empty = private. */
+  shared_with: string[];
   /** Session email of the last admin to edit it; null until edited. */
   updated_by: string | null;
   created_at: string;

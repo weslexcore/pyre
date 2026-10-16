@@ -1,6 +1,7 @@
 // /admin/messages: the messages the admins have written that this person
 // may read, pinned first, each linking to its thread. Admins also get the
-// composer for a new message and can peek at the archive.
+// composer for a new message (send it, or save it as a draft) and can peek
+// at the archive; the drafts they can work on sit above the sent list.
 import { useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { goldButtonClass } from '@/components/admin/ui';
@@ -13,7 +14,7 @@ import { excerpt } from '@/lib/notifications/types';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { emptyDraft, MessageComposer, type MessageDraft } from './MessageComposer';
-import { buttonClass, chipClass } from './messagesUi';
+import { buttonClass, chipClass, draftSharing } from './messagesUi';
 import type { GrantablePerson } from './SopAccessPicker';
 
 interface ListResponse {
@@ -33,8 +34,11 @@ export function MessagesIndex() {
 
   const isAdmin = feed.data?.viewer.role === 'admin';
   const people = feed.data?.people ?? {};
+  const all = feed.data?.messages ?? [];
+  const drafts = all.filter((m) => m.sent_at === null);
+  const sent = all.filter((m) => m.sent_at !== null);
 
-  const create = async (draft: MessageDraft) => {
+  const create = async (draft: MessageDraft, asDraft: boolean) => {
     setBusy(true);
     setError(null);
     try {
@@ -47,7 +51,7 @@ export function MessagesIndex() {
           audienceRoles: draft.audience.roles,
           audienceEmails: draft.audience.emails,
           pinned: draft.pinned,
-          email: draft.email,
+          ...(asDraft ? { draft: true, sharedWith: draft.sharedWith } : { email: draft.email }),
         }),
       });
       if (!res.ok) throw new Error(await readError(res));
@@ -55,7 +59,9 @@ export function MessagesIndex() {
       invalidateJson('/api/admin/messages');
       window.location.assign(`/admin/messages/${message.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send');
+      setError(
+        e instanceof Error ? e.message : asDraft ? 'Failed to save the draft' : 'Failed to send'
+      );
       setBusy(false);
     }
   };
@@ -91,7 +97,9 @@ export function MessagesIndex() {
             busy={busy}
             submitLabel="Send"
             offerEmail
-            onSubmit={(draft) => void create(draft)}
+            authorEmail={feed.data?.viewer.email}
+            onSubmit={(draft) => void create(draft, false)}
+            onSaveDraft={(draft) => void create(draft, true)}
             onCancel={() => setComposing(false)}
           />
         </section>
@@ -104,15 +112,52 @@ export function MessagesIndex() {
         </p>
       )}
 
+      {drafts.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">
+            Drafts
+          </h2>
+          <ul className="space-y-2">
+            {drafts.map((m) => (
+              <li key={m.id}>
+                <a
+                  href={`/admin/messages/${m.id}`}
+                  data-astro-prefetch
+                  className="block rounded border border-dashed border-white/20 px-4 py-3 transition-colors hover:border-white/40 hover:bg-white/5"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className={`${chipClass} border-white/30 text-white/60`}>Draft</span>
+                    <span className="text-base font-semibold text-[var(--pyre-creme)]">
+                      {m.title}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-white/60">
+                    {excerpt(m.body_md, 220)}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/40">
+                    <span>{personName(m.author_email, people)}</span>
+                    <span>
+                      saved {etStamp(m.updated_at)}
+                      {m.updated_by && ` by ${personName(m.updated_by, people)}`}
+                    </span>
+                    <span className="ml-auto">{draftSharing(m, people)}</span>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {feed.loading ? (
         <p className="py-8 text-center text-sm text-white/40">Loading…</p>
-      ) : (feed.data?.messages.length ?? 0) === 0 ? (
+      ) : sent.length === 0 ? (
         <p className="py-8 text-center text-sm text-white/40">
           {isAdmin ? 'No messages yet. Write the first one.' : 'No messages for you yet.'}
         </p>
       ) : (
         <ul className="space-y-2">
-          {feed.data?.messages.map((m) => (
+          {sent.map((m) => (
             <li key={m.id}>
               <a
                 href={`/admin/messages/${m.id}`}
@@ -139,7 +184,7 @@ export function MessagesIndex() {
                 <p className="mt-1 line-clamp-2 text-sm text-white/60">{excerpt(m.body_md, 220)}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/40">
                   <span>{personName(m.author_email, people)}</span>
-                  <span title={etStamp(m.created_at)}>{etStamp(m.created_at)}</span>
+                  <span>{etStamp(m.sent_at ?? m.created_at)}</span>
                   <span>
                     {m.reply_count === 0
                       ? 'no replies'

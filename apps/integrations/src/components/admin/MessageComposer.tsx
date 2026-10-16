@@ -1,8 +1,10 @@
 // Writing (or editing) an admin message: a title, a markdown body with a
 // live preview through the same renderer the SOP library uses, the audience
 // picker the SOP access settings use, a pin toggle, and — for a new message —
-// whether to email it to the audience too (on by default). Admin-only by the
-// routes; the parent decides what "save" means (create or update).
+// whether to email it to the audience too (on by default). A message that
+// hasn't gone out yet can also be saved as a draft, kept private or shared
+// with other admins to work on together. Admin-only by the routes; the parent
+// decides what "save" and "save draft" mean (create or update).
 import { useState } from 'react';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
 import { roleIsNotified } from '@/lib/messages/access';
@@ -20,6 +22,8 @@ export interface MessageDraft {
   pinned: boolean;
   /** Also email it to everyone it reaches; only a new message offers this. */
   email: boolean;
+  /** Admins the draft is shared with besides its author; empty = private. */
+  sharedWith: string[];
 }
 
 export const EVERYONE: SopRole[] = ['staff', 'shift_lead', 'admin'];
@@ -31,7 +35,61 @@ export function emptyDraft(): MessageDraft {
     audience: { roles: EVERYONE.slice(), emails: [] },
     pinned: false,
     email: true,
+    sharedWith: [],
   };
+}
+
+const checkboxClass = 'h-3.5 w-3.5 shrink-0 accent-[var(--pyre-gold)] cursor-pointer';
+
+/** Which admins can open and edit the draft alongside its author. */
+function DraftSharingPicker({
+  admins,
+  sharedWith,
+  disabled,
+  onChange,
+}: {
+  admins: GrantablePerson[];
+  sharedWith: string[];
+  disabled: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  const toggle = (email: string) =>
+    onChange(
+      sharedWith.includes(email) ? sharedWith.filter((e) => e !== email) : [...sharedWith, email]
+    );
+  return (
+    <fieldset className="rounded border border-white/10 bg-white/5 p-3">
+      <legend className="px-1 font-mono text-[10px] uppercase tracking-wide text-white/40">
+        Share draft with
+      </legend>
+      {admins.length === 0 ? (
+        <p className="text-xs text-white/40">No other admins on the roster.</p>
+      ) : (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {admins.map((person) => (
+            <label
+              key={person.email}
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-white/70"
+            >
+              <input
+                type="checkbox"
+                className={checkboxClass}
+                checked={sharedWith.includes(person.email)}
+                disabled={disabled}
+                onChange={() => toggle(person.email)}
+              />
+              {person.name}
+            </label>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 font-mono text-[10px] text-white/30">
+        {sharedWith.length === 0
+          ? 'Private: only you can see this draft until it is sent.'
+          : 'They can open and edit the draft, and send it. Nobody else sees it until it is sent.'}
+      </p>
+    </fieldset>
+  );
 }
 
 export function MessageComposer({
@@ -40,7 +98,9 @@ export function MessageComposer({
   busy,
   submitLabel,
   offerEmail = false,
+  authorEmail,
   onSubmit,
+  onSaveDraft,
   onCancel,
 }: {
   initial: MessageDraft;
@@ -50,7 +110,11 @@ export function MessageComposer({
   submitLabel: string;
   /** Show the "also email" switch (new messages only; edits never re-send). */
   offerEmail?: boolean;
+  /** The draft's author — left out of the sharing picker, they always have it. */
+  authorEmail?: string;
   onSubmit: (draft: MessageDraft) => void;
+  /** Offer "Save draft" and the sharing picker (messages not yet sent). */
+  onSaveDraft?: (draft: MessageDraft) => void;
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState<MessageDraft>(initial);
@@ -65,6 +129,9 @@ export function MessageComposer({
   };
   const reached = staff.filter(
     (person) => roleIsNotified(sent, person.role) || sent.audience_emails.includes(person.email)
+  );
+  const otherAdmins = staff.filter(
+    (person) => person.role === 'admin' && person.email !== authorEmail
   );
 
   return (
@@ -136,6 +203,15 @@ export function MessageComposer({
         onChange={(audience) => setDraft((d) => ({ ...d, audience }))}
       />
 
+      {onSaveDraft && (
+        <DraftSharingPicker
+          admins={otherAdmins}
+          sharedWith={draft.sharedWith}
+          disabled={busy}
+          onChange={(sharedWith) => setDraft((d) => ({ ...d, sharedWith }))}
+        />
+      )}
+
       {offerEmail && (
         <p className="font-mono text-[10px] text-white/40">
           {reached.length === 0
@@ -150,6 +226,16 @@ export function MessageComposer({
         <button type="submit" className={goldButtonClass} disabled={!canSubmit}>
           {submitLabel}
         </button>
+        {onSaveDraft && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={!canSubmit}
+            onClick={() => onSaveDraft(draft)}
+          >
+            Save draft
+          </button>
+        )}
         {onCancel && (
           <button type="button" className={buttonClass} disabled={busy} onClick={onCancel}>
             Cancel

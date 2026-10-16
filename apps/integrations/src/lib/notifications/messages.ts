@@ -4,6 +4,9 @@
 // broadcast). Both share the message as their source, so opening the thread
 // reads all of them at once. Best-effort like every notifier.
 //
+// A draft notifies nobody in its audience until it's sent; sharing one with
+// another admin tells just them, so they know there's something to work on.
+//
 // A new message can also be emailed to its audience (on by default in the
 // composer): the whole message, with a link back to the thread for
 // questions and additions.
@@ -22,9 +25,15 @@ export function messageHref(id: string): string {
   return `/admin/messages/${id}`;
 }
 
+/**
+ * Tell a message's audience it went out. `senderEmail` is whoever pressed
+ * send — the author, or a collaborator sending a shared draft (who then
+ * isn't pinged, and the author is).
+ */
 export async function notifyMessagePosted(
   db: SupabaseClient,
-  message: AdminMessageRow
+  message: AdminMessageRow,
+  senderEmail: string = message.author_email
 ): Promise<number> {
   const rows = (await listStaff()) ?? [];
   return createNotifications(db, resolveAudience(rows, message), {
@@ -33,7 +42,9 @@ export async function notifyMessagePosted(
     body: excerpt(message.body_md),
     href: messageHref(message.id),
     source: { type: 'admin_message', id: message.id },
-    actorEmail: message.author_email,
+    actorEmail: senderEmail,
+    // A sent draft replaces its collaborators' unread "shared a draft" row.
+    supersede: true,
   });
 }
 
@@ -43,16 +54,18 @@ export function absolutizeLinks(bodyMd: string, origin: string): string {
 }
 
 /**
- * Email a new message to everyone it reaches but its author. Returns how
- * many emails went out; failures are logged per recipient and never thrown.
+ * Email a new message to everyone it reaches but its author and whoever
+ * sent it. Returns how many emails went out; failures are logged per
+ * recipient and never thrown.
  */
 export async function emailMessagePosted(
   message: AdminMessageRow,
-  origin: string
+  origin: string,
+  senderEmail: string = message.author_email
 ): Promise<number> {
   const rows = (await listStaff()) ?? [];
-  const author = normalizeEmail(message.author_email);
-  const recipients = resolveAudience(rows, message).filter((email) => email !== author);
+  const skip = new Set([normalizeEmail(message.author_email), normalizeEmail(senderEmail)]);
+  const recipients = resolveAudience(rows, message).filter((email) => !skip.has(email));
   if (recipients.length === 0) return 0;
   const props = {
     authorName: nameFor(rows, message.author_email),
@@ -95,6 +108,25 @@ export async function notifyMessageAudienceWidened(
     href: messageHref(message.id),
     source: { type: 'admin_message', id: message.id },
     // The author wrote it; the editor only widened it — neither is pinged.
+    actorEmail: editorEmail,
+  });
+}
+
+/** A draft was shared with more admins: tell the ones it adds. */
+export async function notifyDraftShared(
+  db: SupabaseClient,
+  message: AdminMessageRow,
+  added: string[],
+  editorEmail: string
+): Promise<number> {
+  if (added.length === 0) return 0;
+  const rows = (await listStaff()) ?? [];
+  return createNotifications(db, added, {
+    kind: 'admin_message',
+    title: `${nameFor(rows, editorEmail)} shared a draft: ${message.title}`,
+    body: excerpt(message.body_md),
+    href: messageHref(message.id),
+    source: { type: 'admin_message', id: message.id },
     actorEmail: editorEmail,
   });
 }

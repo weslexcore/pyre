@@ -60,3 +60,24 @@ export function parseAudience(
   }
   return { ok: true, audience: { roles: uniqueRoles, emails: uniqueEmails } };
 }
+
+/**
+ * The admins a draft is shared with: lowercased, deduped, the author left
+ * out (they always have it). Empty is valid — a private draft. Whether each
+ * one is an admin on the roster is the route's check.
+ */
+export function parseSharedWith(
+  value: unknown,
+  author: string
+): { ok: true; emails: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(value) || !value.every((e) => typeof e === 'string')) {
+    return { ok: false, error: 'sharedWith must be a list of emails' };
+  }
+  const emails = [...new Set((value as string[]).map(normalizeEmail).filter(Boolean))].filter(
+    (email) => email !== author
+  );
+  if (emails.length > AUDIENCE_EMAILS_MAX) {
+    return { ok: false, error: `sharedWith may name at most ${AUDIENCE_EMAILS_MAX} people` };
+  }
+  return { ok: true, emails };
+}

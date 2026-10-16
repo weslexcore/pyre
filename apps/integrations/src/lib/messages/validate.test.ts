@@ -4,6 +4,7 @@ import {
   normalizeBody,
   normalizeTitle,
   parseAudience,
+  parseSharedWith,
   REPLY_MAX,
   TITLE_MAX,
 } from './validate';
@@ -47,5 +48,20 @@ describe('parseAudience', () => {
     expect(bad(['boss'], [])).toMatch(/audienceRoles/);
     expect(bad(['staff'], [1])).toMatch(/audienceEmails/);
     expect(bad('staff', [])).toMatch(/audienceRoles/);
+  });
+});
+
+describe('parseSharedWith', () => {
+  it('lowercases, dedupes, and leaves the author out; empty is a private draft', () => {
+    expect(parseSharedWith(['A@x.test', 'a@x.test', 'me@x.test'], 'me@x.test')).toEqual({
+      ok: true,
+      emails: ['a@x.test'],
+    });
+    expect(parseSharedWith([], 'me@x.test')).toEqual({ ok: true, emails: [] });
+  });
+
+  it('refuses anything but a list of strings', () => {
+    expect(parseSharedWith('a@x.test', 'me@x.test').ok).toBe(false);
+    expect(parseSharedWith([1], 'me@x.test').ok).toBe(false);
   });
 });

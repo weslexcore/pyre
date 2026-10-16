@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addedAudience,
+  addedCollaborators,
+  canChangeMessage,
   canReplyToMessage,
   canTouchReply,
   canViewMessage,
@@ -13,6 +15,8 @@ const message = {
   audience_roles: ['shift_lead', 'admin'] as ('staff' | 'shift_lead' | 'admin')[],
   audience_emails: ['named@pyre.test'],
   archived_at: null as string | null,
+  sent_at: '2026-09-14T00:00:00Z' as string | null,
+  shared_with: [] as string[],
 };
 
 const admin = { role: 'admin' as const, email: 'admin@pyre.test' };
@@ -156,5 +160,36 @@ describe('addedAudience', () => {
     expect(addedAudience(rows, message, plusOne)).toEqual(['staff@pyre.test']);
     const narrower = { ...message, audience_roles: ['admin' as const], audience_emails: [] };
     expect(addedAudience(rows, message, narrower)).toEqual([]);
+  });
+});
+
+describe('drafts', () => {
+  const author = { role: 'admin' as const, email: 'wes@pyre.test' };
+  const draft = { ...message, sent_at: null };
+  const shared = { ...draft, shared_with: ['admin@pyre.test', 'lead@pyre.test'] };
+
+  it('a private draft is its author’s alone, other admins and the audience included', () => {
+    expect(canViewMessage(author, draft)).toBe(true);
+    expect(canViewMessage(admin, draft)).toBe(false);
+    expect(canViewMessage(lead, draft)).toBe(false);
+    expect(canViewMessage(named, draft)).toBe(false);
+  });
+
+  it('a shared draft opens to the admins it names, never to non-admins', () => {
+    expect(canViewMessage(admin, shared)).toBe(true);
+    expect(canChangeMessage(admin, shared)).toBe(true);
+    expect(canViewMessage(lead, shared)).toBe(false);
+    expect(canChangeMessage({ role: 'admin', email: 'other@pyre.test' }, shared)).toBe(false);
+  });
+
+  it('a draft has no thread; once sent, any admin may change it', () => {
+    expect(canReplyToMessage(author, shared)).toBe(false);
+    expect(canChangeMessage({ role: 'admin', email: 'other@pyre.test' }, message)).toBe(true);
+    expect(canChangeMessage(lead, message)).toBe(false);
+  });
+
+  it('sharing pings only the admins it adds, never the editor', () => {
+    expect(addedCollaborators(['a@x'], ['a@x', 'b@x', 'me@x'], 'me@x')).toEqual(['b@x']);
+    expect(addedCollaborators(['a@x', 'b@x'], ['a@x'], 'me@x')).toEqual([]);
   });
 });

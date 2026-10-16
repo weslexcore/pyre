@@ -6,6 +6,11 @@
 // replying is open to whoever can see a message that isn't archived, and
 // editing or deleting a reply is its author or an admin.
 //
+// A draft (sent_at null) sits outside all of that: only its author and the
+// admins it's shared with (shared_with) can open it — other admins included
+// — and those same people edit, send, or delete it. It has no thread until
+// it is sent.
+//
 // Client-bundle-safe (no db/env imports): the islands use it to decide which
 // controls to draw, and every route re-checks it server-side.
 
@@ -16,14 +21,34 @@ import { canUseDashboard, roleForStaffRow, type SopRole, type SopViewer } from '
 /** The parts of a message row the access rules read. */
 export type MessageAccessFields = Pick<
   AdminMessageRow,
-  'author_email' | 'audience_roles' | 'audience_emails' | 'archived_at'
+  'author_email' | 'audience_roles' | 'audience_emails' | 'archived_at' | 'sent_at' | 'shared_with'
 >;
 
 /** The parts of a reply row the edit rule reads. */
 export type ReplyLike = Pick<AdminMessageReplyRow, 'author_email'>;
 
+/** Whether the message is still a draft (saved, not sent). */
+export function isDraft(message: Pick<AdminMessageRow, 'sent_at'>): boolean {
+  return message.sent_at === null;
+}
+
+/**
+ * Whether `viewer` may open and work on this draft: its author, or an admin
+ * it's shared with. Sharing with someone who has since lost admin leaves
+ * them out, since only admins write messages.
+ */
+export function canEditDraft(
+  viewer: SopViewer,
+  message: Pick<AdminMessageRow, 'author_email' | 'shared_with'>
+): boolean {
+  if (viewer.email.length === 0) return false;
+  if (message.author_email === viewer.email) return true;
+  return viewer.role === 'admin' && message.shared_with.includes(viewer.email);
+}
+
 /** Whether `viewer` may read this message. */
 export function canViewMessage(viewer: SopViewer, message: MessageAccessFields): boolean {
+  if (isDraft(message)) return canEditDraft(viewer, message);
   if (viewer.role === 'admin') return true;
   if (viewer.email.length > 0 && message.author_email === viewer.email) return true;
   if (message.archived_at) return false;
@@ -31,9 +56,9 @@ export function canViewMessage(viewer: SopViewer, message: MessageAccessFields):
   return viewer.email.length > 0 && message.audience_emails.includes(viewer.email);
 }
 
-/** Whether `viewer` may add to the thread: visible and not archived. */
+/** Whether `viewer` may add to the thread: visible, sent, and not archived. */
 export function canReplyToMessage(viewer: SopViewer, message: MessageAccessFields): boolean {
-  return canViewMessage(viewer, message) && !message.archived_at;
+  return canViewMessage(viewer, message) && !isDraft(message) && !message.archived_at;
 }
 
 /** Whether `viewer` may edit or delete this reply: its author, or an admin. */
@@ -45,6 +70,27 @@ export function canTouchReply(reply: ReplyLike, viewer: SopViewer): boolean {
 /** Only admins write, edit, pin, archive, or delete messages. */
 export function canManageMessages(viewer: SopViewer): boolean {
   return viewer.role === 'admin';
+}
+
+/**
+ * Whether `viewer` may edit, send, or delete this message: any admin once
+ * it's sent, only the draft's author and collaborators before.
+ */
+export function canChangeMessage(
+  viewer: SopViewer,
+  message: Pick<AdminMessageRow, 'author_email' | 'shared_with' | 'sent_at'>
+): boolean {
+  if (!canManageMessages(viewer)) return false;
+  return isDraft(message) ? canEditDraft(viewer, message) : true;
+}
+
+/**
+ * Who a sharing edit newly brings onto a draft: in `after` but not `before`,
+ * and not the person making the edit.
+ */
+export function addedCollaborators(before: string[], after: string[], editor: string): string[] {
+  const had = new Set(before);
+  return after.filter((email) => !had.has(email) && email !== editor);
 }
 
 /**

@@ -7,15 +7,26 @@
 //
 //   GET  [?archived=1]         → { messages, people, viewer, staff? }
 //   GET  ?id=<uuid>            → { message, replies, people, viewer }
-//   POST { title, bodyMd, audienceRoles, audienceEmails, pinned?, email? }
+//   POST { title, bodyMd, audienceRoles, audienceEmails, pinned?, email?,
+//          draft?, sharedWith? }
 //                              → { message, people, notified, emailed }
-//   PATCH { id, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, archived? }
-//                              → { message, people, notified }
+//   PATCH { id, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, archived?,
+//           sharedWith?, send?, email?, expectedUpdatedAt? }
+//                              → { message, people, notified, emailed }
+//   DELETE ?id=<uuid>          → { ok: true }
 //
 // Posting notifies the whole audience, and unless `email: false` also emails
 // them the message with a link to its thread; an edit that widens it notifies the
 // people it adds (lib/notifications/messages).
-//   DELETE ?id=<uuid>          → { ok: true }
+//
+// `draft: true` saves the message without sending it: nobody in the audience
+// sees it or hears about it. `sharedWith` names the admins who may open and
+// edit the draft alongside its author (empty = private), and adding someone
+// notifies them. PATCH `send: true` sends a draft — the same notifications and
+// (unless `email: false`) emails as posting it. Only the draft's author and
+// collaborators may change, send, or delete it (lib/messages/access).
+// `expectedUpdatedAt` is the updated_at the editor started from: if someone
+// else saved since, the PATCH is refused with 409 rather than overwriting.
 //
 // Opening one message marks the viewer's notifications about it read.
 // `staff` (the roster the audience picker offers) rides only on the admin
@@ -27,10 +38,23 @@ import { type AdminGate, assertSameOrigin, requireAdmin, requireStaff } from '@/
 import { type AdminMessageRow, getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
+import {
+  addedCollaborators,
+  canChangeMessage,
+  canViewMessage,
+  isDraft,
+} from '@/lib/messages/access';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
-import { BODY_MAX, normalizeBody, normalizeTitle, parseAudience } from '@/lib/messages/validate';
+import {
+  BODY_MAX,
+  normalizeBody,
+  normalizeTitle,
+  parseAudience,
+  parseSharedWith,
+} from '@/lib/messages/validate';
 import {
   emailMessagePosted,
+  notifyDraftShared,
   notifyMessageAudienceWidened,
   notifyMessagePosted,
 } from '@/lib/notifications/messages';
@@ -59,6 +83,25 @@ async function checkedAudience(
     return { error: `audienceEmails names people not on the roster: ${unknown.join(', ')}` };
   }
   return parsed.audience;
+}
+
+/** The admins a draft is shared with, checked against the roster. */
+async function checkedSharedWith(
+  value: unknown,
+  author: string
+): Promise<{ emails: string[] } | { error: string }> {
+  const parsed = parseSharedWith(value, author);
+  if (!parsed.ok) return { error: parsed.error };
+  const admins = new Set(
+    (await listGrantablePeople())
+      .filter((person) => person.role === 'admin')
+      .map((person) => person.email)
+  );
+  const notAdmins = parsed.emails.filter((email) => !admins.has(email));
+  if (notAdmins.length > 0) {
+    return { error: `Drafts can only be shared with admins: ${notAdmins.join(', ')}` };
+  }
+  return { emails: parsed.emails };
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown> | Response> {
@@ -123,6 +166,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.email !== undefined && typeof body.email !== 'boolean') {
     return json({ error: 'email must be a boolean' }, 400);
   }
+  if (body.draft !== undefined && typeof body.draft !== 'boolean') {
+    return json({ error: 'draft must be a boolean' }, 400);
+  }
+  const draft = body.draft === true;
+  let sharedWith: string[] = [];
+  if (body.sharedWith !== undefined) {
+    if (!draft) return json({ error: 'Only a draft can be shared' }, 400);
+    const shared = await checkedSharedWith(body.sharedWith, email);
+    if ('error' in shared) return json({ error: shared.error }, 400);
+    sharedWith = shared.emails;
+  }
 
   const { data, error } = await db
     .from('admin_messages')
@@ -133,12 +187,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       audience_roles: audience.roles,
       audience_emails: audience.emails,
       pinned: body.pinned === true,
+      // Left out for a send, so the column's now() default stamps it.
+      ...(draft ? { sent_at: null, shared_with: sharedWith } : {}),
     })
     .select('*')
     .single();
   if (error) return dbError(error);
   const message = data as AdminMessageRow;
 
+  if (draft) {
+    const notified = await notifyDraftShared(db, message, sharedWith, email);
+    return json({ message, people: await getPeopleNames([email]), notified, emailed: 0 }, 201);
+  }
   const notified = await notifyMessagePosted(db, message);
   const emailed =
     body.email === false ? 0 : await emailMessagePosted(message, new URL(request.url).origin);
@@ -156,14 +216,43 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
+  const viewer = await viewerOf(gate);
 
   const id = typeof body.id === 'string' ? body.id : '';
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
+  const { data: found, error: readError } = await db
+    .from('admin_messages')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) return dbError(readError);
+  const existing = (found as AdminMessageRow | null) ?? null;
+  if (!existing || !canViewMessage(viewer, existing)) {
+    return json({ error: 'Message not found' }, 404);
+  }
+  if (!canChangeMessage(viewer, existing)) {
+    return json(
+      { error: 'Only its author and the admins it is shared with can change a draft' },
+      403
+    );
+  }
+  const wasDraft = isDraft(existing);
+
+  const expected = body.expectedUpdatedAt;
+  if (expected !== undefined && typeof expected !== 'string') {
+    return json({ error: 'expectedUpdatedAt must be a timestamp' }, 400);
+  }
+  if (expected !== undefined && Date.parse(expected) !== Date.parse(existing.updated_at)) {
+    return json(
+      {
+        error: 'Someone else saved this message since you opened it. Reload to see their changes.',
+      },
+      409
+    );
+  }
+
   const patch: Partial<AdminMessageRow> = {};
-  // The audience before this edit, when the edit touches it — whoever the
-  // new one adds is notified once the save lands.
-  let previousAudience: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'> | null = null;
   if (body.title !== undefined) {
     const title = normalizeTitle(body.title);
     if (!title) return json({ error: 'title must be non-empty (max 200 chars)' }, 400);
@@ -175,13 +264,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     patch.body_md = bodyMd;
   }
   if (body.audienceRoles !== undefined || body.audienceEmails !== undefined) {
-    const { data: existing } = await db
-      .from('admin_messages')
-      .select('audience_roles, audience_emails')
-      .eq('id', id)
-      .maybeSingle();
-    if (!existing) return json({ error: 'Message not found' }, 404);
-    previousAudience = existing;
     const audience = await checkedAudience(
       body.audienceRoles ?? existing.audience_roles,
       body.audienceEmails ?? existing.audience_emails
@@ -197,28 +279,62 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body.archived !== undefined) {
     if (typeof body.archived !== 'boolean')
       return json({ error: 'archived must be a boolean' }, 400);
+    if (wasDraft) return json({ error: 'A draft can be deleted, not archived' }, 400);
     patch.archived_at = body.archived ? new Date().toISOString() : null;
+  }
+  if (body.sharedWith !== undefined) {
+    if (!wasDraft) return json({ error: 'Only a draft can be shared' }, 400);
+    const shared = await checkedSharedWith(body.sharedWith, existing.author_email);
+    if ('error' in shared) return json({ error: shared.error }, 400);
+    patch.shared_with = shared.emails;
+  }
+  if (body.email !== undefined && typeof body.email !== 'boolean') {
+    return json({ error: 'email must be a boolean' }, 400);
+  }
+  if (body.send !== undefined) {
+    if (typeof body.send !== 'boolean') return json({ error: 'send must be a boolean' }, 400);
+    if (body.send && !wasDraft) return json({ error: 'This message was already sent' }, 409);
+    if (body.send) patch.sent_at = new Date().toISOString();
   }
   if (Object.keys(patch).length === 0) return json({ error: 'Nothing to update' }, 400);
   patch.updated_by = email;
 
+  // Matching updated_at too closes the gap between the read above and this
+  // write: a save that lands in between makes this one miss, not overwrite.
   const { data, error } = await db
     .from('admin_messages')
     .update(patch)
     .eq('id', id)
+    .eq('updated_at', existing.updated_at)
     .select('*')
     .maybeSingle();
   if (error) return dbError(error);
-  if (!data) return json({ error: 'Message not found' }, 404);
+  if (!data) {
+    return json(
+      { error: 'Someone else saved this message at the same time. Reload to see their changes.' },
+      409
+    );
+  }
   const message = data as AdminMessageRow;
-  const notified = previousAudience
-    ? await notifyMessageAudienceWidened(db, message, previousAudience, email)
+  const people = await getPeopleNames([message.author_email, email]);
+
+  if (wasDraft && !isDraft(message)) {
+    const notified = await notifyMessagePosted(db, message, email);
+    const emailed =
+      body.email === false
+        ? 0
+        : await emailMessagePosted(message, new URL(request.url).origin, email);
+    return json({ message, people, notified, emailed });
+  }
+  if (wasDraft) {
+    const added = addedCollaborators(existing.shared_with, message.shared_with, email);
+    const notified = await notifyDraftShared(db, message, added, email);
+    return json({ message, people, notified, emailed: 0 });
+  }
+  const notified = patch.audience_roles
+    ? await notifyMessageAudienceWidened(db, message, existing, email)
     : 0;
-  return json({
-    message,
-    people: await getPeopleNames([message.author_email, email]),
-    notified,
-  });
+  return json({ message, people, notified, emailed: 0 });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -232,6 +348,21 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const id = url.searchParams.get('id') ?? '';
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
+
+  const viewer = await viewerOf(gate);
+  const { data: found, error: readError } = await db
+    .from('admin_messages')
+    .select('author_email, audience_roles, audience_emails, archived_at, sent_at, shared_with')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) return dbError(readError);
+  if (!found || !canViewMessage(viewer, found)) return json({ error: 'Message not found' }, 404);
+  if (!canChangeMessage(viewer, found)) {
+    return json(
+      { error: 'Only its author and the admins it is shared with can delete a draft' },
+      403
+    );
+  }
 
   const { error, count } = await db.from('admin_messages').delete({ count: 'exact' }).eq('id', id);
   if (error) return dbError(error);

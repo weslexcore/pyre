@@ -95,7 +95,16 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const message = await loadVisibleMessage(db, messageId, viewer);
   if (message instanceof Response) return message;
-  if (!canReplyToMessage(viewer, message)) return json({ error: 'This message is archived' }, 409);
+  if (!canReplyToMessage(viewer, message)) {
+    return json(
+      {
+        error: message.sent_at
+          ? 'This message is archived'
+          : 'A draft has no replies until it is sent',
+      },
+      409
+    );
+  }
 
   // Who was already in the conversation, before this reply joins it.
   const { data: earlier } = await db
