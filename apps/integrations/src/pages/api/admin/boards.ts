@@ -51,7 +51,8 @@
 //            goalId? | goal?, sectionId?, columns: [{ key, label, kind, sortOrder? }] }
 //                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            defaultAssigneeEmails?, dueOnCalendar?, archived?, sortOrder?, goalId?, sectionId?,
+//            defaultAssigneeEmails?, dueOnCalendar?, defaultDue? ({ every, unit } | null),
+//            archived?, sortOrder?, goalId?, sectionId?,
 //            columns?, fields? }
 //                        → { board, columns, fields }
 //
