@@ -45,7 +45,10 @@ export interface RoutineRow {
 
 export interface RoutineRunRow {
   id: string;
-  routine_id: string;
+  /** Null once the routine has been deleted; the run and its conversation stay. */
+  routine_id: string | null;
+  routine_title: string;
+  owner_email: string;
   scheduled_for: string;
   trigger: 'scheduled' | 'manual';
   status: 'running' | 'answered' | 'failed';
@@ -142,7 +145,13 @@ export async function startRoutineRun(
 ): Promise<StartResult> {
   const { data: inserted, error: insertError } = await db
     .from('pyre_agent_routine_runs')
-    .insert({ routine_id: routine.id, scheduled_for: scheduledFor, trigger })
+    .insert({
+      routine_id: routine.id,
+      routine_title: routine.title,
+      owner_email: routine.owner_email,
+      scheduled_for: scheduledFor,
+      trigger,
+    })
     .select('id')
     .single();
   if (insertError) {
@@ -223,13 +232,13 @@ export async function finishRoutineRun(
   if (error || !data) return false;
   const run = data as RoutineRunRow;
 
-  const { data: routineData } = await db
-    .from('pyre_agent_routines')
-    .select('*')
-    .eq('id', run.routine_id)
-    .maybeSingle();
-  const routine = routineData as RoutineRow | null;
-  if (!routine) return true;
+  const { data: routineData } = run.routine_id
+    ? await db.from('pyre_agent_routines').select('*').eq('id', run.routine_id).maybeSingle()
+    : { data: null };
+  const routine = (routineData as RoutineRow | null) ?? {
+    title: run.routine_title,
+    owner_email: run.owner_email,
+  };
 
   let body = outcome.ok ? '' : outcome.error;
   if (outcome.ok && run.session_id) {

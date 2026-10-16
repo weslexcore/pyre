@@ -1,5 +1,6 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { proposalIdsOf, relativizeDashboardLinks, turnFromHistory } from './SopAsk';
+import { proposalIdsOf, RoutineBanner, relativizeDashboardLinks, turnFromHistory } from './SopAsk';
 
 describe('turnFromHistory', () => {
   const base = {
@@ -109,5 +110,38 @@ describe('proposalIdsOf', () => {
         tool('propose_board', 'completed', '{"proposal":{"id":"b2"}}'),
       ])
     ).toEqual(['a1', 'b2']);
+  });
+});
+
+describe('RoutineBanner', () => {
+  const origin = {
+    routineId: 'r1',
+    title: 'Weekly shift notes summary',
+    trigger: 'scheduled' as const,
+    ranAt: '2026-10-19T12:00:00Z',
+    schedule: 'Mondays at 8am',
+    enabled: true,
+    prompt: 'Summarize the week',
+  };
+
+  it('says which routine ran it, when, and on what schedule', () => {
+    const html = renderToStaticMarkup(<RoutineBanner routine={origin} />);
+    expect(html).toContain('Weekly shift notes summary');
+    expect(html).toContain('Ran on its schedule Mon, Oct 19, 8:00 AM');
+    expect(html).toContain('Mondays at 8am');
+    expect(html).toContain('href="/admin/ask/routines"');
+  });
+
+  it('says so when it was run by hand, paused, or deleted since', () => {
+    expect(
+      renderToStaticMarkup(
+        <RoutineBanner routine={{ ...origin, trigger: 'manual', enabled: false }} />
+      )
+    ).toMatch(/Run by hand.*\(paused\)/);
+    const gone = renderToStaticMarkup(
+      <RoutineBanner routine={{ ...origin, routineId: null, schedule: null, enabled: false }} />
+    );
+    expect(gone).toContain('has since been deleted');
+    expect(gone).not.toContain('Manage routine');
   });
 });

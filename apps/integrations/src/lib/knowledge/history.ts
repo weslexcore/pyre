@@ -7,9 +7,33 @@
 
 import type { TrailStep } from './trail';
 
+/**
+ * The routine a conversation was opened by, when a saved routine ran it
+ * rather than a person asking (lib/pyre-agent/routines).
+ */
+export interface RoutineOrigin {
+  /** Null once the routine has been deleted. */
+  routineId: string | null;
+  title: string;
+}
+
+/** The same, for an open conversation: when it ran, how, and on what schedule. */
+export interface RoutineRunOrigin extends RoutineOrigin {
+  trigger: 'scheduled' | 'manual';
+  ranAt: string;
+  /** "Mondays at 8am"; null once the routine is gone. */
+  schedule: string | null;
+  /** False while the routine is paused (or gone). */
+  enabled: boolean;
+  /** The saved request, while the routine exists — shown until its first turn is logged. */
+  prompt: string | null;
+}
+
 /** One conversation in the sidebar list. */
 export interface ConversationSummary {
   sessionId: string;
+  /** Set when a routine opened it; the list shows the routine's name and a marker. */
+  routine?: RoutineOrigin | null;
   /** The first question asked, shortened for a list row. */
   title: string;
   startedAt: string;

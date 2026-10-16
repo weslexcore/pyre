@@ -1,7 +1,8 @@
 // The conversation list beside the Ask chat: the staff member's own earlier
 // conversations with the knowledge assistant (their rows in the audit log,
 // via /api/admin/knowledge-history), newest activity first, with a way to
-// start a new one. Rendered twice by SopAsk — as the desktop sidebar and
+// start a new one. A conversation a saved routine opened is listed under
+// the routine's name with a Routine marker. Rendered twice by SopAsk — as the desktop sidebar and
 // inside the mobile drawer — so it carries no layout of its own.
 
 import { timeAgo } from '@/lib/client/relativeTime';
@@ -104,12 +105,21 @@ export function AskHistory({
                       aria-current={active ? 'true' : undefined}
                       disabled={busy || openingSessionId !== null}
                       onClick={() => onSelect(conversation.sessionId)}
-                      title={conversation.title}
+                      title={
+                        conversation.routine
+                          ? `Routine: ${conversation.routine.title}`
+                          : conversation.title
+                      }
                     >
                       <span className="line-clamp-2 text-sm leading-snug">
-                        {conversation.title}
+                        {conversation.routine ? conversation.routine.title : conversation.title}
                       </span>
                       <span className="font-mono text-[10px] uppercase tracking-wide text-white/35">
+                        {conversation.routine && (
+                          <span className="mr-1 rounded border border-[var(--pyre-gold)]/40 px-1 text-[var(--pyre-gold)]/90">
+                            Routine
+                          </span>
+                        )}
                         {timeAgo(conversation.lastAt)} ·{' '}
                         {conversation.turnCount === 1
                           ? '1 question'

@@ -95,7 +95,7 @@ export const GET: APIRoute = async ({ cookies }) => {
       .order('started_at', { ascending: false })
       .limit(routines.length * 5);
     for (const run of (runs ?? []) as RoutineRunRow[]) {
-      if (!lastRuns.has(run.routine_id)) lastRuns.set(run.routine_id, run);
+      if (run.routine_id && !lastRuns.has(run.routine_id)) lastRuns.set(run.routine_id, run);
     }
   }
 
@@ -216,7 +216,8 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const routine = await loadOwn(db, email, url.searchParams.get('id'));
   if (!routine) return json({ error: 'Routine not found' }, 404);
-  // Its runs go with it (cascade); the conversations stay in the history.
+  // Its runs stay, unlinked (routine_id set null), so the conversations it
+  // opened still say which routine they came from.
   const { error } = await db.from('pyre_agent_routines').delete().eq('id', routine.id);
   if (error) return dbError(error);
   return json({ ok: true });

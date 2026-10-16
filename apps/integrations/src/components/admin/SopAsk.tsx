@@ -35,7 +35,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { readError } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import type { ConversationSummary, ConversationTurn } from '@/lib/knowledge/history';
+import type {
+  ConversationSummary,
+  ConversationTurn,
+  RoutineRunOrigin,
+} from '@/lib/knowledge/history';
 import { MAX_QUESTION_LENGTH } from '@/lib/knowledge/question';
 import type { AskStreamEvent } from '@/lib/knowledge/stream';
 import {
@@ -89,6 +93,55 @@ interface ConversationPayload {
   sessionId: string;
   token: string | null;
   turns: ConversationTurn[];
+  /** Set when a saved routine opened this conversation. */
+  routine: RoutineRunOrigin | null;
+}
+
+/** "Mon, Oct 20, 8:00 AM" on the studio's clock. */
+function formatRanAt(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * The top of a conversation a routine opened: which routine, when it ran and
+ * whether on its schedule or by hand, and a way to the routine itself — so
+ * an answer nobody typed a question for says where it came from.
+ */
+export function RoutineBanner({ routine }: { routine: RoutineRunOrigin }) {
+  const how =
+    routine.trigger === 'scheduled'
+      ? `Ran on its schedule ${formatRanAt(routine.ranAt)}`
+      : `Run by hand ${formatRanAt(routine.ranAt)}`;
+  return (
+    <div className="mx-auto mb-5 max-w-3xl rounded-lg border border-dashed border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/5 px-4 py-3">
+      <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+        Routine
+      </p>
+      <p className="mt-0.5 text-sm text-[var(--pyre-creme)]">{routine.title}</p>
+      <p className="mt-1 text-xs text-white/55">
+        {how}
+        {routine.schedule
+          ? ` · ${routine.schedule}${routine.enabled ? '' : ' (paused)'}`
+          : ' · this routine has since been deleted'}
+        . Nobody typed this request; Pyre Agent ran it for you. Follow-ups here are yours.
+      </p>
+      {routine.routineId && (
+        <a
+          href="/admin/ask/routines"
+          className="mt-2 inline-block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
+        >
+          Manage routine →
+        </a>
+      )}
+    </div>
+  );
 }
 
 const HISTORY_URL = '/api/admin/knowledge-history';
@@ -186,6 +239,9 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
   const [actions, setActions] = useState<ActionView[]>([]);
   const [workingActionId, setWorkingActionId] = useState<string | null>(null);
+  /** The routine that opened the conversation on screen, if one did. */
+  const [routine, setRoutine] = useState<RoutineRunOrigin | null>(null);
+  const [routineRequestOpen, setRoutineRequestOpen] = useState(false);
   const session = useRef<AskSession | null>(null);
   const nextId = useRef(1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -447,6 +503,8 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         if (current.id !== prior?.id) {
           actionsFor.current = current.id;
           setActions([]);
+          // A fresh session is the person's own, even when it continues a routine's.
+          setRoutine(null);
         }
         if (prior && body.fresh) patchTurn(id, { fresh: true });
         // Remember it before the answer arrives: leaving now and coming back
@@ -510,6 +568,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     setActiveSessionId(null);
     actionsFor.current = null;
     setActions([]);
+    setRoutine(null);
     setNotice(null);
     setQuestion('');
     setHistoryOpen(false);
@@ -557,13 +616,31 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
           ]);
           token = stored.token;
           reattach = { turnId, current: { id: sessionId, token, nextIndex: null } };
+          setRoutine(null);
         } else {
           if (!res.ok) throw new Error(await readError(res));
           const body = (await res.json()) as ConversationPayload;
           token = body.token ?? stored?.token ?? null;
           const loaded = body.turns.map(turnFromHistory);
           const last = body.turns[body.turns.length - 1];
-          if (token && last?.status === 'pending' && !last.answer) {
+          setRoutine(body.routine ?? null);
+          setRoutineRequestOpen(false);
+          const opening = stored?.pending ?? body.routine?.prompt ?? body.routine?.title;
+          if (token && loaded.length === 0 && opening) {
+            // A routine run (or a question) that has started but is not
+            // logged yet: show its request and stream the answer in.
+            const turnId = `local-${nextId.current++}`;
+            loaded.push({
+              id: turnId,
+              question: opening,
+              answer: '',
+              live: '',
+              trail: [],
+              trailOpen: true,
+              status: 'pending',
+            });
+            reattach = { turnId, current: { id: body.sessionId, token, nextIndex: null } };
+          } else if (token && last?.status === 'pending' && !last.answer) {
             // Still being answered (or never finished): replay it live.
             const turnId = loaded[loaded.length - 1].id;
             loaded[loaded.length - 1] = {
@@ -791,74 +868,100 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
               </div>
             </div>
           ) : (
-            <ol className="mx-auto max-w-3xl space-y-5">
-              {turns.map((turn) => (
-                <li key={turn.id} className="space-y-3">
-                  <div className="flex flex-col items-end">
-                    <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-4 py-2 text-sm text-[var(--pyre-creme)]">
-                      {turn.question}
-                    </p>
-                    {turn.status === 'done' && (
-                      <a
-                        href={`/admin/ask/routines?prompt=${encodeURIComponent(turn.question)}`}
-                        className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30 hover:text-[var(--pyre-gold)]"
-                      >
-                        Save as routine
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex justify-start">
-                    <div className="max-w-[95%] rounded-2xl rounded-bl-sm border border-white/10 bg-white/5 px-4 py-3">
-                      {turn.fresh && (
-                        <p className="mb-2 text-xs text-white/40">
-                          The earlier conversation had expired, so this answer starts fresh.
-                        </p>
-                      )}
-                      <AskTrail
-                        steps={turn.trail}
-                        live={turn.status === 'pending' || turn.status === 'streaming'}
-                        open={turn.trailOpen}
-                        onToggle={() => patchTurn(turn.id, (t) => ({ trailOpen: !t.trailOpen }))}
-                      />
-                      {turn.status === 'error' ? (
-                        <p className="text-sm text-[var(--pyre-red)]">{turn.error}</p>
-                      ) : turn.status === 'empty' ? (
-                        <p className="text-sm text-white/40">No answer was recorded.</p>
-                      ) : turn.answer ? (
-                        <div className="text-sm">
-                          <SopMarkdown
-                            content={relativizeDashboardLinks(turn.answer)}
-                            onSopLink={setPeekSlug}
-                          />
-                        </div>
-                      ) : turn.live ? (
-                        <div className="text-sm">
-                          <SopMarkdown
-                            content={relativizeDashboardLinks(turn.live)}
-                            onSopLink={setPeekSlug}
-                          />
+            <>
+              {routine && <RoutineBanner routine={routine} />}
+              <ol className="mx-auto max-w-3xl space-y-5">
+                {turns.map((turn, index) => (
+                  <li key={turn.id} className="space-y-3">
+                    <div className="flex flex-col items-end">
+                      {routine && index === 0 ? (
+                        // The routine's saved request, not something the person
+                        // typed: drawn apart from their own messages, and folded
+                        // to a few lines since it is often long.
+                        <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-dashed border-[var(--pyre-gold)]/40 bg-white/[0.03] px-4 py-2">
+                          <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80">
+                            Routine request · {routine.title}
+                          </p>
+                          <p
+                            className={`mt-1 whitespace-pre-wrap text-sm text-white/70 ${routineRequestOpen ? '' : 'line-clamp-3'}`}
+                          >
+                            {turn.question}
+                          </p>
+                          <button
+                            type="button"
+                            className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
+                            onClick={() => setRoutineRequestOpen((open) => !open)}
+                          >
+                            {routineRequestOpen ? 'Show less' : 'Show the whole request'}
+                          </button>
                         </div>
                       ) : (
-                        <p className="font-mono text-xs uppercase tracking-wide text-white/50">
-                          {liveActivityLabel(turn.trail)}…
+                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-4 py-2 text-sm text-[var(--pyre-creme)]">
+                          {turn.question}
                         </p>
                       )}
-                      {turn.status === 'streaming' && turn.answer === '' && turn.live !== '' && (
-                        <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                          Writing…
-                        </p>
+                      {turn.status === 'done' && !(routine && index === 0) && (
+                        <a
+                          href={`/admin/ask/routines?prompt=${encodeURIComponent(turn.question)}`}
+                          className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30 hover:text-[var(--pyre-gold)]"
+                        >
+                          Save as routine
+                        </a>
                       )}
-                      <AgentActions
-                        actions={actionsByTurn.get(turn.id) ?? []}
-                        workingId={workingActionId}
-                        onApply={(id) => void decideAction(id, 'apply')}
-                        onDismiss={(id) => void decideAction(id, 'dismiss')}
-                      />
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
+                    <div className="flex justify-start">
+                      <div className="max-w-[95%] rounded-2xl rounded-bl-sm border border-white/10 bg-white/5 px-4 py-3">
+                        {turn.fresh && (
+                          <p className="mb-2 text-xs text-white/40">
+                            The earlier conversation had expired, so this answer starts fresh.
+                          </p>
+                        )}
+                        <AskTrail
+                          steps={turn.trail}
+                          live={turn.status === 'pending' || turn.status === 'streaming'}
+                          open={turn.trailOpen}
+                          onToggle={() => patchTurn(turn.id, (t) => ({ trailOpen: !t.trailOpen }))}
+                        />
+                        {turn.status === 'error' ? (
+                          <p className="text-sm text-[var(--pyre-red)]">{turn.error}</p>
+                        ) : turn.status === 'empty' ? (
+                          <p className="text-sm text-white/40">No answer was recorded.</p>
+                        ) : turn.answer ? (
+                          <div className="text-sm">
+                            <SopMarkdown
+                              content={relativizeDashboardLinks(turn.answer)}
+                              onSopLink={setPeekSlug}
+                            />
+                          </div>
+                        ) : turn.live ? (
+                          <div className="text-sm">
+                            <SopMarkdown
+                              content={relativizeDashboardLinks(turn.live)}
+                              onSopLink={setPeekSlug}
+                            />
+                          </div>
+                        ) : (
+                          <p className="font-mono text-xs uppercase tracking-wide text-white/50">
+                            {liveActivityLabel(turn.trail)}…
+                          </p>
+                        )}
+                        {turn.status === 'streaming' && turn.answer === '' && turn.live !== '' && (
+                          <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                            Writing…
+                          </p>
+                        )}
+                        <AgentActions
+                          actions={actionsByTurn.get(turn.id) ?? []}
+                          workingId={workingActionId}
+                          onApply={(id) => void decideAction(id, 'apply')}
+                          onDismiss={(id) => void decideAction(id, 'dismiss')}
+                        />
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </>
           )}
         </div>
 
