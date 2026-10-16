@@ -21,7 +21,11 @@ export type ChangeEntityType =
   /** The standing instructions the AI drafter carries into every run. */
   | 'agent_instructions'
   /** A person's h/wk target and shifts-per-week range. */
-  | 'staff_prefs';
+  | 'staff_prefs'
+  /** Who does an off-shift duty on a day (duty_assignments). */
+  | 'duty_assignment'
+  /** Who is trained on a duty (staff_duty_training). */
+  | 'duty_training';
 
 export type ChangeAction =
   | 'create'

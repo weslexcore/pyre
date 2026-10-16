@@ -15,12 +15,19 @@ import {
 	dutyTitle,
 	formatDuties,
 	formatDutyDays,
+	formatDutyList,
+	isShiftDuty,
+	isTrainedFor,
 	mismatchedDutyPairs,
 	normalizeDuties,
 	normalizeDutyDays,
 	offDayDuties,
+	offShiftOccurrences,
 	pairedDutyFor,
+	shiftDutyCatalog,
 	toggleDuty,
+	trainingFromRows,
+	untrainedDuties,
 } from "../src/duties";
 
 describe("normalizeDuties", () => {
@@ -349,3 +356,94 @@ describe("duty days", () => {
 		]);
 	});
 });
+
+describe("off-shift duties", () => {
+	const carboys: DutyDef = {
+		key: "fill_carboys",
+		label: "Fill Carboys",
+		detail: null,
+		phase: "off_shift",
+		side: null,
+		sessionDefault: null,
+		sopSlug: null,
+		days: [1],
+		sortOrder: 10,
+		requiresTraining: false,
+		archived: false,
+	};
+	const propane: DutyDef = {
+		...carboys,
+		key: "weigh_propane",
+		label: "Weigh Propane",
+		days: [0],
+		sortOrder: 11,
+	};
+	const catalog: DutyCatalog = [...C, carboys, propane];
+
+	it("are not shift duties", () => {
+		expect(isShiftDuty(carboys)).toBe(false);
+		expect(shiftDutyCatalog(catalog).map((d) => d.key)).toEqual(
+			C.map((d) => d.key),
+		);
+	});
+
+	it("occur on their days, in date order", () => {
+		// 2026-10-18 is a Sunday, 2026-10-19 a Monday.
+		expect(
+			offShiftOccurrences(catalog, "2026-10-17", "2026-10-20").map(
+				(o) => `${o.date} ${o.duty.key}`,
+			),
+		).toEqual(["2026-10-18 weigh_propane", "2026-10-19 fill_carboys"]);
+	});
+
+	it("stop occurring once retired", () => {
+		const retired = catalog.map((d) =>
+			d.key === "fill_carboys" ? { ...d, archived: true } : d,
+		);
+		expect(
+			offShiftOccurrences(retired, "2026-10-19", "2026-10-19"),
+		).toEqual([]);
+	});
+});
+
+describe("training", () => {
+	const catalog: DutyCatalog = C.map((d) =>
+		d.key === "host" ? { ...d, requiresTraining: true } : d,
+	);
+	const training = trainingFromRows([
+		{ staff_id: "sunny", duty_key: "host" },
+	]);
+
+	it("gates only the duties that require it", () => {
+		expect(isTrainedFor(catalog, training, "sunny", "host")).toBe(true);
+		expect(isTrainedFor(catalog, training, "julien", "host")).toBe(false);
+		expect(isTrainedFor(catalog, training, "julien", "setup_a")).toBe(true);
+	});
+
+	it("lists the untrained duties, sparing ones already held", () => {
+		expect(
+			untrainedDuties(catalog, training, "julien", ["setup_b", "host"]),
+		).toEqual(["host"]);
+		expect(
+			untrainedDuties(catalog, training, "julien", ["setup_b", "host"], [
+				"host",
+			]),
+		).toEqual([]);
+	});
+
+	it("names them for a message", () => {
+		expect(formatDutyList(C, ["host"])).toBe("Host");
+		expect(formatDutyList(C, ["setup_a", "host", "breakdown_b"])).toBe(
+			"Set Up (A), Host and Break Down (B)",
+		);
+	});
+});
+
+describe("toggleDuty with canHold", () => {
+	it("doesn't fill in a pair or in-session duty the person can't hold", () => {
+		expect(
+			toggleDuty(C, [], "setup_a", { canHold: (k) => k !== "customer_care" }),
+		).toEqual(["setup_a", "breakdown_a"]);
+	});
+});
+

@@ -8,6 +8,11 @@
 // Friday to Sunday), nudged up or down, and retired. Keys are
 // permanent — every assignment stores them — so a duty someone already holds
 // is retired rather than deleted, and stays readable on those shifts.
+//
+// Off-shift duties (fill the carboys every Monday) sit in their own group:
+// they're done on their days whether or not anyone works a shift, and each
+// day is handed to one person on the schedule board. A duty can require
+// training; then only the people marked trained on it here can be given it.
 
 import {
   DOW_LABELS,
@@ -19,6 +24,7 @@ import {
   dutyPhases,
   formatDutyDays,
   normalizeDutyDays,
+  SHIFT_PHASE_KEYS,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -29,6 +35,7 @@ import { QuietBadge } from './guestUi';
 import { cardClass, inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 
 const ENDPOINT = '/api/admin/shift-duties';
+const TRAINING_ENDPOINT = '/api/admin/duty-training';
 
 type DutyView = DutyDef & { sopId: string | null };
 
@@ -39,10 +46,18 @@ interface SopOption {
   category: string | null;
 }
 
+interface StaffOption {
+  id: string;
+  display_name: string;
+  active: boolean;
+}
+
 interface DutiesResponse {
   duties: DutyView[];
+  training: Array<{ staffId: string; dutyKey: string }>;
   uses: Record<string, number>;
   sops: SopOption[];
+  staff: StaffOption[];
   canManage: boolean;
 }
 
@@ -56,7 +71,11 @@ interface DutyForm {
   sopId: string;
   /** Days of the week it's done (0 = Sunday); all seven for every day. */
   days: number[];
+  requiresTraining: boolean;
 }
+
+/** Set-up and break-down: the phases a duty can have an A/B side in. */
+const isHalfPhase = (phase: DutyPhaseKey) => phase === 'setup' || phase === 'breakdown';
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
@@ -71,6 +90,7 @@ const BLANK_FORM: DutyForm = {
   sessionDefault: '',
   sopId: '',
   days: EVERY_DAY,
+  requiresTraining: false,
 };
 
 function formFor(duty: DutyView): DutyForm {
@@ -82,12 +102,13 @@ function formFor(duty: DutyView): DutyForm {
     sessionDefault: duty.sessionDefault ?? '',
     sopId: duty.sopId ?? '',
     days: duty.days ?? EVERY_DAY,
+    requiresTraining: duty.requiresTraining,
   };
 }
 
-/** The API body for a form: half-only settings are cleared for session duties. */
+/** The API body for a form: half-only settings are cleared outside set-up / break-down. */
 function bodyFor(form: DutyForm): Record<string, unknown> {
-  const isHalf = form.phase !== 'session';
+  const isHalf = isHalfPhase(form.phase);
   return {
     label: form.label,
     detail: form.detail,
@@ -96,6 +117,7 @@ function bodyFor(form: DutyForm): Record<string, unknown> {
     sessionDefault: isHalf && form.sessionDefault ? form.sessionDefault : null,
     sopId: form.sopId || null,
     days: normalizeDutyDays(form.days),
+    requiresTraining: form.requiresTraining,
   };
 }
 
@@ -104,7 +126,20 @@ export function ShiftDutiesManager() {
   const duties = useMemo(() => data?.duties ?? [], [data]);
   const uses = data?.uses ?? {};
   const sops = data?.sops ?? [];
+  const staff = useMemo(() => data?.staff ?? [], [data]);
   const canManage = data?.canManage ?? false;
+  // Duty key -> the staff trained on it.
+  const trainedBy = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const t of data?.training ?? []) {
+      map.set(t.dutyKey, [...(map.get(t.dutyKey) ?? []), t.staffId]);
+    }
+    return map;
+  }, [data]);
+  const nameOf = (id: string) => staff.find((p) => p.id === id)?.display_name ?? 'Someone';
+  // The duty whose trained list is open for editing, and the picks so far.
+  const [trainingKey, setTrainingKey] = useState<string | null>(null);
+  const [trainingPicks, setTrainingPicks] = useState<ReadonlySet<string>>(new Set());
 
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -188,6 +223,102 @@ export function ShiftDutiesManager() {
     if (ok) setDeleting(null);
   };
 
+  const saveTraining = async (key: string) => {
+    const ok = await mutate(key, () =>
+      sendJson(TRAINING_ENDPOINT, 'PUT', { key, staffIds: [...trainingPicks] })
+    );
+    if (ok) setTrainingKey(null);
+  };
+
+  /** Who is trained, and (for a manager) the picker to change it. */
+  const renderTraining = (duty: DutyView) => {
+    const trained = trainedBy.get(duty.key) ?? [];
+    if (trainingKey === duty.key) {
+      // Off-roster people stay listed only while they're still marked trained.
+      const options = staff.filter((p) => p.active || trainingPicks.has(p.id));
+      return (
+        <div className="mt-2 space-y-2 rounded border border-white/10 bg-white/[0.02] p-3">
+          <p className={labelClass}>Trained on {duty.label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((p) => {
+              const on = trainingPicks.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={on}
+                  className={`rounded border px-2.5 py-1.5 text-xs transition-colors ${
+                    on
+                      ? 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/20 text-[var(--pyre-creme)]'
+                      : 'border-white/10 bg-white/5 text-white/50 hover:text-white'
+                  }`}
+                  onClick={() => {
+                    const next = new Set(trainingPicks);
+                    if (on) next.delete(p.id);
+                    else next.add(p.id);
+                    setTrainingPicks(next);
+                  }}
+                >
+                  {p.display_name}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={primaryButtonClass}
+              disabled={busy !== null}
+              onClick={() => void saveTraining(duty.key)}
+            >
+              {busy === duty.key ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className={formButtonClass}
+              disabled={busy !== null}
+              onClick={() => setTrainingKey(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <p className="mt-1 text-xs text-white/55">
+        {duty.requiresTraining ? (
+          trained.length > 0 ? (
+            <>Trained: {trained.map(nameOf).sort().join(', ')}</>
+          ) : (
+            <span className="text-[var(--pyre-red)]">
+              Requires training, and nobody is trained yet — it can't be assigned.
+            </span>
+          )
+        ) : trained.length > 0 ? (
+          <span className="text-white/40">
+            Anyone can do it · trained: {trained.map(nameOf).sort().join(', ')}
+          </span>
+        ) : (
+          <span className="text-white/35">Anyone can do it</span>
+        )}
+        {canManage && !duty.archived && (
+          <button
+            type="button"
+            className="ml-2 font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
+            disabled={busy !== null}
+            onClick={() => {
+              setTrainingKey(duty.key);
+              setTrainingPicks(new Set(trained));
+            }}
+          >
+            Who's trained
+          </button>
+        )}
+      </p>
+    );
+  };
+
   const renderDuty = (duty: DutyView) => {
     const isEditing = editing === duty.key && form;
     const count = uses[duty.key] ?? 0;
@@ -205,7 +336,10 @@ export function ShiftDutiesManager() {
                   {duty.label}
                 </span>
                 {duty.side && <QuietBadge>Side {duty.side.toUpperCase()}</QuietBadge>}
-                {duty.days && <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>}
+                {(duty.days || duty.phase === 'off_shift') && (
+                  <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>
+                )}
+                {duty.requiresTraining && <QuietBadge>Training required</QuietBadge>}
                 {duty.archived && <QuietBadge>Retired</QuietBadge>}
               </div>
               {duty.detail && <p className="mt-0.5 text-xs text-white/45">{duty.detail}</p>}
@@ -224,9 +358,11 @@ export function ShiftDutiesManager() {
                   <span className="text-white/40"> · usually with {defaultLabel}</span>
                 )}
               </p>
+              {renderTraining(duty)}
               {canManage && (
                 <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30">
-                  {duty.key} · {count} assignment{count === 1 ? '' : 's'}
+                  {duty.key} · {count} {duty.phase === 'off_shift' ? 'day' : 'assignment'}
+                  {count === 1 ? '' : 's'}
                 </p>
               )}
             </div>
@@ -294,6 +430,8 @@ export function ShiftDutiesManager() {
               onChange={setForm}
               sops={sops}
               sessionDuties={sessionDuties.filter((d) => d.key !== duty.key)}
+              // A duty can't move between the shift and off-shift.
+              phases={duty.phase === 'off_shift' ? ['off_shift'] : SHIFT_PHASE_KEYS}
             />
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -339,7 +477,15 @@ export function ShiftDutiesManager() {
 
       {phases.map((phase) => (
         <section key={phase.key} className={cardClass}>
-          <SectionTitle>{phase.label}</SectionTitle>
+          <SectionTitle
+            note={
+              phase.key === 'off_shift'
+                ? 'Done on their days whether or not anyone works a shift. Each day is handed to one person on the schedule board.'
+                : undefined
+            }
+          >
+            {phase.label}
+          </SectionTitle>
           <ul className="divide-y divide-white/5">
             {phase.duties.map((d) => renderDuty(d as DutyView))}
           </ul>
@@ -391,21 +537,28 @@ export function ShiftDutiesManager() {
   );
 }
 
-/** Label, detail, phase, side, in-session default, SOP and days — shared by add and edit. */
+/**
+ * Label, detail, phase, side, in-session default, SOP, days and training —
+ * shared by add and edit.
+ */
 function DutyFields({
   idPrefix,
   form,
   onChange,
   sops,
   sessionDuties,
+  phases = DUTY_PHASE_KEYS,
 }: {
   idPrefix: string;
   form: DutyForm;
   onChange: (form: DutyForm) => void;
   sops: SopOption[];
   sessionDuties: DutyDef[];
+  /** The phases it may be put in; all of them for a new duty. */
+  phases?: readonly DutyPhaseKey[];
 }) {
-  const isHalf = form.phase !== 'session';
+  const isHalf = isHalfPhase(form.phase);
+  const offShift = form.phase === 'off_shift';
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div>
@@ -436,17 +589,18 @@ function DutyFields({
       </div>
       <div>
         <label className={labelClass} htmlFor={`${idPrefix}-phase`}>
-          Part of the shift
+          When it's done
         </label>
         <select
           id={`${idPrefix}-phase`}
           className={inputClass}
           value={form.phase}
+          disabled={phases.length < 2}
           onChange={(e) => onChange({ ...form, phase: e.target.value as DutyPhaseKey })}
         >
-          {DUTY_PHASE_KEYS.map((key) => (
+          {phases.map((key) => (
             <option key={key} value={key}>
-              {DUTY_PHASE_LABELS[key]}
+              {key === 'off_shift' ? 'Off shift (its own day)' : DUTY_PHASE_LABELS[key]}
             </option>
           ))}
         </select>
@@ -511,11 +665,28 @@ function DutyFields({
         >
           {form.days.length === 0
             ? 'Pick at least one day.'
-            : form.days.length === 7
-              ? 'Done every shift.'
-              : `Only offered on shifts ${formatDutyDays(form.days)}. A job done at set-up one day and break down another is two duties.`}
+            : offShift
+              ? `Someone is needed for it ${form.days.length === 7 ? 'every day' : formatDutyDays(form.days)}, assigned on the schedule board.`
+              : form.days.length === 7
+                ? 'Done every shift.'
+                : `Only offered on shifts ${formatDutyDays(form.days)}. A job done at set-up one day and break down another is two duties.`}
         </p>
       </fieldset>
+      <label className="flex items-start gap-2 sm:col-span-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={form.requiresTraining}
+          onChange={(e) => onChange({ ...form, requiresTraining: e.target.checked })}
+        />
+        <span>
+          <span className="text-sm text-[var(--pyre-creme)]">Requires training</span>
+          <span className="block text-xs text-white/40">
+            Only the people marked trained on it can be given it. Mark who's trained from the duty
+            list once it's saved.
+          </span>
+        </span>
+      </label>
       {isHalf && (
         <>
           <div>

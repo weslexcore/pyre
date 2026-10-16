@@ -17,17 +17,35 @@
 // scheduler; a duty needed at both ends of the shift on different days (weigh
 // the propane at Wednesday's set-up and Sunday's break down) is two duties,
 // one per phase.
+//
+// Two more things ride on the list. A duty can require training: only the
+// people marked trained on it (public.staff_duty_training) may be given it —
+// see isTrainedFor. And a duty can be off-shift (phase "off_shift"): a job
+// done on its days whether or not anyone works a shift (fill the water
+// carboys on Monday). Off-shift duties are never held on a shift assignment;
+// each day they run is handed to one person in public.duty_assignments — see
+// offShiftOccurrences. The shift helpers below only ever offer shift duties.
 
 import { dayOfWeek } from "./availability";
 import { DOW_LABELS } from "./constants";
+import { addDays } from "./hours";
 
-export const DUTY_PHASE_KEYS = ["setup", "session", "breakdown"] as const;
+export const DUTY_PHASE_KEYS = [
+	"setup",
+	"session",
+	"breakdown",
+	"off_shift",
+] as const;
 export type DutyPhaseKey = (typeof DUTY_PHASE_KEYS)[number];
+
+/** The phases a duty held on a shift assignment can belong to. */
+export const SHIFT_PHASE_KEYS = ["setup", "session", "breakdown"] as const;
 
 export const DUTY_PHASE_LABELS: Record<DutyPhaseKey, string> = {
 	setup: "Setup",
 	session: "In session",
 	breakdown: "Breakdown",
+	off_shift: "Off shift",
 };
 
 export const DUTY_SIDES = ["a", "b"] as const;
@@ -59,6 +77,11 @@ export interface DutyDef {
 	 */
 	days: number[] | null;
 	sortOrder: number;
+	/**
+	 * Only people marked trained on it (see DutyTraining) may be given it;
+	 * false = anyone on the roster.
+	 */
+	requiresTraining: boolean;
 	/** Retired: no longer offered, but still readable on old assignments. */
 	archived: boolean;
 }
@@ -76,6 +99,8 @@ export interface ShiftDutyRow {
 	sop_id: string | null;
 	days: number[] | null;
 	sort_order: number;
+	/** Optional so a select that predates the column still reads (as false). */
+	requires_training?: boolean | null;
 	archived: boolean;
 }
 
@@ -93,6 +118,7 @@ export function dutyDefFromRow(
 		sopSlug,
 		days: normalizeDutyDays(row.days),
 		sortOrder: row.sort_order,
+		requiresTraining: row.requires_training === true,
 		archived: row.archived,
 	};
 }
@@ -113,6 +139,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "set-up-a-fire-and-water",
 		days: null,
 		sortOrder: 0,
+		requiresTraining: false,
 		archived: false,
 	},
 	{
@@ -125,6 +152,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "set-up-b-space-prep",
 		days: null,
 		sortOrder: 1,
+		requiresTraining: false,
 		archived: false,
 	},
 	{
@@ -137,6 +165,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "host-responsibilities",
 		days: null,
 		sortOrder: 2,
+		requiresTraining: false,
 		archived: false,
 	},
 	{
@@ -149,6 +178,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "customer-care-responsibilities",
 		days: null,
 		sortOrder: 3,
+		requiresTraining: false,
 		archived: false,
 	},
 	{
@@ -161,6 +191,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "break-down-a-fire-and-water",
 		days: null,
 		sortOrder: 4,
+		requiresTraining: false,
 		archived: false,
 	},
 	{
@@ -173,6 +204,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		sopSlug: "break-down-b-guest-areas",
 		days: null,
 		sortOrder: 5,
+		requiresTraining: false,
 		archived: false,
 	},
 ];
@@ -341,13 +373,14 @@ export function normalizeDuties(
  * Nothing is ever auto-removed, so every part of the mix stays an admin's to
  * change — drop the in-session duty and pick the other one, split the
  * letters, or (working a shift alone) hold every half at once. Given the
- * shift's `date`, a pair or in-session duty not done that day isn't filled in.
+ * shift's `date`, a pair or in-session duty not done that day isn't filled in;
+ * given `canHold`, nor is one the person may not hold (not trained on it).
  */
 export function toggleDuty(
 	catalog: DutyCatalog,
 	duties: readonly string[],
 	key: string,
-	opts: { date?: string } = {},
+	opts: { date?: string; canHold?: (key: string) => boolean } = {},
 ): string[] {
 	const held = new Set(normalizeDuties(catalog, duties));
 	if (held.has(key)) {
@@ -357,7 +390,11 @@ export function toggleDuty(
 	held.add(key);
 	const runs = (k: string) => {
 		const def = dutyDef(catalog, k);
-		return !!def && (!opts.date || dutyRunsOn(def, opts.date));
+		return (
+			!!def &&
+			(!opts.date || dutyRunsOn(def, opts.date)) &&
+			(opts.canHold?.(k) ?? true)
+		);
 	};
 	const pair = pairedDutyFor(catalog, key);
 	if (pair && runs(pair)) held.add(pair);
@@ -405,4 +442,137 @@ export function formatDuties(
 	return normalized.length > 0
 		? normalized.map((key) => dutyLabel(catalog, key)).join(" · ")
 		: null;
+}
+
+// --- Shift vs off-shift ---
+
+/** Held on a shift assignment (set-up, session, break-down), not off-shift. */
+export function isShiftDuty(def: Pick<DutyDef, "phase">): boolean {
+	return def.phase !== "off_shift";
+}
+
+/** The duties a shift assignment can hold — what the board's picker offers. */
+export function shiftDutyCatalog(catalog: DutyCatalog): DutyDef[] {
+	return catalog.filter(isShiftDuty);
+}
+
+// --- Training ---
+
+/** public.staff_duty_training: one person trained on one duty. */
+export interface DutyTrainingRow {
+	staff_id: string;
+	duty_key: string;
+	/** Dashboard email of the manager who marked them trained. */
+	trained_by: string | null;
+	created_at: string;
+}
+
+/** Who is trained on what: duty key -> staff ids. */
+export type DutyTraining = ReadonlyMap<string, ReadonlySet<string>>;
+
+export function trainingFromRows(
+	rows: ReadonlyArray<Pick<DutyTrainingRow, "staff_id" | "duty_key">>,
+): DutyTraining {
+	const byDuty = new Map<string, Set<string>>();
+	for (const row of rows) {
+		const set = byDuty.get(row.duty_key) ?? new Set<string>();
+		set.add(row.staff_id);
+		byDuty.set(row.duty_key, set);
+	}
+	return byDuty;
+}
+
+/**
+ * Whether `staffId` may be given `key`: always, unless the duty requires
+ * training, and then only if they're marked trained on it. A duty the
+ * catalog doesn't know gates nobody (validation rejects it elsewhere).
+ */
+export function isTrainedFor(
+	catalog: DutyCatalog,
+	training: DutyTraining,
+	staffId: string,
+	key: string,
+): boolean {
+	const def = dutyDef(catalog, key);
+	if (!def?.requiresTraining) return true;
+	return training.get(key)?.has(staffId) ?? false;
+}
+
+/**
+ * The duties in `duties` this person isn't trained for, leaving out any they
+ * already `held` — like an archived duty, a duty held before the training
+ * rule (or before their training was taken off) stays on the shift it's on,
+ * and the board flags it rather than the API rejecting every later edit.
+ */
+export function untrainedDuties(
+	catalog: DutyCatalog,
+	training: DutyTraining,
+	staffId: string,
+	duties: readonly string[],
+	held: readonly string[] = [],
+): string[] {
+	return duties.filter(
+		(key) =>
+			!held.includes(key) && !isTrainedFor(catalog, training, staffId, key),
+	);
+}
+
+/** "Plunge Care" / "Plunge Care and Weigh Propane" — for a rejection message. */
+export function formatDutyList(
+	catalog: DutyCatalog,
+	keys: readonly string[],
+): string {
+	const labels = keys.map((key) => dutyLabel(catalog, key));
+	if (labels.length <= 1) return labels.join("");
+	return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+// --- Off-shift duties ---
+
+/**
+ * public.duty_assignments: who does an off-shift duty on one day. One row
+ * per (duty, day); reassigning replaces the person.
+ */
+export interface DutyAssignmentRow {
+	id: string;
+	duty_key: string;
+	duty_date: string;
+	staff_id: string;
+	notes: string | null;
+	/** When it was ticked done; null until then. */
+	done_at: string | null;
+	/** Dashboard email of whoever ticked it. */
+	done_by: string | null;
+	created_by: string | null;
+	updated_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface OffShiftOccurrence {
+	date: string;
+	duty: DutyDef;
+}
+
+/**
+ * Every day from `start` to `end` (inclusive) that a live off-shift duty is
+ * done, in date then list order — the slots the board shows, assigned or
+ * not.
+ */
+export function offShiftOccurrences(
+	catalog: DutyCatalog,
+	start: string,
+	end: string,
+): OffShiftOccurrence[] {
+	const duties = sortCatalog(catalog).filter(
+		(d) => d.phase === "off_shift" && !d.archived,
+	);
+	const out: OffShiftOccurrence[] = [];
+	if (duties.length === 0) return out;
+	for (let date = start; date <= end; date = addDays(date, 1)) {
+		for (const duty of duties) {
+			if (dutyRunsOn(duty, date)) out.push({ date, duty });
+		}
+	}
+	return out;
 }

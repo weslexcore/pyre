@@ -26,6 +26,8 @@ const ENTITY_TYPES: ChangeEntityType[] = [
   'sub_request',
   'agent_instructions',
   'staff_prefs',
+  'duty_assignment',
+  'duty_training',
 ];
 
 export const GET: APIRoute = async ({ cookies, url }) => {

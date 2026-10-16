@@ -4,7 +4,7 @@
 // with the status transition as the first-come-first-served gate. Also the
 // home of the small formatting helpers the sub emails use.
 
-import { formatCompactTime, todayEastern } from '@pyre/schedule-core';
+import { formatCompactTime, formatDutyList, isTrainedFor, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import type { ShiftAssignmentRow, ShiftRow, SubRequestRow } from '@/lib/db';
@@ -12,6 +12,7 @@ import { sendToEach } from '@/lib/email/send-each';
 import { adminEmails } from '@/lib/notifications/recipients';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { type ChangeActor, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
+import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 
 /** "Thursday, August 14" from YYYY-MM-DD (dates are already ET wall-clock). */
 export const formatDateLabel = (date: string): string =>
@@ -89,6 +90,21 @@ export async function claimSubRequest(
   if (existingError) return { outcome: 'error', message: existingError.message };
   if (existing) return { outcome: 'already-assigned' };
 
+  // The taker gets the requester's duties, except any that require training
+  // they don't have — those stay with nobody, and the admins are told.
+  const dutyCatalog = await loadDutyCatalog(db);
+  let dutyTraining: Awaited<ReturnType<typeof loadDutyTraining>>;
+  try {
+    dutyTraining = await loadDutyTraining(db);
+  } catch (e) {
+    return { outcome: 'error', message: e instanceof Error ? e.message : String(e) };
+  }
+  const carried = sub.duties.filter((key) =>
+    isTrainedFor(dutyCatalog, dutyTraining, claimerId, key)
+  );
+  const dropped = sub.duties.filter((key) => !carried.includes(key));
+  const droppedLabel = dropped.length > 0 ? formatDutyList(dutyCatalog, dropped) : null;
+
   // The status transition is the claim gate: only one caller can move
   // open -> claimed, so a second click loses here rather than double-swapping.
   const { data: claimedRow, error: claimError } = await db
@@ -134,7 +150,7 @@ export async function claimSubRequest(
       staff_id: claimerId,
       starts_at: sub.starts_at,
       ends_at: sub.ends_at,
-      duties: sub.duties,
+      duties: carried,
       notes: null,
     })
     .select('*')
@@ -170,7 +186,9 @@ export async function claimSubRequest(
     entityType: 'assignment',
     entityId: assignment.id,
     action: 'create',
-    summary: `Assigned ${claimerName} to ${shiftDesc} (sub for ${requesterName})`,
+    summary: `Assigned ${claimerName} to ${shiftDesc} (sub for ${requesterName})${
+      droppedLabel ? `; not trained on ${droppedLabel}, so it was left unassigned` : ''
+    }`,
     details: { before: removed ?? null, after: assignment },
   });
 
@@ -193,6 +211,7 @@ export async function claimSubRequest(
     dateLabel: formatDateLabel(shift.shift_date),
     timeLabel: formatWindowLabel(sub),
     scheduleUrl,
+    ...(droppedLabel && { untrainedDuties: droppedLabel }),
   };
   await sendToEach(
     await listAdminRecipients(),

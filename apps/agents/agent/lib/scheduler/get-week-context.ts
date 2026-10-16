@@ -22,6 +22,7 @@ import {
   dutyDefFromRow,
   dutyRunsOn,
   formatDutyDays,
+  isShiftDuty,
   type ShiftDutyRow,
   sortCatalog,
   rollupHours,
@@ -64,7 +65,7 @@ export const getWeekContextTool = defineTool({
     const dayBefore = addDays(weekStart, -1);
     const dayAfter = addDays(weekEnd, 1);
 
-    const [staffRes, shiftsRes, timeOffRes, dutiesRes, bufferRes] = await Promise.all([
+    const [staffRes, shiftsRes, timeOffRes, dutiesRes, bufferRes, trainingRes] = await Promise.all([
       db.from('staff').select('*').eq('active', true).order('display_name'),
       db
         .from('shifts')
@@ -78,7 +79,7 @@ export const getWeekContextTool = defineTool({
       db
         .from('shift_duties')
         .select(
-          'key, label, detail, phase, side, session_default, sop_id, days, sort_order, archived'
+          'key, label, detail, phase, side, session_default, sop_id, days, sort_order, requires_training, archived'
         )
         .eq('archived', false),
       // When people arrive before the first session and leave after the last
@@ -87,6 +88,8 @@ export const getWeekContextTool = defineTool({
         .from('schedule_settings')
         .select('key, minutes')
         .in('key', ['arrive_before_min', 'leave_after_min']),
+      // Who may hold the duties that require training (staff_duty_training).
+      db.from('staff_duty_training').select('staff_id, duty_key'),
     ]);
     for (const res of [staffRes, shiftsRes, timeOffRes]) {
       if (res.error) throw new Error(res.error.message);
@@ -96,9 +99,20 @@ export const getWeekContextTool = defineTool({
     const shifts = (shiftsRes.data ?? []) as ShiftRow[];
     const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
     // A failed read falls back to the built-in list rather than failing the draft.
-    const duties: DutyDef[] = dutiesRes.error
-      ? DEFAULT_DUTY_CATALOG.filter((d) => !d.archived)
-      : sortCatalog(((dutiesRes.data ?? []) as ShiftDutyRow[]).map((r) => dutyDefFromRow(r, null)));
+    // Off-shift duties (fill the carboys Monday) aren't held on a shift, so
+    // they never reach the drafter.
+    const duties: DutyDef[] = (
+      dutiesRes.error
+        ? DEFAULT_DUTY_CATALOG.filter((d) => !d.archived)
+        : sortCatalog(((dutiesRes.data ?? []) as ShiftDutyRow[]).map((r) => dutyDefFromRow(r, null)))
+    ).filter(isShiftDuty);
+    // Duty key -> the staff trained on it. A failed read leaves the lists
+    // empty; the proposals endpoint still drops any duty given to someone
+    // untrained, so the worst case is duties left for the admin to hand out.
+    const trainedByDuty = new Map<string, string[]>();
+    for (const row of (trainingRes.data ?? []) as Array<{ staff_id: string; duty_key: string }>) {
+      trainedByDuty.set(row.duty_key, [...(trainedByDuty.get(row.duty_key) ?? []), row.staff_id]);
+    }
 
     const shiftIds = shifts.map((s) => s.id);
     let assignments: ShiftAssignmentRow[] = [];
@@ -329,6 +343,10 @@ export const getWeekContextTool = defineTool({
         // "Every day", or the days it's done ("Fri–Sun", "Wed"). Each shift's
         // dutyKeys already applies it.
         days: formatDutyDays(d.days),
+        // Only the staff in trainedStaffIds may hold it; anyone else's is
+        // dropped from the draft.
+        requiresTraining: d.requiresTraining,
+        ...(d.requiresTraining && { trainedStaffIds: trainedByDuty.get(d.key) ?? [] }),
       })),
     };
   },

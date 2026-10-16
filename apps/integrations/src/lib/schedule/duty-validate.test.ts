@@ -24,6 +24,7 @@ const row = (key: string): ShiftDutyRow => {
     sop_id: null,
     days: d.days,
     sort_order: d.sortOrder,
+    requires_training: d.requiresTraining,
     archived: d.archived,
   };
 };
@@ -61,6 +62,7 @@ describe('normalizeDutyCreate', () => {
         session_default: null,
         sop_id: SOP_ID,
         days: null,
+        requires_training: false,
         archived: false,
       },
     });
@@ -207,6 +209,50 @@ describe('normalizeDutyPatch', () => {
 
   it('rejects a malformed SOP id', () => {
     expect(normalizeDutyPatch({ sopId: 'set-up' }, row('host'), C)).toMatchObject({ ok: false });
+  });
+});
+
+describe('off-shift duties and training', () => {
+  it('adds an off-shift duty on its days, with training required', () => {
+    const result = normalizeDutyCreate(
+      { label: 'Fill Carboys', phase: 'off_shift', days: [1], requiresTraining: true },
+      C
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { key: 'fill_carboys', phase: 'off_shift', days: [1], requires_training: true },
+    });
+  });
+
+  it('gives an off-shift duty no side or in-session default', () => {
+    expect(
+      normalizeDutyCreate({ label: 'Carboys', phase: 'off_shift', side: 'a' }, C)
+    ).toMatchObject({ ok: false });
+    expect(
+      normalizeDutyCreate({ label: 'Carboys', phase: 'off_shift', sessionDefault: 'host' }, C)
+    ).toMatchObject({ ok: false });
+  });
+
+  it('never moves a duty between the shift and off-shift', () => {
+    expect(normalizeDutyPatch({ phase: 'off_shift' }, row('host'), C)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('stays on the shift'),
+    });
+    const carboys: ShiftDutyRow = { ...row('host'), key: 'carboys', phase: 'off_shift' };
+    expect(normalizeDutyPatch({ phase: 'session' }, carboys, C)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('stays off-shift'),
+    });
+  });
+
+  it('turns training on and off', () => {
+    expect(normalizeDutyPatch({ requiresTraining: true }, row('host'), C)).toEqual({
+      ok: true,
+      value: { requires_training: true },
+    });
+    expect(normalizeDutyPatch({ requiresTraining: 'yes' }, row('host'), C)).toMatchObject({
+      ok: false,
+    });
   });
 });
 

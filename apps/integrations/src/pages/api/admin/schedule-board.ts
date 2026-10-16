@@ -7,6 +7,7 @@
 
 import {
   addDays,
+  type DutyAssignmentRow,
   HOURS_CHANGE_LOOKBACK_DAYS,
   paydaysBetween,
   utcToEastern,
@@ -108,6 +109,12 @@ export interface ScheduleBoardPayload {
   /** Paydays from start through end (YYYY-MM-DD), per the admin's pay schedule. */
   paydays: string[];
   /**
+   * Who does each off-shift duty (fill the carboys, weigh the propane) on the
+   * days in range. Everyone sees them, like the shift crews. Days a duty runs
+   * with no row here are open — see offShiftOccurrences.
+   */
+  dutyAssignments: DutyAssignmentRow[];
+  /**
    * Live assignments on the day before `start` and the day after `end`, so
    * the board's rest-rule check (an evening close followed by next-morning
    * open) sees across the edges of the range. Names only — no ids to act on.
@@ -152,19 +159,26 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .order('starts_at');
   if (!includeDrafts) shiftsQuery = shiftsQuery.eq('is_draft', false);
 
-  const [staffRes, shiftsRes, timeOffRes, stipendsRes, overridesRes] = await Promise.all([
+  const [staffRes, shiftsRes, timeOffRes, stipendsRes, overridesRes, dutyRes] = await Promise.all([
     db.from('staff').select('*').order('display_name'),
     shiftsQuery,
     db.from('time_off').select('*').order('created_at'),
     db.from('staff_stipends').select('*').order('created_at'),
     db.from('stipend_overrides').select('*').order('week_start'),
+    db
+      .from('duty_assignments')
+      .select('*')
+      .gte('duty_date', start)
+      .lte('duty_date', end)
+      .order('duty_date'),
   ]);
   const firstError =
     staffRes.error ??
     shiftsRes.error ??
     timeOffRes.error ??
     stipendsRes.error ??
-    overridesRes.error;
+    overridesRes.error ??
+    dutyRes.error;
   if (firstError) return dbError(firstError);
 
   const shifts = (shiftsRes.data ?? []) as Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
@@ -384,6 +398,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     pendingRequestCount,
     settings: await getScheduleSettings(),
     paydays: paySchedule ? paydaysBetween(paySchedule, start, end) : [],
+    dutyAssignments: (dutyRes.data ?? []) as DutyAssignmentRow[],
     neighborAssignments,
   };
 

@@ -6,7 +6,12 @@
 // Times come straight off the rows as ET wall clock; generateIcsCalendar names
 // that clock with TZID rather than converting to an instant.
 
-import { type DutyCatalog, formatDuties } from '@pyre/schedule-core';
+import {
+  type DutyAssignmentRow,
+  type DutyCatalog,
+  dutyDef,
+  formatDuties,
+} from '@pyre/schedule-core';
 import type { AllDayCalendarEvent, LocalCalendarEvent } from '@/lib/calendar/ics';
 import { VENUE_ADDRESS } from '@/lib/calendar/links';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
@@ -147,6 +152,44 @@ export function buildPersonalEvents(args: {
   }
 
   return events;
+}
+
+/**
+ * One all-day event per off-shift duty the person is down for (fill the
+ * carboys Monday) — a job on that day, not a block of hours. Keyed on the
+ * duty_assignments row; a reassignment changes the person on the same row,
+ * so the event moves from one feed to the other under the same uid.
+ */
+export function buildDutyEvents(args: {
+  staffId: string;
+  dutyAssignments: DutyAssignmentRow[];
+  dutyCatalog: DutyCatalog;
+  origin: string;
+}): AllDayCalendarEvent[] {
+  const { staffId, dutyAssignments, dutyCatalog, origin } = args;
+  return dutyAssignments
+    .filter((d) => d.staff_id === staffId)
+    .map((d) => {
+      const def = dutyDef(dutyCatalog, d.duty_key);
+      const label = def?.label ?? d.duty_key;
+      return {
+        uid: `pyre-duty-${d.id}@pyresauna.com`,
+        date: d.duty_date,
+        allDay: true,
+        summary: `Pyre — ${label}`,
+        location: VENUE_ADDRESS,
+        description: describe([
+          def?.detail ? `${label}: ${def.detail}` : label,
+          d.done_at ? 'Done.' : null,
+          d.notes,
+          def?.sopSlug ? `How: ${origin}/admin/sops/${def.sopSlug}` : null,
+          dayUrl(origin, d.duty_date),
+        ]),
+        url: dayUrl(origin, d.duty_date),
+        status: 'CONFIRMED',
+        lastModified: d.updated_at,
+      };
+    });
 }
 
 /**

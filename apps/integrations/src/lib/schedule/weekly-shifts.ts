@@ -1,6 +1,7 @@
 // The Monday shift roundup: every employee with locked-in hours in the week
 // ahead gets one email listing their own shifts, each a deep link straight to
-// that shift on /admin/schedule.
+// that shift on /admin/schedule. Off-shift duties they're down for (fill the
+// carboys Monday) are listed beneath, so someone with only those still hears.
 //
 // "Locked in" means live rows — is_draft = false on both the shift and the
 // assignment, so an agent proposal still awaiting review is never mailed out
@@ -15,13 +16,15 @@
 import {
   addDays,
   assignmentHours,
+  type DutyAssignmentRow,
+  dutyDef,
   formatDuties,
   formatShortDay,
   todayEastern,
   utcToEastern,
   weekStartOf,
 } from '@pyre/schedule-core';
-import type { WeeklyShiftItem } from '@/emails/types';
+import type { WeeklyDutyItem, WeeklyShiftItem } from '@/emails/types';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import {
   getDb,
@@ -100,14 +103,27 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
   if (shiftError) return { ...base, skipped: `shifts-query-failed:${shiftError.message}` };
 
   const shifts = (shiftRows ?? []) as ShiftRow[];
-  if (shifts.length === 0) return { ...base, skipped: 'no-shifts' };
+  const { data: dutyRows, error: dutyError } = await db
+    .from('duty_assignments')
+    .select('*')
+    .gte('duty_date', weekStart)
+    .lte('duty_date', weekEnd);
+  if (dutyError) return { ...base, skipped: `duty-assignments-query-failed:${dutyError.message}` };
+  const dutyAssignments = (dutyRows ?? []) as DutyAssignmentRow[];
+  if (shifts.length === 0 && dutyAssignments.length === 0) {
+    return { ...base, skipped: 'no-shifts' };
+  }
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   const shiftIds = shifts.map((s) => s.id);
   const [assignmentRes, staffRes, subRes] = await Promise.all([
-    db.from('shift_assignments').select('*').in('shift_id', shiftIds).eq('is_draft', false),
+    shiftIds.length > 0
+      ? db.from('shift_assignments').select('*').in('shift_id', shiftIds).eq('is_draft', false)
+      : Promise.resolve({ data: [], error: null }),
     db.from('staff').select('*'),
-    db.from('sub_requests').select('*').in('shift_id', shiftIds).eq('status', 'open'),
+    shiftIds.length > 0
+      ? db.from('sub_requests').select('*').in('shift_id', shiftIds).eq('status', 'open')
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (assignmentRes.error) {
     return { ...base, skipped: `assignments-query-failed:${assignmentRes.error.message}` };
@@ -128,6 +144,10 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
     if (list) list.push(a);
     else byStaff.set(a.staff_id, [a]);
   }
+  const dutiesByStaff = new Map<string, DutyAssignmentRow[]>();
+  for (const d of [...dutyAssignments].sort((x, y) => x.duty_date.localeCompare(y.duty_date))) {
+    dutiesByStaff.set(d.staff_id, [...(dutiesByStaff.get(d.staff_id) ?? []), d]);
+  }
 
   const origin = appOrigin();
   const scheduleUrl = `${origin}/admin/schedule`;
@@ -137,7 +157,8 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
 
   for (const person of staff) {
     const mine = byStaff.get(person.id) ?? [];
-    if (mine.length === 0) {
+    const myDuties = dutiesByStaff.get(person.id) ?? [];
+    if (mine.length === 0 && myDuties.length === 0) {
       summary.withoutShifts += 1;
       continue;
     }
@@ -173,6 +194,16 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       ...(pendingSubs.has(`${shift.id}:${person.id}`) && { subRequested: true }),
     }));
 
+    const dutyItems: WeeklyDutyItem[] = myDuties.map((d) => {
+      const def = dutyDef(dutyCatalog, d.duty_key);
+      return {
+        dayLabel: formatShortDay(d.duty_date),
+        dutyLabel: def?.label ?? d.duty_key,
+        ...(def?.detail && { detail: def.detail }),
+        dayUrl: `${origin}/admin/schedule?view=week&date=${d.duty_date}`,
+      };
+    });
+
     const hours = items.reduce(
       (total, { assignment }) => total + assignmentHours(assignment.starts_at, assignment.ends_at),
       0
@@ -182,7 +213,11 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
 
     const email = person.email as string;
     if (ctx.dryRun) {
-      wouldSend.push(`${email} (${shiftItems.length} shifts, ${totalHours}h)`);
+      wouldSend.push(
+        `${email} (${shiftItems.length} shifts, ${totalHours}h${
+          dutyItems.length > 0 ? `, ${dutyItems.length} off-shift duties` : ''
+        })`
+      );
       continue;
     }
 
@@ -196,6 +231,7 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
           firstName: person.display_name,
           weekLabel,
           shifts: shiftItems,
+          ...(dutyItems.length > 0 && { offShiftDuties: dutyItems }),
           totalHours,
           scheduleUrl,
         },

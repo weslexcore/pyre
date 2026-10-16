@@ -3,11 +3,12 @@
 // assignment-keyed choice is what makes a sub swap land in the right person's
 // calendar.
 
-import { DEFAULT_DUTY_CATALOG } from '@pyre/schedule-core';
+import { DEFAULT_DUTY_CATALOG, type DutyAssignmentRow } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
 import { generateIcsCalendar } from '@/lib/calendar/ics';
 import type { ShiftAssignmentRow, StaffRow } from '@/lib/db';
 import {
+  buildDutyEvents,
   buildPaydayEvents,
   buildPersonalEvents,
   buildTeamEvents,
@@ -252,5 +253,37 @@ describe('buildPaydayEvents', () => {
     const ics = generateIcsCalendar({ calendarName: 'Pyre — My Shifts', events });
     expect(ics).toContain('DTSTART;VALUE=DATE:20261026');
     expect(ics).not.toMatch(/^LOCATION:/m);
+  });
+});
+
+describe('buildDutyEvents', () => {
+  const duty = (over: Partial<DutyAssignmentRow> = {}): DutyAssignmentRow =>
+    ({
+      id: 'duty-1',
+      duty_key: 'host',
+      duty_date: '2026-08-17',
+      staff_id: ME,
+      notes: null,
+      done_at: null,
+      updated_at: '2026-08-13T14:22:11.000Z',
+      ...over,
+    }) as DutyAssignmentRow;
+
+  it('makes an all-day event per off-shift duty of theirs, keyed on the row', () => {
+    const events = buildDutyEvents({
+      staffId: ME,
+      dutyAssignments: [duty(), duty({ id: 'duty-2', staff_id: THEM })],
+      dutyCatalog: DEFAULT_DUTY_CATALOG,
+      origin: ORIGIN,
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      uid: 'pyre-duty-duty-1@pyresauna.com',
+      date: '2026-08-17',
+      allDay: true,
+      summary: 'Pyre — Host',
+      url: `${ORIGIN}/admin/schedule?view=week&date=2026-08-17`,
+    });
+    expect(events[0].description).toContain(`${ORIGIN}/admin/sops/host-responsibilities`);
   });
 });

@@ -15,12 +15,19 @@
 // convenience — the board's Add-to-calendar button and the shift emails stay
 // the fast path for anything time-sensitive.
 
-import { addDays, lastConfirmedDate, paydaysBetween, todayEastern } from '@pyre/schedule-core';
+import {
+  addDays,
+  type DutyAssignmentRow,
+  lastConfirmedDate,
+  paydaysBetween,
+  todayEastern,
+} from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { generateIcsCalendar } from '@/lib/calendar/ics';
 import { getDb, type ShiftAssignmentRow, type StaffRow } from '@/lib/db';
 import {
+  buildDutyEvents,
   buildPaydayEvents,
   buildPersonalEvents,
   buildTeamEvents,
@@ -83,7 +90,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   const start = addDays(today, -PAST_DAYS);
   const end = lastConfirmedDate(today);
 
-  const [shiftsRes, allStaffRes] = await Promise.all([
+  const [shiftsRes, allStaffRes, dutyRes] = await Promise.all([
     db
       .from('shifts')
       .select('*')
@@ -94,8 +101,17 @@ export const GET: APIRoute = async ({ request, url }) => {
       .order('shift_date')
       .order('starts_at'),
     db.from('staff').select('*'),
+    // Off-shift duties ride in the personal feed only; the team feed is coverage.
+    wantsTeam
+      ? Promise.resolve({ data: [], error: null })
+      : db
+          .from('duty_assignments')
+          .select('*')
+          .eq('staff_id', person.id)
+          .gte('duty_date', start)
+          .lte('duty_date', end),
   ]);
-  const loadError = shiftsRes.error ?? allStaffRes.error;
+  const loadError = shiftsRes.error ?? allStaffRes.error ?? dutyRes.error;
   if (loadError) return unavailable('shift load', loadError);
 
   const shifts = (shiftsRes.data ?? []) as ShiftWithAssignments[];
@@ -128,6 +144,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     ? paydaysBetween(paySchedule, start, addDays(today, PAYDAY_DAYS_AHEAD))
     : [];
 
+  const dutyCatalog = await loadDutyCatalog(db);
   const ics = generateIcsCalendar({
     calendarName: wantsTeam ? 'Pyre — Team Coverage' : 'Pyre — My Shifts',
     events: wantsTeam
@@ -138,7 +155,13 @@ export const GET: APIRoute = async ({ request, url }) => {
             shifts,
             staffById,
             origin,
-            dutyCatalog: await loadDutyCatalog(db),
+            dutyCatalog,
+          }),
+          ...buildDutyEvents({
+            staffId: person.id,
+            dutyAssignments: (dutyRes.data ?? []) as DutyAssignmentRow[],
+            dutyCatalog,
+            origin,
           }),
           ...buildPaydayEvents({ paydays, origin }),
         ],

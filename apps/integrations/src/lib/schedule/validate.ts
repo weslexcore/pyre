@@ -4,9 +4,13 @@
 
 import {
   type DutyCatalog,
+  type DutyTraining,
+  formatDutyList,
+  isShiftDuty,
   MAX_SHIFT_MIN,
   normalizeDuties,
   timeToMinutes,
+  untrainedDuties,
 } from '@pyre/schedule-core';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -86,7 +90,9 @@ export function checkShiftWindow(startsAt: string, endsAt: string): string | nul
  * parseShiftFields. Duties are checked against the admin-edited catalog
  * (loadDutyCatalog): a live duty is always accepted, an archived one only if
  * the assignment already `held` it — retiring a duty stops new assignments
- * without making old ones unsaveable.
+ * without making old ones unsaveable. Off-shift duties are never held on a
+ * shift (they're assigned per day in duty_assignments). Training is checked
+ * separately (trainingError), since it depends on who the assignment is for.
  */
 export function parseAssignmentFields(
   body: Record<string, unknown>,
@@ -110,12 +116,13 @@ export function parseAssignmentFields(
   // drafted, since there's no database constraint on the array to do either.
   if (body.duties !== undefined) {
     if (!Array.isArray(body.duties)) return 'duties must be an array';
+    const shiftCatalog = catalog.filter(isShiftDuty);
     const allowed = new Set(
-      catalog.filter((d) => !d.archived || held.includes(d.key)).map((d) => d.key)
+      shiftCatalog.filter((d) => !d.archived || held.includes(d.key)).map((d) => d.key)
     );
     const unknown = body.duties.find((d) => typeof d !== 'string' || !allowed.has(d));
     if (unknown !== undefined) {
-      const live = catalog.filter((d) => !d.archived).map((d) => d.key);
+      const live = shiftCatalog.filter((d) => !d.archived).map((d) => d.key);
       return `duties must each be one of: ${live.join(', ')}`;
     }
     fields.duties = normalizeDuties(catalog, body.duties as string[]);
@@ -125,4 +132,22 @@ export function parseAssignmentFields(
     fields.notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) || null : null;
   }
   return fields;
+}
+
+/**
+ * Why `name` can't be given `duties`: the ones requiring training they
+ * aren't trained on, leaving out any they already `held` (those stay, like
+ * an archived duty, and the board flags them). Null when every one is fine.
+ */
+export function trainingError(
+  catalog: DutyCatalog,
+  training: DutyTraining,
+  staffId: string,
+  name: string,
+  duties: readonly string[],
+  held: readonly string[] = []
+): string | null {
+  const untrained = untrainedDuties(catalog, training, staffId, duties, held);
+  if (untrained.length === 0) return null;
+  return `${name} isn't trained on ${formatDutyList(catalog, untrained)}. Mark them trained on the Duties tab first.`;
 }

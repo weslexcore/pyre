@@ -2,9 +2,9 @@
 // set rather than a scalar, and the only one checked against an admin-edited
 // list (shift_duties) rather than a database constraint.
 
-import { DEFAULT_DUTY_CATALOG } from '@pyre/schedule-core';
+import { DEFAULT_DUTY_CATALOG, type DutyDef, trainingFromRows } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
-import { parseAssignmentFields as parse } from './validate';
+import { parseAssignmentFields as parse, trainingError } from './validate';
 
 const parseAssignmentFields = (body: Record<string, unknown>, held?: string[]) =>
   parse(body, DEFAULT_DUTY_CATALOG, held);
@@ -56,11 +56,46 @@ describe('parseAssignmentFields duties', () => {
         sopSlug: null,
         days: null,
         sortOrder: 1.5,
+        requiresTraining: false,
         archived: false,
       },
     ];
     expect(parse({ duties: ['plunge_care', 'setup_b', 'setup_a'] }, catalog)).toEqual({
       duties: ['setup_a', 'setup_b', 'plunge_care'],
     });
+  });
+});
+
+describe('off-shift duties and training', () => {
+  const carboys: DutyDef = {
+    key: 'fill_carboys',
+    label: 'Fill Carboys',
+    detail: null,
+    phase: 'off_shift',
+    side: null,
+    sessionDefault: null,
+    sopSlug: null,
+    days: [1],
+    sortOrder: 10,
+    requiresTraining: false,
+    archived: false,
+  };
+
+  it('never puts an off-shift duty on a shift', () => {
+    expect(parse({ duties: ['fill_carboys'] }, [...DEFAULT_DUTY_CATALOG, carboys])).toMatch(
+      /duties must each be one of/
+    );
+  });
+
+  it('names the duties someone is not trained on, sparing ones they hold', () => {
+    const catalog = DEFAULT_DUTY_CATALOG.map((d) =>
+      d.key === 'host' ? { ...d, requiresTraining: true } : d
+    );
+    const training = trainingFromRows([{ staff_id: 'sunny', duty_key: 'host' }]);
+    expect(trainingError(catalog, training, 'sunny', 'Sunny', ['host'])).toBeNull();
+    expect(trainingError(catalog, training, 'julien', 'Julien', ['setup_b', 'host'])).toMatch(
+      /^Julien isn't trained on Host\./
+    );
+    expect(trainingError(catalog, training, 'julien', 'Julien', ['host'], ['host'])).toBeNull();
   });
 });

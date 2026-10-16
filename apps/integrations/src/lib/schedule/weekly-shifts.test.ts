@@ -291,4 +291,33 @@ describe('runWeeklyShiftEmails', () => {
     expect(summary.outOfTime).toBe(true);
     expect(sendTemplate).not.toHaveBeenCalled();
   });
+
+  it('lists off-shift duties, and emails someone who has only those', async () => {
+    getDb.mockReturnValue(
+      fakeDb({
+        shifts: [shift()],
+        shift_assignments: [assignment()],
+        staff: [person(), person({ id: 'staff-2', display_name: 'Sunny', email: 's@example.com' })],
+        sub_requests: [],
+        duty_assignments: [
+          { id: 'd-1', duty_key: 'host', duty_date: '2026-08-18', staff_id: 'staff-2' },
+        ],
+      })
+    );
+
+    const summary = await runWeeklyShiftEmails(ctx);
+
+    expect(summary.sent).toBe(2);
+    const sunny = sendTemplate.mock.calls.find((c) => c[0].to === 's@example.com')?.[0];
+    expect(sunny.props.shifts).toEqual([]);
+    expect(sunny.props.offShiftDuties).toEqual([
+      {
+        dayLabel: 'Tue, Aug 18',
+        dutyLabel: 'Host',
+        dayUrl: 'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-18',
+      },
+    ]);
+    const omar = sendTemplate.mock.calls.find((c) => c[0].to === 'omar@example.com')?.[0];
+    expect(omar.props).not.toHaveProperty('offShiftDuties');
+  });
 });

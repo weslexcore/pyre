@@ -165,6 +165,11 @@ export interface SubClaimedNoticeProps {
   dateLabel: string;
   timeLabel: string;
   scheduleUrl: string;
+  /**
+   * Duties the requester held that the taker isn't trained on — not carried
+   * over, so somebody else on the shift needs them ("Plunge Care").
+   */
+  untrainedDuties?: string;
 }
 
 /** One shift on the Monday roundup, from the recipient's point of view. */
@@ -185,12 +190,29 @@ export interface WeeklyShiftItem {
   subRequested?: boolean;
 }
 
+/** One off-shift duty on the Monday roundup ("Mon, Aug 17 — Fill Carboys"). */
+export interface WeeklyDutyItem {
+  /** e.g. "Mon, Aug 17" */
+  dayLabel: string;
+  /** "Fill Carboys" */
+  dutyLabel: string;
+  /** What it covers, from the duty list; omitted when there's nothing more to say. */
+  detail?: string;
+  /** Deep link to that day on the board. */
+  dayUrl: string;
+}
+
 export interface WeeklyShiftsProps {
   firstName: string;
   /** e.g. "Aug 17–23" */
   weekLabel: string;
-  /** Chronological; never empty (people with no shifts aren't emailed). */
+  /**
+   * Chronological. Empty only when they have off-shift duties and no shifts
+   * (people with neither aren't emailed).
+   */
   shifts: WeeklyShiftItem[];
+  /** Off-shift duties they're down for this week, chronological; omitted when none. */
+  offShiftDuties?: WeeklyDutyItem[];
   /** Total scheduled hours for the week, e.g. "18.5". */
   totalHours: string;
   scheduleUrl: string;

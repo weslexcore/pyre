@@ -15,8 +15,10 @@ import {
   DEFAULT_DUTY_CATALOG,
   DEFAULT_LEAVE_AFTER_MIN,
   DOW_LABELS,
+  type DutyAssignmentRow,
   type DutyCatalog,
   type DutyDef,
+  type DutyTraining,
   dayOfWeek,
   defaultAssignmentWindow,
   dutyDef,
@@ -28,9 +30,12 @@ import {
   firstTentativeDate,
   formatChipDate,
   formatCompactTime,
+  formatDutyList,
   formatShiftNotes,
   HOURS_CHANGE_LOOKBACK_DAYS,
+  isShiftDuty,
   isTentativeShift,
+  isTrainedFor,
   MAX_SHIFT_BUFFER_MIN,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
   minutesToTime,
@@ -38,11 +43,14 @@ import {
   missingShiftLead,
   normalizeDuties,
   offDayDuties,
+  offShiftOccurrences,
   onCallPeople,
   pairedDutyFor,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
   toggleDuty,
+  trainingFromRows,
+  untrainedDuties,
   weekStartOf,
   workingOnCall,
 } from '@pyre/schedule-core';
@@ -66,6 +74,7 @@ import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
 import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
+import { OffShiftDuties } from './OffShiftDuties';
 import { PayScheduleSettings } from './PayScheduleSettings';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
@@ -109,6 +118,8 @@ interface BoardData {
   isAdmin?: boolean;
   /** Paydays in the fetched range, per the admin's pay schedule. */
   paydays?: string[];
+  /** Who does each off-shift duty on the days in range. */
+  dutyAssignments?: DutyAssignmentRow[];
   selfStaffId?: string | null;
   /** Pending requests (all of them on the manage side, own only otherwise). */
   shiftRequests?: ShiftRequestRow[];
@@ -181,6 +192,24 @@ const pairingAdvice = (catalog: DutyCatalog, setup: AssignmentDuty): string => {
 function useDutyCatalog(): DutyCatalog {
   const { data } = useCachedJson<{ duties: DutyDef[] }>('/api/admin/shift-duties');
   return data?.duties ?? DEFAULT_DUTY_CATALOG;
+}
+
+/**
+ * Who is trained on what, from the same cached fetch. Empty until it lands —
+ * the picker then offers no duty that requires training, which the API
+ * would refuse anyway.
+ */
+function useDutyTraining(): DutyTraining {
+  const { data } = useCachedJson<{ training: Array<{ staffId: string; dutyKey: string }> }>(
+    '/api/admin/shift-duties'
+  );
+  return useMemo(
+    () =>
+      trainingFromRows(
+        (data?.training ?? []).map((t) => ({ staff_id: t.staffId, duty_key: t.dutyKey }))
+      ),
+    [data]
+  );
 }
 
 const todayLocal = (): string => {
@@ -463,6 +492,24 @@ export function ScheduleBoard() {
   const selfId = data?.selfStaffId ?? null;
   const settings = data?.settings ?? DEFAULT_SETTINGS;
   const paydays = useMemo(() => new Set(data?.paydays ?? []), [data]);
+  // Off-shift duties (fill the carboys Monday): the days each is done in the
+  // range, and who has them.
+  const dutyCatalog = useDutyCatalog();
+  const dutyTraining = useDutyTraining();
+  const offShiftByDate = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof offShiftOccurrences>>();
+    for (const o of offShiftOccurrences(dutyCatalog, range.start, range.end)) {
+      map.set(o.date, [...(map.get(o.date) ?? []), o]);
+    }
+    return map;
+  }, [dutyCatalog, range]);
+  const dutyAssignmentsByDate = useMemo(() => {
+    const map = new Map<string, DutyAssignmentRow[]>();
+    for (const d of data?.dutyAssignments ?? []) {
+      map.set(d.duty_date, [...(map.get(d.duty_date) ?? []), d]);
+    }
+    return map;
+  }, [data]);
   const pendingRequestCount = data?.pendingRequestCount ?? 0;
 
   // Pull the standing instructions once, when an admin first opens the panel.
@@ -1529,12 +1576,21 @@ export function ScheduleBoard() {
                   s.assignments.some((a) => staffFilter.has(a.staff_id))
                 );
               }
+              const dayDuties = dutyAssignmentsByDate.get(date) ?? [];
+              const dayOffShift = offShiftByDate.get(date) ?? [];
               // With a filter on, skip day sections nobody selected is part of —
-              // a filtered month would otherwise be a wall of "No shifts".
+              // a filtered month would otherwise be a wall of "No shifts". An
+              // off-shift duty of theirs that day counts as being part of it.
+              const filteredDuty = dayDuties.some(
+                (d) =>
+                  (mineOnly && d.staff_id === selfId) ||
+                  (staffFilter.size > 0 && staffFilter.has(d.staff_id))
+              );
               if (
                 (mineOnly || staffFilter.size > 0) &&
                 calendarView &&
                 shifts.length === 0 &&
+                !filteredDuty &&
                 formTarget !== `new:${date}`
               ) {
                 return null;
@@ -1908,6 +1964,34 @@ export function ScheduleBoard() {
                       );
                     })}
                   </div>
+
+                  {calendarView && (
+                    <OffShiftDuties
+                      date={date}
+                      occurrences={dayOffShift}
+                      assignments={dayDuties}
+                      catalog={dutyCatalog}
+                      training={dutyTraining}
+                      staff={data?.staff ?? []}
+                      selfId={selfId}
+                      canManage={canManage}
+                      canViewSops={canViewSops}
+                      busy={busy}
+                      onAssign={(dutyKey, staffId) =>
+                        void run(() =>
+                          api('POST', '/api/admin/duty-assignments', { dutyKey, date, staffId })
+                        )
+                      }
+                      onUnassign={(id) =>
+                        void run(() =>
+                          api('DELETE', `/api/admin/duty-assignments?id=${encodeURIComponent(id)}`)
+                        )
+                      }
+                      onDone={(id, done) =>
+                        void run(() => api('PATCH', '/api/admin/duty-assignments', { id, done }))
+                      }
+                    />
+                  )}
                 </section>
               );
             })}
@@ -2126,6 +2210,7 @@ function ShiftDetail({
   restCheck: (staffId: string, date: string, startsAt: string, endsAt: string) => string | null;
 }) {
   const dutyCatalog = useDutyCatalog();
+  const dutyTraining = useDutyTraining();
   // The hours someone added now gets: the arrive-before / leave-after settings
   // counted from the shift's sessions (the shift window on a manual shift).
   // Same function the server applies, so what's checked here is what lands.
@@ -2685,6 +2770,19 @@ function ShiftDetail({
                           .map((key) => dutyLabel(dutyCatalog, key))
                           .join(', ')}{' '}
                         not done {DOW_LABELS[dayOfWeek(shift.shift_date)]}
+                      </span>
+                    )}
+                    {untrainedDuties(dutyCatalog, dutyTraining, a.staff_id, a.duties).length >
+                      0 && (
+                      <span
+                        className="font-mono text-[10px] text-[var(--pyre-gold)]"
+                        title="These duties require training this person isn't marked as having — they were given them before, so they stay until someone takes them off"
+                      >
+                        ⚠ not trained on{' '}
+                        {formatDutyList(
+                          dutyCatalog,
+                          untrainedDuties(dutyCatalog, dutyTraining, a.staff_id, a.duties)
+                        )}
                       </span>
                     )}
                   </div>
@@ -3315,16 +3413,24 @@ function AssignmentEditor({
   // Taking a half fills in the same letter in the other phase and that side's
   // in-session duty (toggleDuty); every part of that stays editable.
   const dutyCatalog = useDutyCatalog();
+  const dutyTraining = useDutyTraining();
   const [duties, setDuties] = useState<AssignmentDuty[]>(() =>
     normalizeDuties(dutyCatalog, assignment.duties)
   );
   const mismatches = mismatchedDutyPairs(dutyCatalog, duties);
-  // Retired duties, and ones not done on this day of the week, aren't
-  // offered — but one this person already holds stays on the picker so it
-  // can be seen and taken off.
+  // A duty that requires training is only for the people trained on it —
+  // one they already hold stays, so it can be seen and taken off.
+  const canHold = (key: string) =>
+    assignment.duties.includes(key) ||
+    isTrainedFor(dutyCatalog, dutyTraining, assignment.staff_id, key);
+  // Retired duties, ones not done on this day of the week, and off-shift
+  // duties (handed out by the day, not on a shift) aren't offered — but one
+  // this person already holds stays on the picker so it can be taken off.
   const phases = dutyPhases(
     dutyCatalog.filter(
-      (d) => (!d.archived && dutyRunsOn(d, date)) || assignment.duties.includes(d.key)
+      (d) =>
+        isShiftDuty(d) &&
+        ((!d.archived && dutyRunsOn(d, date)) || assignment.duties.includes(d.key))
     ),
     { includeArchived: true }
   );
@@ -3410,15 +3516,22 @@ function AssignmentEditor({
             <button
               key={duty.key}
               type="button"
-              className={`${dutyPillClass(duties.includes(duty.key))}${duty.archived ? ' opacity-50' : ''}`}
+              className={`${dutyPillClass(duties.includes(duty.key))}${
+                duty.archived || !canHold(duty.key) ? ' opacity-50' : ''
+              }${!canHold(duty.key) ? ' cursor-not-allowed line-through' : ''}`}
               title={
                 duty.archived
                   ? `${dutyTitle(dutyCatalog, duty.key)} (retired)`
-                  : dutyTitle(dutyCatalog, duty.key)
+                  : !canHold(duty.key)
+                    ? `${dutyTitle(dutyCatalog, duty.key)} — requires training this person doesn't have`
+                    : dutyTitle(dutyCatalog, duty.key)
               }
               aria-pressed={duties.includes(duty.key)}
+              disabled={!canHold(duty.key) && !duties.includes(duty.key)}
               onClick={() =>
-                setDuties((current) => toggleDuty(dutyCatalog, current, duty.key, { date }))
+                setDuties((current) =>
+                  toggleDuty(dutyCatalog, current, duty.key, { date, canHold })
+                )
               }
             >
               {duty.label}

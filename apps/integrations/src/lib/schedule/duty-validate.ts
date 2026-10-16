@@ -6,7 +6,10 @@
 //     live duty holds each side of a phase (so "the matching half" is never
 //     ambiguous — the DB's partial unique index is the backstop);
 //   - a half's in-session default names a live, in-session duty;
-//   - a session duty another half defaults to stays a session duty.
+//   - a session duty another half defaults to stays a session duty;
+//   - an off-shift duty has neither a side nor an in-session default, and a
+//     duty never moves between shift and off-shift (the two are assigned in
+//     different tables, so the move would strand what's already assigned).
 //
 // Keys are derived from the label once and never change: they're what the
 // duties[] arrays on every assignment store.
@@ -35,6 +38,8 @@ export interface DutyColumns {
   sop_id: string | null;
   /** Days of the week (0 = Sunday); null for every day. */
   days: number[] | null;
+  /** Only people marked trained on it may be given it. */
+  requires_training: boolean;
   archived: boolean;
 }
 
@@ -109,15 +114,20 @@ function readFields(body: Record<string, unknown>, base: DutyColumns): DutyColum
     }
     next.days = normalizeDutyDays(body.days as number[] | null);
   }
+  if (body.requiresTraining !== undefined) {
+    if (typeof body.requiresTraining !== 'boolean') return 'requiresTraining must be true or false';
+    next.requires_training = body.requiresTraining;
+  }
   if (body.archived !== undefined) {
     if (typeof body.archived !== 'boolean') return 'archived must be true or false';
     next.archived = body.archived;
   }
-  // A duty moved into the session phase can't keep the half-only settings.
-  if (next.phase === 'session' && body.phase !== undefined && body.side === undefined) {
+  // A duty moved out of set-up / break-down can't keep the half-only settings.
+  const halfPhase = next.phase === 'setup' || next.phase === 'breakdown';
+  if (!halfPhase && body.phase !== undefined && body.side === undefined) {
     next.side = null;
   }
-  if (next.phase === 'session' && body.phase !== undefined && body.sessionDefault === undefined) {
+  if (!halfPhase && body.phase !== undefined && body.sessionDefault === undefined) {
     next.session_default = null;
   }
   return next;
@@ -125,11 +135,12 @@ function readFields(body: Record<string, unknown>, base: DutyColumns): DutyColum
 
 /** The cross-row rules, checked against the rest of the list. */
 function checkCoherent(key: string, cols: DutyColumns, catalog: DutyCatalog): string | null {
-  if (cols.side && cols.phase === 'session') {
+  if (cols.side && (cols.phase === 'session' || cols.phase === 'off_shift')) {
     return 'Only set-up and break-down duties can have an A/B side';
   }
   if (cols.session_default) {
     if (cols.phase === 'session') return 'An in-session duty has no in-session default';
+    if (cols.phase === 'off_shift') return 'An off-shift duty has no in-session default';
     const target = catalog.find((d) => d.key === cols.session_default);
     if (!target || target.key === key || target.phase !== 'session' || target.archived) {
       return 'The in-session default must be a live in-session duty';
@@ -167,6 +178,7 @@ export function normalizeDutyCreate(
     session_default: null,
     sop_id: null,
     days: null,
+    requires_training: false,
     archived: false,
   });
   if (typeof cols === 'string') return { ok: false, error: cols };
@@ -190,10 +202,20 @@ export function normalizeDutyPatch(
     session_default: existing.session_default,
     sop_id: existing.sop_id,
     days: normalizeDutyDays(existing.days),
+    requires_training: existing.requires_training === true,
     archived: existing.archived,
   };
   const cols = readFields(body, base);
   if (typeof cols === 'string') return { ok: false, error: cols };
+  if ((cols.phase === 'off_shift') !== (base.phase === 'off_shift')) {
+    return {
+      ok: false,
+      error:
+        base.phase === 'off_shift'
+          ? 'An off-shift duty stays off-shift. Add a shift duty instead.'
+          : 'A shift duty stays on the shift. Add an off-shift duty instead.',
+    };
+  }
   const incoherent = checkCoherent(existing.key, cols, catalog);
   if (incoherent) return { ok: false, error: incoherent };
   const changes: Partial<DutyColumns> = {};

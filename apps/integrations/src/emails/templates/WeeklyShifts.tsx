@@ -1,11 +1,13 @@
 import { Button, Hr, Link, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
-import type { WeeklyShiftItem, WeeklyShiftsProps } from '../types';
+import type { WeeklyDutyItem, WeeklyShiftItem, WeeklyShiftsProps } from '../types';
 
 // Monday morning to each person with live (non-draft) assignments in the week
 // ahead — their own hours, not the whole board. Every row is a deep link to
 // that shift on /admin/schedule, so "when am I working Thursday?" is one tap
-// from the inbox. Sent by the weekly-shifts cron job.
+// from the inbox. Off-shift duties they're down for (fill the carboys
+// Monday) follow the shifts, each a link to its day. Sent by the
+// weekly-shifts cron job.
 
 const shiftDay = {
   ...text,
@@ -60,23 +62,52 @@ function ShiftRow({ shift }: { shift: WeeklyShiftItem }) {
   );
 }
 
+function DutyRow({ duty }: { duty: WeeklyDutyItem }) {
+  return (
+    <>
+      <Text style={shiftDay}>
+        <Link href={duty.dayUrl} style={shiftLink}>
+          {duty.dayLabel} — {duty.dutyLabel}
+        </Link>
+      </Text>
+      {duty.detail ? <Text style={shiftDuties}>{duty.detail}</Text> : null}
+    </>
+  );
+}
+
 export function WeeklyShifts({
   firstName,
   weekLabel,
   shifts,
+  offShiftDuties = [],
   totalHours,
   scheduleUrl,
 }: WeeklyShiftsProps) {
   const shiftCount = shifts.length;
+  const dutyCount = offShiftDuties.length;
+  const dutiesPhrase = `${dutyCount} off-shift dut${dutyCount === 1 ? 'y' : 'ies'}`;
   return (
     <EmailLayout
-      preview={`${shiftCount} shift${shiftCount === 1 ? '' : 's'} this week (${weekLabel})`}
+      preview={
+        shiftCount > 0
+          ? `${shiftCount} shift${shiftCount === 1 ? '' : 's'} this week (${weekLabel})`
+          : `${dutiesPhrase} this week (${weekLabel})`
+      }
     >
       <Text style={heading}>Your week, {firstName}</Text>
-      <Text style={text}>
-        {shiftCount === 1 ? "You're on 1 shift" : `You're on ${shiftCount} shifts`} for {weekLabel}{' '}
-        — {totalHours} hours total. Tap any shift to open it on the schedule board.
-      </Text>
+      {shiftCount > 0 ? (
+        <Text style={text}>
+          {shiftCount === 1 ? "You're on 1 shift" : `You're on ${shiftCount} shifts`} for{' '}
+          {weekLabel} — {totalHours} hours total
+          {dutyCount > 0 ? `, plus ${dutiesPhrase}` : ''}. Tap any shift to open it on the schedule
+          board.
+        </Text>
+      ) : (
+        <Text style={text}>
+          No shifts for {weekLabel}, but you're down for {dutiesPhrase}. Tap one to open its day on
+          the schedule board.
+        </Text>
+      )}
 
       <Hr style={{ borderColor: COLORS.sky, margin: '4px 0 16px' }} />
       {shifts.map((shift, i) => (
@@ -84,6 +115,17 @@ export function WeeklyShifts({
           <ShiftRow shift={shift} />
         </div>
       ))}
+      {dutyCount > 0 && (
+        <>
+          {shiftCount > 0 && <Hr style={{ borderColor: COLORS.sky, margin: '16px 0' }} />}
+          <Text style={shiftDetail}>Off-shift duties</Text>
+          {offShiftDuties.map((duty) => (
+            <div key={`${duty.dayLabel}-${duty.dutyLabel}`} style={{ margin: '10px 0' }}>
+              <DutyRow duty={duty} />
+            </div>
+          ))}
+        </>
+      )}
       <Hr style={{ borderColor: COLORS.sky, margin: '16px 0 20px' }} />
 
       <Button style={button} href={scheduleUrl}>
@@ -125,6 +167,14 @@ WeeklyShifts.PreviewProps = {
       subRequested: true,
       shiftUrl:
         'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-22&shift=example-3',
+    },
+  ],
+  offShiftDuties: [
+    {
+      dayLabel: 'Mon, Aug 17',
+      dutyLabel: 'Fill Carboys',
+      detail: 'Both carboys, from the back tap',
+      dayUrl: 'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-17',
     },
   ],
   scheduleUrl: 'https://pyre-integrations.vercel.app/admin/schedule',

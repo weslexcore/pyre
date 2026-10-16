@@ -183,6 +183,9 @@ morning instead").
   - Some duties are only done on certain days (\`days\`, e.g. watering the
     plants Fri–Sun). On each shift hand out only that shift's \`dutyKeys\` —
     never a duty that isn't done that day.
+  - A duty with \`requiresTraining\` may only go to someone in its
+    \`trainedStaffIds\`; anyone else's is dropped from the draft. When nobody
+    trained is on a shift, leave that duty off and say so in your rationale.
   - Only give a duty to someone on the shift for its phase: set-up duties to
     people there at the start, break-down duties to people there at the end,
     session duties to people there during it. Someone who leaves before the

@@ -13,14 +13,23 @@ export function SubClaimedNotice({
   dateLabel,
   timeLabel,
   scheduleUrl,
+  untrainedDuties,
 }: SubClaimedNoticeProps) {
   return (
     <EmailLayout preview={`${takerName} is covering ${shiftLabel} on ${dateLabel}`}>
-      <Text style={heading}>Sub found — no action needed</Text>
+      <Text style={heading}>
+        {untrainedDuties ? 'Sub found — one duty needs a home' : 'Sub found — no action needed'}
+      </Text>
       <Text style={text}>
         {takerName} took {requesterName}'s {shiftLabel} shift on {dateLabel} ({timeLabel}). The
         schedule already shows the swap.
       </Text>
+      {untrainedDuties ? (
+        <Text style={text}>
+          {takerName} isn't trained on {untrainedDuties}, so it wasn't carried over. Give it to
+          someone else on the shift.
+        </Text>
+      ) : null}
       <Button style={button} href={scheduleUrl}>
         Open the schedule
       </Button>

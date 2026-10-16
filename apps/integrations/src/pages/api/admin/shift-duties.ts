@@ -1,12 +1,14 @@
 // The duty list behind the schedule board's picker (/admin/schedule/duties).
 //   GET                              — every duty, archived included, in shift
 //                                      order; with how many assignments hold
-//                                      each, for anyone who may manage
+//                                      each, for anyone who may manage; and who
+//                                      is trained on what (edited through
+//                                      /api/admin/duty-training)
 //   POST   { label, phase, … }       — add a duty, placed last in its phase
 //   PATCH  { key, …changes }         — rename, re-describe, re-link the SOP,
 //                                      move phase / side / in-session default,
-//                                      limit to days of the week, archive /
-//                                      restore
+//                                      limit to days of the week, require
+//                                      training, archive / restore
 //   PATCH  { order: [keys] }         — re-order
 //   DELETE ?key=                     — remove a duty no assignment holds
 //
@@ -23,7 +25,11 @@ import { type AdminGate, requirePage, requireScheduleManage } from '@/lib/auth/a
 import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
-import { invalidateDutyCatalog, loadDutyCatalog } from '@/lib/schedule/duties';
+import {
+  invalidateDutyCatalog,
+  loadDutyCatalog,
+  loadDutyTrainingRows,
+} from '@/lib/schedule/duties';
 import {
   DUTY_KEY_RE,
   normalizeDutyCreate,
@@ -34,7 +40,7 @@ import {
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
 const COLUMNS =
-  'key, label, detail, phase, side, session_default, sop_id, days, sort_order, archived';
+  'key, label, detail, phase, side, session_default, sop_id, days, sort_order, requires_training, archived';
 
 const emailOf = (gate: AdminGate): string => normalizeEmail(gate.user.email);
 
@@ -51,16 +57,20 @@ async function freshCatalog(db: Db) {
   return loadDutyCatalog(db);
 }
 
-/** Assignments (live or draft) and open-or-past sub requests holding `key`. */
+/**
+ * Assignments (live or draft) and open-or-past sub requests holding `key`,
+ * and the days an off-shift duty has been handed to someone.
+ */
 async function countUses(db: Db, key: string): Promise<number> {
-  const [assignments, subs] = await Promise.all([
+  const [assignments, subs, offShift] = await Promise.all([
     db
       .from('shift_assignments')
       .select('id', { count: 'exact', head: true })
       .contains('duties', [key]),
     db.from('sub_requests').select('id', { count: 'exact', head: true }).contains('duties', [key]),
+    db.from('duty_assignments').select('id', { count: 'exact', head: true }).eq('duty_key', key),
   ]);
-  return (assignments.count ?? 0) + (subs.count ?? 0);
+  return (assignments.count ?? 0) + (subs.count ?? 0) + (offShift.count ?? 0);
 }
 
 async function checkSop(db: Db, sopId: string | null | undefined): Promise<Response | null> {
@@ -83,30 +93,45 @@ export const GET: APIRoute = async ({ cookies }) => {
   const sopIds = new Map(rows.map((r) => [r.key, r.sop_id]));
   const canManage = hasScheduleManage(gate.access);
 
+  // Who is trained on what: the board's picker needs it to offer a duty
+  // that requires training only to the people trained on it.
+  let trainingRows: Awaited<ReturnType<typeof loadDutyTrainingRows>>;
+  try {
+    trainingRows = await loadDutyTrainingRows(db);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : 'Could not read training' }, 500);
+  }
+
   // For the editor: how many assignments hold each duty (delete vs archive),
-  // and the SOPs a duty can link to. The SOP list is served here rather than
-  // from /api/admin/sops so managing duties doesn't need the library grant.
+  // the SOPs a duty can link to, and the roster to mark trained. The SOP list
+  // is served here rather than from /api/admin/sops so managing duties
+  // doesn't need the library grant.
   const uses: Record<string, number> = {};
   let sops: Array<{ id: string; slug: string; title: string; category: string | null }> = [];
+  let staff: Array<{ id: string; display_name: string; active: boolean }> = [];
   if (canManage) {
-    const [counts, sopRes] = await Promise.all([
+    const [counts, sopRes, staffRes] = await Promise.all([
       Promise.all(catalog.map((d) => countUses(db, d.key))),
       db
         .from('sops')
         .select('id, slug, title, category')
         .eq('archived', false)
         .order('title', { ascending: true }),
+      db.from('staff').select('id, display_name, active').order('display_name'),
     ]);
     catalog.forEach((d, i) => {
       uses[d.key] = counts[i];
     });
     sops = (sopRes.data ?? []) as typeof sops;
+    staff = (staffRes.data ?? []) as typeof staff;
   }
 
   return json({
     duties: catalog.map((d) => ({ ...d, sopId: sopIds.get(d.key) ?? null })),
+    training: trainingRows.map((r) => ({ staffId: r.staff_id, dutyKey: r.duty_key })),
     uses,
     sops,
+    staff,
     canManage,
   });
 };

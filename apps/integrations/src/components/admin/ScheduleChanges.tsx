@@ -18,6 +18,8 @@ const FILTERS: Array<{ value: string; label: string }> = [
   { value: 'sub_request', label: 'Sub requests' },
   { value: 'agent_instructions', label: 'Drafter instructions' },
   { value: 'staff_prefs', label: 'Shift preferences' },
+  { value: 'duty_assignment', label: 'Off-shift duties' },
+  { value: 'duty_training', label: 'Duty training' },
   { value: 'sync', label: 'Momence sync' },
 ];
 
@@ -31,6 +33,8 @@ const ENTITY_LABEL: Record<ScheduleChangeRow['entity_type'], string> = {
   sub_request: 'Sub request',
   agent_instructions: 'Drafter instructions',
   staff_prefs: 'Shift preferences',
+  duty_assignment: 'Off-shift duty',
+  duty_training: 'Duty training',
 };
 
 const ACTOR_TINT: Record<ScheduleChangeRow['actor_kind'], string> = {

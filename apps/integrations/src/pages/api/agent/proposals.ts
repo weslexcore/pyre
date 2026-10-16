@@ -27,6 +27,7 @@ import {
   dutyDef,
   dutyRunsOn,
   findRestViolations,
+  isTrainedFor,
   type StaffRow,
   type TimeOffRow,
   timeToMinutes,
@@ -37,7 +38,7 @@ import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
-import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 import { type OnCallRecommendation, recommendOnCall } from '@/lib/schedule/on-call';
 import { getShiftBufferSettings } from '@/lib/schedule/settings';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
@@ -177,6 +178,7 @@ export const POST: APIRoute = async ({ request }) => {
   const draftAssignments: DraftAssignment[] = [];
   const seenPairs = new Set<string>();
   const dutyCatalog = await loadDutyCatalog(db);
+  const dutyTraining = await loadDutyTraining(db);
   // Hours the agent leaves out default the same way a manager's add does.
   const buffers = await getShiftBufferSettings();
 
@@ -221,12 +223,15 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ error: `assignments[${i}]: needs shiftId or shiftKey` }, 400);
     }
 
-    // A duty not done on the shift's day (shift_duties.days) is dropped
-    // rather than failing the whole draft; the admin can still add it.
+    // A duty not done on the shift's day (shift_duties.days), or one this
+    // person isn't trained on, is dropped rather than failing the whole
+    // draft; the admin can still hand it to someone who can do it.
     if (Array.isArray(columns.duties)) {
       columns.duties = (columns.duties as string[]).filter((key) => {
         const def = dutyDef(dutyCatalog, key);
-        return !def || dutyRunsOn(def, date);
+        return (
+          (!def || dutyRunsOn(def, date)) && isTrainedFor(dutyCatalog, dutyTraining, staffId, key)
+        );
       });
     }
 

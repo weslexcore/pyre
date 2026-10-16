@@ -4,7 +4,8 @@
 // or take them off.
 // Admin-only, CSRF-guarded in-route. Availability is advisory — the UI warns
 // about time-off overlaps but the API doesn't block them (the admin may have
-// confirmed with the person, as the sheet's notes show).
+// confirmed with the person, as the sheet's notes show). Training is not
+// advisory: a duty that requires it can only go to someone trained on it.
 
 import { type AssignmentDuty, defaultAssignmentWindow } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
@@ -22,9 +23,9 @@ import {
   timeWindow,
 } from '@/lib/schedule/change-log';
 import { acceptDraftRow } from '@/lib/schedule/draft-accept';
-import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 import { getShiftBufferSettings } from '@/lib/schedule/settings';
-import { parseAssignmentFields } from '@/lib/schedule/validate';
+import { parseAssignmentFields, trainingError } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
@@ -63,8 +64,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'shiftId and staffId are required' }, 400);
   }
 
-  const fields = parseAssignmentFields(body, await loadDutyCatalog(db));
+  const catalog = await loadDutyCatalog(db);
+  const fields = parseAssignmentFields(body, catalog);
   if (typeof fields === 'string') return json({ error: fields }, 400);
+  if (Array.isArray(fields.duties) && fields.duties.length > 0) {
+    const untrained = trainingError(
+      catalog,
+      await loadDutyTraining(db),
+      staffId,
+      await staffNameOf(db, staffId),
+      fields.duties as string[]
+    );
+    if (untrained) return json({ error: untrained }, 400);
+  }
 
   const { data: shift, error: shiftError } = await db
     .from('shifts')
@@ -144,13 +156,22 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   // Validated against what the row already holds, so an assignment carrying
   // a since-archived duty can still be edited without dropping it.
-  const fields = parseAssignmentFields(
-    body,
-    await loadDutyCatalog(db),
-    (existing.duties as string[] | null) ?? []
-  );
+  const catalog = await loadDutyCatalog(db);
+  const held = (existing.duties as string[] | null) ?? [];
+  const fields = parseAssignmentFields(body, catalog, held);
   if (typeof fields === 'string') return json({ error: fields }, 400);
   if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
+  if (Array.isArray(fields.duties)) {
+    const untrained = trainingError(
+      catalog,
+      await loadDutyTraining(db),
+      existing.staff_id,
+      await staffNameOf(db, existing.staff_id),
+      fields.duties as string[],
+      held
+    );
+    if (untrained) return json({ error: untrained }, 400);
+  }
 
   const startsAt = (fields.starts_at as string) ?? existing.starts_at;
   const endsAt = (fields.ends_at as string) ?? existing.ends_at;
