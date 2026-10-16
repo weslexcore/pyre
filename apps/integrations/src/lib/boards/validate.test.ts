@@ -646,6 +646,33 @@ describe('due dates on the calendar', () => {
   });
 });
 
+describe('a default due date for new cards', () => {
+  it('sets both halves of the rule', () => {
+    const patch = value(parseBoardPatch({ defaultDue: { every: 2, unit: 'hour' } }));
+    expect(patch.default_due_every).toBe(2);
+    expect(patch.default_due_unit).toBe('hour');
+  });
+
+  it('clears both halves with null, and leaves them alone when absent', () => {
+    const cleared = value(parseBoardPatch({ defaultDue: null }));
+    expect(cleared.default_due_every).toBeNull();
+    expect(cleared.default_due_unit).toBeNull();
+    const untouched = value(parseBoardPatch({ name: 'Leads' }));
+    expect('default_due_every' in untouched).toBe(false);
+  });
+
+  it('refuses an unknown unit or an out-of-range count', () => {
+    expect(error(parseBoardPatch({ defaultDue: { every: 2, unit: 'year' } }))).toMatch(
+      /defaultDue/
+    );
+    expect(error(parseBoardPatch({ defaultDue: { every: 0, unit: 'day' } }))).toMatch(/defaultDue/);
+    expect(error(parseBoardPatch({ defaultDue: { every: 1.5, unit: 'day' } }))).toMatch(
+      /defaultDue/
+    );
+    expect(error(parseBoardPatch({ defaultDue: '1 week' }))).toMatch(/defaultDue/);
+  });
+});
+
 describe('multiple requested dates', () => {
   const fields = [field({ key: 'requested_date', kind: 'date' })];
   it('normalizes date options and preserves other properties', () => {
