@@ -5,7 +5,8 @@
 // renamed, re-described, re-linked to a different SOP, moved between phases,
 // given an A/B side (set-up and break-down only) with the in-session duty
 // that side usually takes, limited to days of the week (water the plants
-// Friday to Sunday), nudged up or down, and retired. Keys are
+// Friday to Sunday), dragged into order — or into another section, which
+// moves its phase — and retired. Keys are
 // permanent — every assignment stores them — so a duty someone already holds
 // is retired rather than deleted, and stays readable on those shifts.
 //
@@ -17,6 +18,8 @@
 // as requires_training plus staff_duty_training). Saving a duty needs one or
 // the other, so a new duty never lands without that choice made.
 
+import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   DOW_LABELS,
   DUTY_PHASE_KEYS,
@@ -28,10 +31,12 @@ import {
   formatDutyDays,
   normalizeDutyDays,
 } from '@pyre/schedule-core';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { type DutyDropTarget, moveDuty } from '@/lib/schedule/duty-order';
+import { boardCollisions, useBoardSensors } from './boards/dnd';
 import { ConfirmDialog } from './ConfirmDialog';
 import { QuietBadge } from './guestUi';
 import { cardClass, inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
@@ -159,8 +164,28 @@ export function ShiftDutiesManager() {
   const [deleting, setDeleting] = useState<DutyView | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
-  const phases = useMemo(() => dutyPhases(duties), [duties]);
   const archived = useMemo(() => duties.filter((d) => d.archived), [duties]);
+
+  // The live duties in display order, rearranged while one is dragged and
+  // reseeded from the server after every save (or a refused drop).
+  const serverOrder = useMemo(
+    () => dutyPhases(duties).flatMap((p) => p.duties.map((d) => ({ key: d.key, phase: d.phase }))),
+    [duties]
+  );
+  const [liveOrder, setLiveOrder] = useState(serverOrder);
+  useEffect(() => setLiveOrder(serverOrder), [serverOrder]);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const sensors = useBoardSensors();
+  const dutyByKey = useMemo(() => new Map(duties.map((d) => [d.key, d])), [duties]);
+  // Every phase gets a section, so an empty one can still take a drop.
+  const sections = DUTY_PHASE_KEYS.map((phase) => ({
+    key: phase,
+    label: DUTY_PHASE_LABELS[phase],
+    duties: liveOrder
+      .filter((d) => d.phase === phase)
+      .map((d) => dutyByKey.get(d.key))
+      .filter((d): d is DutyView => !!d),
+  }));
   const sessionDuties = useMemo(
     () => duties.filter((d) => d.phase === 'session' && !d.archived),
     [duties]
@@ -187,21 +212,43 @@ export function ShiftDutiesManager() {
   const patch = (key: string, body: Record<string, unknown>) =>
     mutate(key, () => sendJson(ENDPOINT, 'PATCH', { key, ...body }));
 
-  /** Swap `key` with its neighbour inside its phase, then send the full order. */
-  const nudge = (key: string, direction: -1 | 1) => {
-    const phase = phases.find((p) => p.duties.some((d) => d.key === key));
-    if (!phase) return;
-    const within = phase.duties.map((d) => d.key);
-    const index = within.indexOf(key);
-    const other = within[index + direction];
-    if (!other) return;
-    const order = phases.flatMap((p) => p.duties.map((d) => d.key));
-    const a = order.indexOf(key);
-    const b = order.indexOf(other);
-    [order[a], order[b]] = [order[b], order[a]];
-    void mutate(key, () =>
-      sendJson(ENDPOINT, 'PATCH', { order: [...order, ...archived.map((d) => d.key)] })
-    );
+  /** "duty:host" / "phase:session" — the drag ids. */
+  const targetOf = (id: unknown): DutyDropTarget | null => {
+    const [kind, value] = String(id).split(':');
+    if (kind === 'duty' && value) return { kind: 'duty', key: value };
+    if (kind === 'phase' && DUTY_PHASE_KEYS.includes(value as DutyPhaseKey)) {
+      return { kind: 'phase', phase: value as DutyPhaseKey };
+    }
+    return null;
+  };
+
+  /**
+   * Save where the duty was dropped: its new phase first (the server may
+   * refuse — a session duty a half defaults to stays in session — and then
+   * the reload puts it back), then the whole order.
+   */
+  const drop = (key: string) => {
+    const before = dutyByKey.get(key);
+    const after = liveOrder.find((d) => d.key === key);
+    if (!before || !after) return;
+    const order = liveOrder.map((d) => d.key);
+    if (
+      after.phase === before.phase &&
+      JSON.stringify(order) === JSON.stringify(serverOrder.map((d) => d.key))
+    ) {
+      return;
+    }
+    void mutate(key, async () => {
+      try {
+        if (after.phase !== before.phase) {
+          await sendJson(ENDPOINT, 'PATCH', { key, phase: after.phase });
+        }
+        await sendJson(ENDPOINT, 'PATCH', { order: [...order, ...archived.map((d) => d.key)] });
+      } catch (e) {
+        setLiveOrder(serverOrder);
+        throw e;
+      }
+    });
   };
 
   const saveEdit = async (duty: DutyView) => {
@@ -271,76 +318,56 @@ export function ShiftDutiesManager() {
     );
   };
 
-  const renderDuty = (duty: DutyView) => {
+  /** A duty's row; `handle` is its drag grip (live duties, for a manager). */
+  const renderDuty = (duty: DutyView, handle: ReactNode = null) => {
     const isEditing = editing === duty.key && form;
     const count = uses[duty.key] ?? 0;
-    const siblings = phases.find((p) => p.key === duty.phase)?.duties ?? [];
-    const position = siblings.findIndex((d) => d.key === duty.key);
     const defaultLabel = duties.find((d) => d.key === duty.sessionDefault)?.label;
 
     return (
-      <li key={duty.key} className="py-3 first:pt-0 last:pb-0">
+      <>
         {!isEditing ? (
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-primary-semibold text-[var(--pyre-creme)]">
-                  {duty.label}
-                </span>
-                {duty.side && <QuietBadge>Side {duty.side.toUpperCase()}</QuietBadge>}
-                {(duty.days || duty.phase === 'off_shift') && (
-                  <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>
-                )}
-                {duty.archived && <QuietBadge>Retired</QuietBadge>}
-              </div>
-              {duty.detail && <p className="mt-0.5 text-xs text-white/45">{duty.detail}</p>}
-              <p className="mt-1 text-xs text-white/55">
-                {duty.sopSlug ? (
-                  <a
-                    className="underline decoration-white/20 hover:text-white"
-                    href={`/admin/sops/${duty.sopSlug}`}
-                  >
-                    {sopTitle(duty.sopId) ?? duty.sopSlug}
-                  </a>
-                ) : (
-                  <span className="text-white/35">No SOP linked</span>
-                )}
-                {defaultLabel && (
-                  <span className="text-white/40"> · usually with {defaultLabel}</span>
-                )}
-              </p>
-              {renderWho(duty)}
-              {canManage && (
-                <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30">
-                  {duty.key} · {count} {duty.phase === 'off_shift' ? 'day' : 'assignment'}
-                  {count === 1 ? '' : 's'}
+            <div className="flex min-w-0 items-start gap-2">
+              {handle}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-primary-semibold text-[var(--pyre-creme)]">
+                    {duty.label}
+                  </span>
+                  {duty.side && <QuietBadge>Side {duty.side.toUpperCase()}</QuietBadge>}
+                  {(duty.days || duty.phase === 'off_shift') && (
+                    <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>
+                  )}
+                  {duty.archived && <QuietBadge>Retired</QuietBadge>}
+                </div>
+                {duty.detail && <p className="mt-0.5 text-xs text-white/45">{duty.detail}</p>}
+                <p className="mt-1 text-xs text-white/55">
+                  {duty.sopSlug ? (
+                    <a
+                      className="underline decoration-white/20 hover:text-white"
+                      href={`/admin/sops/${duty.sopSlug}`}
+                    >
+                      {sopTitle(duty.sopId) ?? duty.sopSlug}
+                    </a>
+                  ) : (
+                    <span className="text-white/35">No SOP linked</span>
+                  )}
+                  {defaultLabel && (
+                    <span className="text-white/40"> · usually with {defaultLabel}</span>
+                  )}
                 </p>
-              )}
+                {renderWho(duty)}
+                {canManage && (
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30">
+                    {duty.key} · {count} {duty.phase === 'off_shift' ? 'day' : 'assignment'}
+                    {count === 1 ? '' : 's'}
+                  </p>
+                )}
+              </div>
             </div>
             {canManage && (
               <div className="flex flex-wrap gap-1.5">
-                {!duty.archived && (
-                  <>
-                    <button
-                      type="button"
-                      className={formButtonClass}
-                      disabled={busy !== null || position <= 0}
-                      aria-label={`Move ${duty.label} up`}
-                      onClick={() => nudge(duty.key, -1)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className={formButtonClass}
-                      disabled={busy !== null || position < 0 || position >= siblings.length - 1}
-                      aria-label={`Move ${duty.label} down`}
-                      onClick={() => nudge(duty.key, 1)}
-                    >
-                      ↓
-                    </button>
-                  </>
-                )}
                 <button
                   type="button"
                   className={formButtonClass}
@@ -415,7 +442,7 @@ export function ShiftDutiesManager() {
             </div>
           </div>
         )}
-      </li>
+      </>
     );
   };
 
@@ -435,24 +462,86 @@ export function ShiftDutiesManager() {
       {error && <p className="text-sm text-[var(--pyre-red)]">Couldn't load duties: {error}</p>}
       {loading && !data && <p className="font-mono text-xs text-white/40">Loading…</p>}
 
-      {phases.map((phase) => (
-        <section key={phase.key} className={cardClass}>
-          <SectionTitle
-            note={
-              phase.key === 'off_shift'
-                ? 'Done on their days whether or not anyone works a shift. Each day is handed to one person on the schedule board.'
-                : undefined
-            }
-          >
-            {phase.label}
-          </SectionTitle>
-          <ul className="divide-y divide-white/5">
-            {phase.duties.map((d) => renderDuty(d as DutyView))}
-          </ul>
-        </section>
-      ))}
+      {data && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={boardCollisions}
+          onDragStart={({ active }) =>
+            setDragging(targetOf(active.id)?.kind === 'duty' ? String(active.id).slice(5) : null)
+          }
+          onDragOver={({ active, over }) => {
+            const target = over ? targetOf(over.id) : null;
+            const key = String(active.id).slice(5);
+            if (target) setLiveOrder((current) => [...moveDuty(current, key, target)]);
+          }}
+          onDragEnd={({ active }) => {
+            setDragging(null);
+            drop(String(active.id).slice(5));
+          }}
+          onDragCancel={() => {
+            setDragging(null);
+            setLiveOrder(serverOrder);
+          }}
+        >
+          {sections.map((phase) => (
+            <PhaseSection
+              key={phase.key}
+              phase={phase.key}
+              dragging={dragging !== null}
+              disabled={!canManage || busy !== null}
+            >
+              <SectionTitle
+                note={
+                  phase.key === 'off_shift'
+                    ? 'Done on their days whether or not anyone works a shift. Each day is handed to one person on the schedule board.'
+                    : undefined
+                }
+              >
+                {phase.label}
+              </SectionTitle>
+              <SortableContext
+                items={phase.duties.map((d) => `duty:${d.key}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ul className="divide-y divide-white/5">
+                  {phase.duties.map((d) => (
+                    <SortableDuty
+                      key={d.key}
+                      duty={d}
+                      draggable={canManage && editing !== d.key}
+                      locked={busy !== null}
+                    >
+                      {(handle) => renderDuty(d, handle)}
+                    </SortableDuty>
+                  ))}
+                </ul>
+              </SortableContext>
+              {phase.duties.length === 0 && (
+                <p
+                  className={`rounded border border-dashed px-3 py-3 text-center font-mono text-xs ${
+                    dragging ? 'border-white/25 text-white/50' : 'border-white/10 text-white/30'
+                  }`}
+                >
+                  {dragging
+                    ? 'Drop it here.'
+                    : canManage
+                      ? 'No duties here — drag one in or add one.'
+                      : 'No duties here.'}
+                </p>
+              )}
+            </PhaseSection>
+          ))}
+          <DragOverlay dropAnimation={null}>
+            {dragging && dutyByKey.get(dragging) && (
+              <div className="rounded border border-[var(--pyre-gold)] bg-[var(--pyre-black)] px-4 py-2 text-sm text-[var(--pyre-creme)] shadow-xl">
+                {dutyByKey.get(dragging)?.label}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
 
-      {data && phases.length === 0 && (
+      {data && liveOrder.length === 0 && (
         <div className={cardClass}>
           <p className="text-sm text-white/60">
             No active duties — the schedule board has nothing to assign.
@@ -477,7 +566,13 @@ export function ShiftDutiesManager() {
             </span>
           </button>
           {showArchived && (
-            <ul className="mt-4 divide-y divide-white/5">{archived.map(renderDuty)}</ul>
+            <ul className="mt-4 divide-y divide-white/5">
+              {archived.map((d) => (
+                <li key={d.key} className="py-3 first:pt-0 last:pb-0">
+                  {renderDuty(d)}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}
@@ -494,6 +589,102 @@ export function ShiftDutiesManager() {
         />
       )}
     </div>
+  );
+}
+
+const handleClass =
+  'flex h-7 w-6 shrink-0 touch-none items-center justify-center rounded text-white/35 hover:bg-white/10 hover:text-white enabled:cursor-grab enabled:active:cursor-grabbing disabled:opacity-30';
+
+function Grip() {
+  return (
+    <svg width="12" height="16" viewBox="0 0 16 20" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="5" r="1.5" />
+      <circle cx="11" cy="5" r="1.5" />
+      <circle cx="5" cy="10" r="1.5" />
+      <circle cx="11" cy="10" r="1.5" />
+      <circle cx="5" cy="15" r="1.5" />
+      <circle cx="11" cy="15" r="1.5" />
+    </svg>
+  );
+}
+
+/** A phase's card as a drop target: lights up while a duty is held over it. */
+function PhaseSection({
+  phase,
+  dragging,
+  disabled,
+  children,
+}: {
+  phase: DutyPhaseKey;
+  dragging: boolean;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `phase:${phase}`, disabled });
+  return (
+    <section
+      ref={setNodeRef}
+      className={`${cardClass} transition-colors ${
+        isOver
+          ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/5'
+          : dragging
+            ? 'border-white/20'
+            : ''
+      }`}
+    >
+      {children}
+    </section>
+  );
+}
+
+/** One live duty's row, picked up by its grip. */
+function SortableDuty({
+  duty,
+  draggable,
+  locked,
+  children,
+}: {
+  duty: DutyDef;
+  draggable: boolean;
+  locked: boolean;
+  children: (handle: ReactNode) => ReactNode;
+}) {
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `duty:${duty.key}`, disabled: !draggable || locked });
+  const handle = draggable ? (
+    <button
+      ref={setActivatorNodeRef}
+      type="button"
+      className={handleClass}
+      disabled={locked}
+      aria-label={`Move ${duty.label}`}
+      title="Drag to reorder, or into another section"
+      {...attributes}
+      {...listeners}
+    >
+      <Grip />
+    </button>
+  ) : null;
+  return (
+    <li
+      ref={setNodeRef}
+      className={`py-3 first:pt-0 last:pb-0 ${isDragging ? 'opacity-30' : ''}`}
+      style={{
+        transform: transform
+          ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
+          : undefined,
+        transition,
+      }}
+    >
+      {children(handle)}
+    </li>
   );
 }
 
