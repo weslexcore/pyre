@@ -6,8 +6,9 @@
 // with other admins to work on together. A new message can start from a
 // template (lib/messages/templates fills its date placeholders); the
 // template editor reuses this form too. Admin-only by the routes; the parent
-// decides what "save" and "save draft" mean (create or update).
-import { useState } from 'react';
+// decides what "save" and "save draft" mean (create or update), and hears
+// every change (onChange) so it can autosave (lib/client/autosave).
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
 import type { AdminMessageTemplateRow } from '@/lib/db';
@@ -32,6 +33,22 @@ export interface MessageDraft {
 }
 
 export const EVERYONE: SopRole[] = ['staff', 'shift_lead', 'admin'];
+
+/** Whether anything has been written yet (an empty form isn't worth saving). */
+export function hasContent(draft: MessageDraft): boolean {
+  return draft.title.trim().length > 0 || draft.bodyMd.trim().length > 0;
+}
+
+/** The message fields of a draft as the messages API takes them. */
+export function messageFields(draft: MessageDraft) {
+  return {
+    title: draft.title,
+    bodyMd: draft.bodyMd,
+    audienceRoles: draft.audience.roles,
+    audienceEmails: draft.audience.emails,
+    pinned: draft.pinned,
+  };
+}
 
 /** A template copied into a fresh message, its placeholders filled for today. */
 export function draftFromTemplate(
@@ -120,6 +137,10 @@ export function MessageComposer({
   authorEmail,
   templates,
   submitDisabled = false,
+  draftLabel = 'Save draft',
+  cancelLabel = 'Cancel',
+  status,
+  onChange,
   onSubmit,
   onSaveDraft,
   onCancel,
@@ -137,12 +158,24 @@ export function MessageComposer({
   templates?: AdminMessageTemplateRow[];
   /** Hold the submit buttons off for a reason outside the form (a blank template name). */
   submitDisabled?: boolean;
+  /** The label for the onSaveDraft button ("Save draft", or "Done" when it autosaves). */
+  draftLabel?: string;
+  cancelLabel?: string;
+  /** Shown under the buttons — the autosave readout. */
+  status?: ReactNode;
+  /** Every change to the form, for autosave. */
+  onChange?: (draft: MessageDraft) => void;
   onSubmit: (draft: MessageDraft) => void;
-  /** Offer "Save draft" and the sharing picker (messages not yet sent). */
+  /** Offer the draft button and the sharing picker (messages not yet sent). */
   onSaveDraft?: (draft: MessageDraft) => void;
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState<MessageDraft>(initial);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.(draft);
+  }, [draft]);
   const [preview, setPreview] = useState(false);
   const hasAudience = draft.audience.roles.length > 0 || draft.audience.emails.length > 0;
   const canSubmit =
@@ -297,18 +330,19 @@ export function MessageComposer({
           {submitLabel}
         </button>
         {onSaveDraft && (
+          // A draft may be incomplete, so only an empty form holds this off.
           <button
             type="button"
             className={buttonClass}
-            disabled={!canSubmit}
+            disabled={busy || !hasContent(draft)}
             onClick={() => onSaveDraft(draft)}
           >
-            Save draft
+            {draftLabel}
           </button>
         )}
         {onCancel && (
           <button type="button" className={buttonClass} disabled={busy} onClick={onCancel}>
-            Cancel
+            {cancelLabel}
           </button>
         )}
         {offerEmail && (
@@ -336,6 +370,7 @@ export function MessageComposer({
           pin to top
         </label>
       </div>
+      {status}
     </form>
   );
 }

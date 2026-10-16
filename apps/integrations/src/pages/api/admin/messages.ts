@@ -24,7 +24,9 @@
 // edit the draft alongside its author (empty = private), and adding someone
 // notifies them. PATCH `send: true` sends a draft — the same notifications and
 // (unless `email: false`) emails as posting it. Only the draft's author and
-// collaborators may change, send, or delete it (lib/messages/access).
+// collaborators may change, send, or delete it (lib/messages/access). A
+// draft may have a blank title, body, or audience — the composer autosaves
+// it while it's being written — but all three are required to send.
 // `expectedUpdatedAt` is the updated_at the editor started from: if someone
 // else saved since, the PATCH is refused with 409 rather than overwriting.
 //
@@ -46,7 +48,15 @@ import {
 } from '@/lib/messages/access';
 import { checkedAudience } from '@/lib/messages/roster';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
-import { BODY_MAX, normalizeBody, normalizeTitle, parseSharedWith } from '@/lib/messages/validate';
+import {
+  BODY_MAX,
+  draftBody,
+  draftTitle,
+  normalizeBody,
+  normalizeTitle,
+  parseSharedWith,
+  sendProblem,
+} from '@/lib/messages/validate';
 import {
   emailMessagePosted,
   notifyDraftShared,
@@ -131,13 +141,23 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
-  const title = normalizeTitle(body.title);
-  if (!title) return json({ error: 'title is required (max 200 chars)' }, 400);
-  const bodyMd = normalizeBody(body.bodyMd, BODY_MAX);
-  if (!bodyMd) return json({ error: `bodyMd is required (max ${BODY_MAX} chars)` }, 400);
+  if (body.draft !== undefined && typeof body.draft !== 'boolean') {
+    return json({ error: 'draft must be a boolean' }, 400);
+  }
+  const draft = body.draft === true;
+  // A draft is saved while it's still being written, so it may be blank.
+  const title = draft ? draftTitle(body.title ?? '') : normalizeTitle(body.title);
+  if (title === null || (!draft && !title)) {
+    return json({ error: 'title is required (max 200 chars)' }, 400);
+  }
+  const bodyMd = draft ? draftBody(body.bodyMd ?? '') : normalizeBody(body.bodyMd, BODY_MAX);
+  if (bodyMd === null || (!draft && !bodyMd)) {
+    return json({ error: `bodyMd is required (max ${BODY_MAX} chars)` }, 400);
+  }
   const audience = await checkedAudience(
     body.audienceRoles ?? ['staff', 'shift_lead', 'admin'],
-    body.audienceEmails ?? []
+    body.audienceEmails ?? [],
+    { allowEmpty: draft }
   );
   if ('error' in audience) return json({ error: audience.error }, 400);
   if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
@@ -146,10 +166,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.email !== undefined && typeof body.email !== 'boolean') {
     return json({ error: 'email must be a boolean' }, 400);
   }
-  if (body.draft !== undefined && typeof body.draft !== 'boolean') {
-    return json({ error: 'draft must be a boolean' }, 400);
-  }
-  const draft = body.draft === true;
   let sharedWith: string[] = [];
   if (body.sharedWith !== undefined) {
     if (!draft) return json({ error: 'Only a draft can be shared' }, 400);
@@ -227,26 +243,30 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     return json(
       {
         error: 'Someone else saved this message since you opened it. Reload to see their changes.',
+        conflict: true,
       },
       409
     );
   }
 
+  // Fields parse leniently here — a draft may be blank while it's written —
+  // and a message that is (or is about to be) sent is checked whole below.
   const patch: Partial<AdminMessageRow> = {};
   if (body.title !== undefined) {
-    const title = normalizeTitle(body.title);
-    if (!title) return json({ error: 'title must be non-empty (max 200 chars)' }, 400);
+    const title = draftTitle(body.title);
+    if (title === null) return json({ error: 'title must be text (max 200 chars)' }, 400);
     patch.title = title;
   }
   if (body.bodyMd !== undefined) {
-    const bodyMd = normalizeBody(body.bodyMd, BODY_MAX);
-    if (!bodyMd) return json({ error: `bodyMd must be non-empty (max ${BODY_MAX} chars)` }, 400);
+    const bodyMd = draftBody(body.bodyMd);
+    if (bodyMd === null) return json({ error: `bodyMd must be text (max ${BODY_MAX} chars)` }, 400);
     patch.body_md = bodyMd;
   }
   if (body.audienceRoles !== undefined || body.audienceEmails !== undefined) {
     const audience = await checkedAudience(
       body.audienceRoles ?? existing.audience_roles,
-      body.audienceEmails ?? existing.audience_emails
+      body.audienceEmails ?? existing.audience_emails,
+      { allowEmpty: true }
     );
     if ('error' in audience) return json({ error: audience.error }, 400);
     patch.audience_roles = audience.roles;
@@ -277,6 +297,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (body.send) patch.sent_at = new Date().toISOString();
   }
   if (Object.keys(patch).length === 0) return json({ error: 'Nothing to update' }, 400);
+  if (!wasDraft || patch.sent_at) {
+    const problem = sendProblem({ ...existing, ...patch });
+    if (problem) return json({ error: problem }, 400);
+  }
   patch.updated_by = email;
 
   // Matching updated_at too closes the gap between the read above and this
@@ -291,7 +315,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error);
   if (!data) {
     return json(
-      { error: 'Someone else saved this message at the same time. Reload to see their changes.' },
+      {
+        error: 'Someone else saved this message at the same time. Reload to see their changes.',
+        conflict: true,
+      },
       409
     );
   }

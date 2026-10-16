@@ -5,12 +5,13 @@ import type { AdminMessageRow } from '@/lib/db';
 import { listGrantablePeople } from '@/lib/sops/people';
 import { parseAudience } from './validate';
 
-/** The audience a request names, with every named email on the roster. */
+/** The audience a request names, with every named email on the roster (see parseAudience). */
 export async function checkedAudience(
   roles: unknown,
-  emails: unknown
+  emails: unknown,
+  options: { allowEmpty?: boolean } = {}
 ): Promise<{ roles: AdminMessageRow['audience_roles']; emails: string[] } | { error: string }> {
-  const parsed = parseAudience(roles, emails);
+  const parsed = parseAudience(roles, emails, options);
   if (!parsed.ok) return { error: parsed.error };
   const roster = new Set((await listGrantablePeople()).map((person) => person.email));
   const unknown = parsed.audience.emails.filter((email) => !roster.has(email));

@@ -7,11 +7,14 @@
 //   GET                         → { templates, people }
 //   POST  { name, title, bodyMd, audienceRoles, audienceEmails, pinned? }
 //                               → { template }
-//   PATCH { id, name?, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned? }
+//   PATCH { id, name?, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?,
+//           expectedUpdatedAt? }
 //                               → { template }
 //   DELETE ?id=<uuid>           → { ok: true }
 //
-// Names are unique ignoring case; a clash is a 409.
+// Names are unique ignoring case; a clash is a 409. The editor autosaves, so
+// a PATCH may carry `expectedUpdatedAt` — the version it started from — and
+// is refused with 409 if another admin saved since, rather than overwriting.
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
@@ -112,6 +115,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = typeof body.id === 'string' ? body.id : '';
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
+  const expected = body.expectedUpdatedAt;
+  if (expected !== undefined && typeof expected !== 'string') {
+    return json({ error: 'expectedUpdatedAt must be a timestamp' }, 400);
+  }
+
   const patch: Partial<AdminMessageTemplateRow> = {};
   if (body.name !== undefined) {
     const name = normalizeTemplateName(body.name);
@@ -152,14 +160,23 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (Object.keys(patch).length === 0) return json({ error: 'Nothing to update' }, 400);
   patch.updated_by = email;
 
-  const { data, error } = await db
-    .from('admin_message_templates')
-    .update(patch)
-    .eq('id', id)
-    .select('*')
-    .maybeSingle();
+  let update = db.from('admin_message_templates').update(patch).eq('id', id);
+  if (expected !== undefined) update = update.eq('updated_at', expected);
+  const { data, error } = await update.select('*').maybeSingle();
   if (error) return saveError(error);
-  if (!data) return json({ error: 'Template not found' }, 404);
+  if (!data) {
+    if (expected === undefined) return json({ error: 'Template not found' }, 404);
+    const { data: still } = await db
+      .from('admin_message_templates')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    if (!still) return json({ error: 'Template not found' }, 404);
+    return json(
+      { error: 'Someone else saved this template since you opened it.', conflict: true },
+      409
+    );
+  }
   return json({ template: data as AdminMessageTemplateRow });
 };
 

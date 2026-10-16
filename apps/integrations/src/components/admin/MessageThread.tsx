@@ -3,9 +3,8 @@
 // once; it then owns the conversation: replies (markdown, like the message),
 // editing and deleting your own, and for admins the message itself — edit,
 // pin, archive, delete. A draft shows no thread: its author and the admins
-// it's shared with edit it (each save carries the version it started from,
-// so two people editing at once can't silently overwrite each other), send
-// it, or delete it. Every mutation goes through the two API routes,
+// it's shared with edit it, send it, or delete it. Editing is MessageEditor,
+// which autosaves; edits someone left unsaved reopen when they come back. Every mutation goes through the two API routes,
 // which re-check access; the predicates in lib/messages/access decide
 // which controls to draw.
 import { useEffect, useState } from 'react';
@@ -13,6 +12,7 @@ import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { goldButtonClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
+import { type Backup, clearBackup, readBackup } from '@/lib/client/autosave';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
@@ -24,13 +24,14 @@ import {
   roleIsNotified,
 } from '@/lib/messages/access';
 import type { MessageThreadPayload } from '@/lib/messages/store';
-import { REPLY_MAX } from '@/lib/messages/validate';
+import { REPLY_MAX, sendProblem } from '@/lib/messages/validate';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkTextarea } from './LinkTextarea';
-import { MessageComposer, type MessageDraft } from './MessageComposer';
+import type { MessageDraft } from './MessageComposer';
+import { draftOfMessage, MessageEditor, messageEditBackupKey } from './MessageEditor';
 import {
   buttonClass,
   chipClass,
@@ -76,6 +77,7 @@ export function MessageThread({
   const [editingMessage, setEditingMessage] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [restoredEdit, setRestoredEdit] = useState<Backup<MessageDraft> | null>(null);
 
   const isAdmin = message ? canChangeMessage(viewer, message) : false;
   const unsent = message ? isDraft(message) : false;
@@ -163,6 +165,22 @@ export function MessageThread({
     }
   };
 
+  // An edit left unsaved last time (on this device) reopens the editor with
+  // it. Read after hydration — the server render has no localStorage.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on load
+  useEffect(() => {
+    if (!message || !isAdmin) return;
+    const backup = readBackup<MessageDraft>(messageEditBackupKey(message.id));
+    if (!backup) return;
+    const current = draftOfMessage(message);
+    if (JSON.stringify({ ...current, ...backup.value }) === JSON.stringify(current)) {
+      clearBackup(messageEditBackupKey(message.id));
+      return;
+    }
+    setRestoredEdit(backup);
+    setEditingMessage(true);
+  }, []);
+
   const patchMessage = async (patch: Record<string, unknown>) => {
     if (!message) return;
     setBusy(true);
@@ -223,23 +241,7 @@ export function MessageThread({
     );
   }
 
-  const editDraft: MessageDraft = {
-    title: message.title,
-    bodyMd: message.body_md,
-    audience: { roles: message.audience_roles, emails: message.audience_emails },
-    pinned: message.pinned,
-    // A draft hasn't been emailed yet, so sending it from here offers it.
-    email: unsent,
-    sharedWith: message.shared_with,
-  };
-  const composerFields = (d: MessageDraft) => ({
-    title: d.title,
-    bodyMd: d.bodyMd,
-    audienceRoles: d.audience.roles,
-    audienceEmails: d.audience.emails,
-    pinned: d.pinned,
-    expectedUpdatedAt: message.updated_at,
-  });
+  const notReady = unsent ? sendProblem(message) : null;
   const reached = staff.filter(
     (person) =>
       roleIsNotified(message, person.role) || message.audience_emails.includes(person.email)
@@ -253,25 +255,16 @@ export function MessageThread({
 
       <article className="rounded border border-white/10 bg-white/5 px-4 py-4">
         {editingMessage ? (
-          <MessageComposer
-            key={message.updated_at}
-            initial={editDraft}
+          <MessageEditor
+            message={message}
             staff={staff}
-            busy={busy}
-            submitLabel={unsent ? 'Send' : 'Save'}
-            offerEmail={unsent}
-            authorEmail={message.author_email}
-            onSubmit={(d) =>
-              void patchMessage(
-                unsent ? { ...composerFields(d), send: true, email: d.email } : composerFields(d)
-              )
-            }
-            onSaveDraft={
-              unsent
-                ? (d) => void patchMessage({ ...composerFields(d), sharedWith: d.sharedWith })
-                : undefined
-            }
-            onCancel={() => setEditingMessage(false)}
+            restored={restoredEdit}
+            onDone={(latest, names) => {
+              setMessage(latest);
+              setPeople((prev) => ({ ...prev, ...names }));
+              setRestoredEdit(null);
+              setEditingMessage(false);
+            }}
           />
         ) : (
           <>
@@ -316,7 +309,8 @@ export function MessageThread({
                 <button
                   type="button"
                   className={goldButtonClass}
-                  disabled={busy}
+                  disabled={busy || notReady !== null}
+                  title={notReady ?? undefined}
                   onClick={() => setConfirmSend(true)}
                 >
                   Send

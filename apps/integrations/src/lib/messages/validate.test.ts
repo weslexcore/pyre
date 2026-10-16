@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   BODY_MAX,
+  draftBody,
+  draftTitle,
   normalizeBody,
   normalizeTitle,
   parseAudience,
   parseSharedWith,
   REPLY_MAX,
+  sendProblem,
   TITLE_MAX,
 } from './validate';
 
@@ -63,5 +66,32 @@ describe('parseSharedWith', () => {
   it('refuses anything but a list of strings', () => {
     expect(parseSharedWith('a@x.test', 'me@x.test').ok).toBe(false);
     expect(parseSharedWith([1], 'me@x.test').ok).toBe(false);
+  });
+});
+
+describe('drafts may be incomplete', () => {
+  it('keeps a blank title or body, and refuses only bad types and overlong text', () => {
+    expect(draftTitle('  ')).toBe('');
+    expect(draftTitle(' Weekly ')).toBe('Weekly');
+    expect(draftTitle('x'.repeat(TITLE_MAX + 1))).toBeNull();
+    expect(draftTitle(undefined)).toBeNull();
+    expect(draftBody('\n\nhello\n  ')).toBe('hello');
+    expect(draftBody('')).toBe('');
+    expect(draftBody('x'.repeat(BODY_MAX + 1))).toBeNull();
+  });
+
+  it('lets a draft have no audience yet', () => {
+    expect(parseAudience([], [], { allowEmpty: true })).toEqual({
+      ok: true,
+      audience: { roles: [], emails: [] },
+    });
+  });
+
+  it('names what is missing before a message can go out', () => {
+    const ready = { title: 'T', body_md: 'B', audience_roles: ['staff'], audience_emails: [] };
+    expect(sendProblem(ready)).toBeNull();
+    expect(sendProblem({ ...ready, title: ' ' })).toMatch(/title/);
+    expect(sendProblem({ ...ready, body_md: '' })).toMatch(/Write/);
+    expect(sendProblem({ ...ready, audience_roles: [] })).toMatch(/role or person/);
   });
 });

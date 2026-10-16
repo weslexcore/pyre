@@ -9,6 +9,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getDb } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
 import { loadMessageForViewer, type MessageThreadPayload } from '@/lib/messages/store';
+import { displayTitle } from '@/lib/messages/validate';
 import { markSourceRead } from '@/lib/notifications/notify';
 import { normalizeEmail } from '@/lib/email/address';
 import type { SopViewer } from '@/lib/sops/levels';
@@ -32,7 +33,7 @@ if (!isUuid(id)) {
   const result = await loadMessageForViewer(db, viewer, id);
   if (result.ok) {
     initial = result.thread;
-    title = result.thread.message.title;
+    title = displayTitle(result.thread.message);
     if (viewer.email) await markSourceRead(db, viewer.email, 'admin_message', id);
   } else {
     initialError = result.error;

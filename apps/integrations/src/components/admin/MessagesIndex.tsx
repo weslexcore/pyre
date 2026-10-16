@@ -3,19 +3,20 @@
 // composer for a new message (send it, or save it as a draft) and can peek
 // at the archive; the drafts they can work on sit above the sent list. The
 // composer offers the message templates (/admin/messages/templates).
-import { useState } from 'react';
-import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { useEffect, useRef, useState } from 'react';
 import { goldButtonClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
-import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { type Backup, readBackup } from '@/lib/client/autosave';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
-import type { AdminMessageRow, AdminMessageTemplateRow } from '@/lib/db';
+import type { AdminMessageTemplateRow } from '@/lib/db';
 import type { MessageSummary } from '@/lib/messages/store';
+import { displayTitle } from '@/lib/messages/validate';
 import { excerpt } from '@/lib/notifications/types';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { emptyDraft, MessageComposer, type MessageDraft } from './MessageComposer';
+import { emptyDraft, hasContent, type MessageDraft } from './MessageComposer';
 import { buttonClass, chipClass, draftSharing } from './messagesUi';
+import { NewMessageComposer, type NewMessageMeta, newMessageBackupKey } from './NewMessageComposer';
 import type { GrantablePerson } from './SopAccessPicker';
 
 interface ListResponse {
@@ -30,8 +31,6 @@ export function MessagesIndex() {
   const url = `/api/admin/messages${showArchived ? '?archived=1' : ''}`;
   const feed = useCachedJson<ListResponse>(url);
   const [composing, setComposing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const isAdmin = feed.data?.viewer.role === 'admin';
   const templates = useCachedJson<{ templates: AdminMessageTemplateRow[] }>(
@@ -42,33 +41,24 @@ export function MessagesIndex() {
   const drafts = all.filter((m) => m.sent_at === null);
   const sent = all.filter((m) => m.sent_at !== null);
 
-  const create = async (draft: MessageDraft, asDraft: boolean) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: draft.title,
-          bodyMd: draft.bodyMd,
-          audienceRoles: draft.audience.roles,
-          audienceEmails: draft.audience.emails,
-          pinned: draft.pinned,
-          ...(asDraft ? { draft: true, sharedWith: draft.sharedWith } : { email: draft.email }),
-        }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const { message } = (await res.json()) as { message: AdminMessageRow };
-      invalidateJson('/api/admin/messages');
-      window.location.assign(`/admin/messages/${message.id}`);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : asDraft ? 'Failed to save the draft' : 'Failed to send'
-      );
-      setBusy(false);
-    }
-  };
+  // A new message that was being written when this admin last left reopens
+  // here with what they'd typed (NewMessageComposer keeps it on the device
+  // until the server has it). Checked once the list says who's looking.
+  const [restored, setRestored] = useState<Backup<MessageDraft> | null>(null);
+  const backupChecked = useRef(false);
+  const viewerEmail = feed.data?.viewer.email ?? '';
+  useEffect(() => {
+    if (backupChecked.current || !isAdmin || !viewerEmail || !feed.data) return;
+    backupChecked.current = true;
+    const backup = readBackup<MessageDraft>(newMessageBackupKey(viewerEmail));
+    if (!backup || !hasContent({ ...emptyDraft(), ...backup.value })) return;
+    // A draft that has since been sent or deleted can't take the save; the
+    // typing starts a new draft instead.
+    const meta = backup.meta as NewMessageMeta | null;
+    const stillDraft = !!meta?.id && feed.data.messages.some((m) => m.id === meta.id && !m.sent_at);
+    setRestored(stillDraft ? backup : { ...backup, meta: { id: null, updatedAt: null } });
+    setComposing(true);
+  }, [isAdmin, viewerEmail, feed.data]);
 
   return (
     <div className="space-y-4">
@@ -93,27 +83,21 @@ export function MessagesIndex() {
         </div>
       )}
 
-      {composing && isAdmin && (
-        <section className="rounded border border-white/10 bg-white/5 p-4">
-          <h2 className="mb-3 font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">
-            New message
-          </h2>
-          <MessageComposer
-            initial={emptyDraft()}
-            staff={feed.data?.staff ?? []}
-            busy={busy}
-            submitLabel="Send"
-            offerEmail
-            authorEmail={feed.data?.viewer.email}
-            templates={templates.data?.templates}
-            onSubmit={(draft) => void create(draft, false)}
-            onSaveDraft={(draft) => void create(draft, true)}
-            onCancel={() => setComposing(false)}
-          />
-        </section>
+      {composing && isAdmin && viewerEmail && (
+        <NewMessageComposer
+          staff={feed.data?.staff ?? []}
+          templates={templates.data?.templates}
+          viewerEmail={viewerEmail}
+          restored={restored}
+          onClose={() => {
+            setComposing(false);
+            setRestored(null);
+            // The autosaved draft now belongs under Drafts.
+            void feed.reload();
+          }}
+        />
       )}
 
-      {error && <ErrorBanner>{error}</ErrorBanner>}
       {feed.error && !feed.data && (
         <p role="alert" className="text-sm text-[var(--pyre-red)]">
           Couldn't load messages: {feed.error}
@@ -136,7 +120,7 @@ export function MessagesIndex() {
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className={`${chipClass} border-white/30 text-white/60`}>Draft</span>
                     <span className="text-base font-semibold text-[var(--pyre-creme)]">
-                      {m.title}
+                      {displayTitle(m)}
                     </span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-white/60">

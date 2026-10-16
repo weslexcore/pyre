@@ -17,6 +17,7 @@ import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { addedAudience, resolveAudience } from '@/lib/messages/access';
+import { displayTitle } from '@/lib/messages/validate';
 import { createNotifications } from './notify';
 import { nameFor } from './recipients';
 import { excerpt } from './types';
@@ -123,7 +124,7 @@ export async function notifyDraftShared(
   const rows = (await listStaff()) ?? [];
   return createNotifications(db, added, {
     kind: 'admin_message',
-    title: `${nameFor(rows, editorEmail)} shared a draft: ${message.title}`,
+    title: `${nameFor(rows, editorEmail)} shared a draft: ${displayTitle(message)}`,
     body: excerpt(message.body_md),
     href: messageHref(message.id),
     source: { type: 'admin_message', id: message.id },
