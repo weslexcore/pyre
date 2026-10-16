@@ -17,8 +17,9 @@ async function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
   // questions; it is re-resolved each turn, so a conversation that crosses
   // midnight picks up the new day.
   if (role === 'knowledge') {
+    const { scope } = resolveRole(auth);
     return defineInstructions({
-      markdown: knowledgeInstructionsFor(utcToEastern(new Date().toISOString()).date),
+      markdown: knowledgeInstructionsFor(utcToEastern(new Date().toISOString()).date, scope),
     });
   }
   // The suggester resolves relative dates in a note ("before Saturday")

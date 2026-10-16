@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createStreamReducerState, reduceStreamEvent } from './stream';
+import {
+  type AskStreamEvent,
+  catchUpEvent,
+  createCatchUpState,
+  createStreamReducerState,
+  reduceStreamEvent,
+  type UpstreamEvent,
+} from './stream';
 
 describe('reduceStreamEvent', () => {
   it('accumulates delta-only appends into the text of the block so far', () => {
@@ -164,5 +171,70 @@ describe('reduceStreamEvent', () => {
     ).toBeNull();
     expect(reduceStreamEvent({ type: 'step.started' }, 1)).toBeNull();
     expect(reduceStreamEvent({}, 1)).toBeNull();
+  });
+});
+
+describe('catchUpEvent', () => {
+  /** Run upstream events through the reducer and the catch-up, as the proxy does. */
+  function replay(events: UpstreamEvent[], until: number) {
+    const reducer = createStreamReducerState();
+    const catchUp = createCatchUpState(until);
+    const out: AskStreamEvent[][] = [];
+    events.forEach((event, i) => {
+      const index = i + 1;
+      out.push(catchUpEvent(catchUp, event, index, reduceStreamEvent(event, index, reducer)));
+    });
+    return out;
+  }
+
+  const firstTurn: UpstreamEvent[] = [
+    { type: 'turn.started' },
+    { type: 'message.completed', data: { message: 'Old answer', finishReason: 'stop' } },
+    { type: 'session.waiting' },
+  ];
+
+  it('holds the replay back and sends only the newest turn once it reaches the tail', () => {
+    const events: UpstreamEvent[] = [
+      ...firstTurn,
+      { type: 'turn.started' },
+      { type: 'message.appended', data: { messageDelta: 'Look' } },
+      { type: 'message.appended', data: { messageDelta: 'ing' } },
+      {
+        type: 'actions.requested',
+        data: { actions: [{ kind: 'tool-call', callId: 'c1', toolName: 'find_cards', input: {} }] },
+      },
+    ];
+    const out = replay(events, events.length);
+    expect(out.slice(0, -1).every((batch) => batch.length === 0)).toBe(true);
+    // Runs of deltas collapse to the block so far.
+    expect(out[out.length - 1]).toEqual([
+      { type: 'delta', text: 'Looking' },
+      { type: 'activity', calls: [{ callId: 'c1', tool: 'find_cards', input: {} }] },
+    ]);
+  });
+
+  it('passes events straight through once caught up', () => {
+    const events: UpstreamEvent[] = [
+      { type: 'turn.started' },
+      { type: 'message.completed', data: { message: 'New answer', finishReason: 'stop' } },
+      { type: 'session.waiting' },
+    ];
+    const out = replay(events, 1);
+    expect(out[0]).toEqual([]);
+    expect(out[1]).toEqual([{ type: 'message', text: 'New answer', finishReason: 'stop' }]);
+    expect(out[2]).toEqual([{ type: 'done', status: 'waiting', nextIndex: 3 }]);
+  });
+
+  it('replays a turn that finished while nobody watched, ending in done', () => {
+    const out = replay(firstTurn, firstTurn.length);
+    expect(out[2]).toEqual([
+      { type: 'message', text: 'Old answer', finishReason: 'stop' },
+      { type: 'done', status: 'waiting', nextIndex: 3 },
+    ]);
+  });
+
+  it('streams live from the start when the session has no events yet', () => {
+    const out = replay(firstTurn, 0);
+    expect(out[1]).toEqual([{ type: 'message', text: 'Old answer', finishReason: 'stop' }]);
   });
 });

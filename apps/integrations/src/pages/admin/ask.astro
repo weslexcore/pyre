@@ -1,22 +1,29 @@
 ---
-// Ask a question: a chat with the pyre-agents knowledge assistant, which
-// answers from the SOP library, shift notes, water log, incident reports,
-// and the staff schedule — scoped to what this user may read, with links
-// back to the documents. Earlier conversations sit beside the chat (their own only).
+// Pyre Agent: a chat with the team's assistant in pyre-agents. It answers
+// from the SOP library, shift notes, water log, incident reports, and the
+// staff schedule — scoped to what this user may read, with links back to the
+// documents — and, for people who hold the Boards tool or a board, reads the
+// goals and boards for status updates and proposes boards, tasks, and task
+// changes they apply from the chat. Earlier conversations sit beside the
+// chat (their own only), and the open one survives leaving the page.
 // Who may open it is the Ask page grant on /admin/users (the middleware +
-// AdminLayout gate); the island talks to /api/admin/knowledge-ask and
-// /api/admin/knowledge-history, which re-check the grant on every request.
-// Admins also get a link to the audit log of every question asked.
+// AdminLayout gate); the island talks to /api/admin/knowledge-ask,
+// /api/admin/knowledge-history, and /api/admin/agent-actions, which re-check
+// the grant on every request. Admins also get a link to the audit log of
+// every question asked.
 import { SopAsk } from '@/components/admin/SopAsk';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { canViewBoardsTool } from '@/lib/boards/access';
 
-const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
+const access = Astro.locals.adminAccess;
+const isAdmin = access?.isAdmin ?? false;
+const hasBoards = access ? canViewBoardsTool(access) : false;
 ---
 
 <AdminLayout
-  title="Ask a Question"
-  subtitle="Answers from the SOPs, shift notes, water log, incident reports, and schedule you can see — with links to where they come from"
+  title="Pyre Agent"
+  subtitle="Answers from the SOPs, shift notes, water log, incident reports, schedule, and boards you can see — with links to where they come from"
   fill
 >
-  <SopAsk client:load isAdmin={isAdmin} />
+  <SopAsk client:load isAdmin={isAdmin} hasBoards={hasBoards} />
 </AdminLayout>

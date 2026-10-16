@@ -91,7 +91,7 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   create: { heading: '', badge: '' },
 };
 
-/** The "Ask a question" row: gold, headingless, first in the list. */
+/** The "Ask Pyre Agent" row: gold, headingless, first in the list. */
 function AskRow({
   item,
   index,

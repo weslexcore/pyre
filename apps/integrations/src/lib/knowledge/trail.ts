@@ -37,6 +37,14 @@ export const TOOL_LABELS: Record<string, string> = {
   get_shift_notes: 'Read shift notes',
   read_incident: 'Read incident',
   get_shifts: 'Read the schedule',
+  get_goals_and_boards: 'Read the goals and boards',
+  read_board: 'Read board',
+  find_cards: 'Searched cards',
+  propose_card: 'Proposed a task',
+  propose_card_update: 'Proposed a task change',
+  propose_comment: 'Proposed a comment',
+  propose_board: 'Proposed a board',
+  propose_kpi_measurement: 'Proposed a KPI reading',
 };
 
 /** The same tools, present tense, for the line shown while one runs. */
@@ -48,6 +56,14 @@ export const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   get_shift_notes: 'Reading shift notes',
   read_incident: 'Reading an incident report',
   get_shifts: 'Reading the schedule',
+  get_goals_and_boards: 'Reading the goals and boards',
+  read_board: 'Reading a board',
+  find_cards: 'Searching cards',
+  propose_card: 'Drafting a task',
+  propose_card_update: 'Drafting a task change',
+  propose_comment: 'Drafting a comment',
+  propose_board: 'Drafting a board',
+  propose_kpi_measurement: 'Drafting a KPI reading',
 };
 
 /** A tool's output as one string for the trail, cut to the cap with a marker. */
@@ -80,9 +96,13 @@ export function describeToolCall(call: { tool: string; input: Record<string, unk
         ? `${input.slug}${typeof input.section === 'string' ? `#${input.section}` : ''}`
         : typeof input.reference === 'string'
           ? input.reference
-          : Object.keys(input).length > 0
-            ? JSON.stringify(input)
-            : '';
+          : typeof input.title === 'string'
+            ? `"${input.title}"`
+            : typeof input.name === 'string'
+              ? `"${input.name}"`
+              : Object.keys(input).length > 0
+                ? JSON.stringify(input)
+                : '';
   return arg ? `${label} ${arg}` : label;
 }
 
@@ -129,6 +149,24 @@ export function summarizeToolResult(step: TrailToolStep): string {
     }
     case 'read_incident':
       return typeof out.reference === 'string' ? out.reference : 'done';
+    case 'get_goals_and_boards': {
+      const goals = Array.isArray(out.goals) ? out.goals.length : null;
+      const boards = Array.isArray(out.boards) ? out.boards.length : null;
+      return goals === null
+        ? 'done'
+        : `${goals} goal${goals === 1 ? '' : 's'}, ${boards ?? 0} board${boards === 1 ? '' : 's'}`;
+    }
+    case 'read_board': {
+      const board = out.board as { name?: unknown } | undefined;
+      const cards = Array.isArray(out.cards) ? out.cards.length : null;
+      return typeof board?.name === 'string'
+        ? `${board.name}${cards === null ? '' : `, ${cards} card${cards === 1 ? '' : 's'}`}`
+        : 'done';
+    }
+    case 'find_cards': {
+      const count = typeof out.count === 'number' ? out.count : null;
+      return count === null ? 'done' : `${count} card${count === 1 ? '' : 's'}`;
+    }
     case 'get_shifts': {
       const count = typeof out.count === 'number' ? out.count : null;
       const window = out.window as { from?: unknown; to?: unknown } | undefined;
@@ -139,6 +177,8 @@ export function summarizeToolResult(step: TrailToolStep): string {
       return count === null ? 'done' : `${count} shift${count === 1 ? '' : 's'}${range}`;
     }
     default: {
+      const proposal = out.proposal as { summary?: unknown } | undefined;
+      if (typeof proposal?.summary === 'string') return proposal.summary;
       const rows = Array.isArray(out.entries)
         ? out.entries.length
         : Array.isArray(out.notes)

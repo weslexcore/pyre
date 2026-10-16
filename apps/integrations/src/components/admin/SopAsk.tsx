@@ -1,7 +1,19 @@
-// The "Ask" island: a chat with the knowledge assistant. Messages fill the
+// The Pyre Agent island: a chat with the team's assistant. Messages fill the
 // page above a composer pinned to the bottom, and a sidebar (a drawer on
 // phones) lists the staff member's earlier conversations so any of them can
 // be reopened and, when the assistant still has it, continued.
+//
+// The conversation outlives the page. The agent runs server-side, so leaving
+// mid-answer loses nothing; the island remembers which conversation is open
+// (?c= in the URL, and localStorage for coming back through the nav) and, on
+// the way back in, reopens it from the history and — when its last question
+// is still being answered — reattaches to the live answer, replayed from the
+// start of that turn (the ask route's resume mode).
+//
+// For people with boards the agent also reads the goals and boards and
+// proposes changes to them. Each proposal is drawn under the answer that
+// made it (AgentActions) with Apply and Dismiss; nothing changes on a board
+// until the person applies it (/api/admin/agent-actions).
 //
 // Each question opens (or continues) a pyre-agents knowledge session through
 // /api/admin/knowledge-ask, then streams the answer as it is written. The
@@ -32,6 +44,8 @@ import {
   trailWithResult,
   trailWithThought,
 } from '@/lib/knowledge/trail';
+import { type ActionView, isProposeTool, proposalIdOf } from '@/lib/pyre-agent/types';
+import { AgentActions } from './AgentActions';
 import { AskHistory } from './AskHistory';
 import { AskTrail, liveActivityLabel } from './AskTrail';
 import { SopMarkdown } from './SopMarkdown';
@@ -72,13 +86,82 @@ interface ConversationPayload {
 }
 
 const HISTORY_URL = '/api/admin/knowledge-history';
+const ACTIONS_URL = '/api/admin/agent-actions';
+
+/** Which conversation is open, so leaving the page and coming back lands in it. */
+const STORAGE_KEY = 'pyre-agent:conversation';
+/** The URL parameter naming the open conversation. */
+const CONVERSATION_PARAM = 'c';
+
+interface StoredConversation {
+  sessionId: string;
+  token: string;
+  /** A question sent but maybe not logged yet — shown if the history has nothing. */
+  pending?: string;
+}
+
+function readStored(): StoredConversation | null {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<StoredConversation>;
+    return typeof value.sessionId === 'string' && typeof value.token === 'string'
+      ? { sessionId: value.sessionId, token: value.token, pending: value.pending }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(value: StoredConversation | null): void {
+  try {
+    if (value) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage unavailable (private mode): the URL still carries the conversation.
+  }
+}
+
+/** Put the open conversation in the URL (or take it out) without a navigation. */
+function writeConversationParam(sessionId: string | null): void {
+  const url = new URL(window.location.href);
+  if (sessionId) url.searchParams.set(CONVERSATION_PARAM, sessionId);
+  else url.searchParams.delete(CONVERSATION_PARAM);
+  if (url.href !== window.location.href) {
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }
+}
+
+/** Whether the log's copy of a question is the one this browser sent (the log tidies it). */
+function sameQuestion(logged: string, sent: string): boolean {
+  const tidy = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 500);
+  return tidy(logged) === tidy(sent);
+}
+
+/** The proposal ids a turn's trail made, in order. Exported for tests. */
+export function proposalIdsOf(trail: TrailStep[]): string[] {
+  const ids: string[] = [];
+  for (const step of trail) {
+    if (step.kind !== 'tool' || !isProposeTool(step.tool) || step.status !== 'completed') continue;
+    const id = proposalIdOf(step.output);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
 
 const EXAMPLES = [
   'What are the benefits of cold plunging?',
   'How do I break down the fire and water side at close?',
-  'What do we tell a guest who is pregnant and wants to plunge?',
   'When was the left tub last shocked?',
   'When is my next shift, and who am I on with?',
+];
+
+/** Offered to people who can see goals and boards. */
+const BOARD_EXAMPLES = [
+  'Give me a status update on our goals',
+  'What is overdue, and what is on my plate this week?',
+  'Help me break our next goal into tasks',
+  'Propose a board for tracking wholesale leads',
 ];
 
 /** Past this many lines the composer scrolls instead of growing. */
@@ -116,9 +199,11 @@ export function turnFromHistory(turn: ConversationTurn): Turn {
 interface Props {
   /** Admins get the link to the review log of everyone's questions. */
   isAdmin?: boolean;
+  /** Whether this person can see goals and boards (their examples and copy). */
+  hasBoards?: boolean;
 }
 
-export function SopAsk({ isAdmin = false }: Props) {
+export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -127,6 +212,8 @@ export function SopAsk({ isAdmin = false }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
+  const [actions, setActions] = useState<ActionView[]>([]);
+  const [workingActionId, setWorkingActionId] = useState<string | null>(null);
   const session = useRef<AskSession | null>(null);
   const nextId = useRef(1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,6 +234,51 @@ export function SopAsk({ isAdmin = false }: Props) {
     },
     []
   );
+
+  // The open conversation's proposals; a stale reply for a conversation the
+  // person has since left is dropped.
+  const actionsFor = useRef<string | null>(null);
+  const refreshActions = useCallback(async (sessionId: string) => {
+    actionsFor.current = sessionId;
+    try {
+      const res = await fetch(`${ACTIONS_URL}?sessionId=${encodeURIComponent(sessionId)}`);
+      if (!res.ok) return;
+      const body = (await res.json()) as { actions: ActionView[] };
+      if (actionsFor.current === sessionId) setActions(body.actions);
+    } catch {
+      // The cards catch up on the next refresh.
+    }
+  }, []);
+
+  const decideAction = useCallback(async (id: string, action: 'apply' | 'dismiss') => {
+    setWorkingActionId(id);
+    try {
+      const res = await fetch(ACTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { action?: ActionView; error?: string };
+      const updated = body.action;
+      if (updated) {
+        setActions((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      } else {
+        setActions((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, error: body.error ?? 'Something went wrong' } : a))
+        );
+      }
+    } catch (error) {
+      setActions((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, error: error instanceof Error ? error.message : 'Something went wrong' }
+            : a
+        )
+      );
+    } finally {
+      setWorkingActionId(null);
+    }
+  }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll whenever the transcript changes
   useEffect(() => {
@@ -176,14 +308,17 @@ export function SopAsk({ isAdmin = false }: Props) {
   }, [busy]);
 
   const streamAnswer = useCallback(
-    async (turnId: string, current: AskSession) => {
+    async (turnId: string, current: AskSession, options: { resume?: boolean } = {}) => {
       // The function budget may cut a long answer short; resume from where
-      // the proxy said it stopped, a few times at most.
+      // the proxy said it stopped, a few times at most. Reattaching to a
+      // conversation (options.resume) has no position yet: the first read
+      // replays its newest turn from the start, and says where it got to.
       for (let attempt = 0; attempt < 4; attempt++) {
+        const reattach = options.resume === true && attempt === 0;
         const params = new URLSearchParams({
           sessionId: current.id,
           token: current.token,
-          startIndex: String(current.nextIndex ?? 0),
+          ...(reattach ? { resume: '1' } : { startIndex: String(current.nextIndex ?? 0) }),
         });
         const res = await fetch(`/api/admin/knowledge-ask?${params}`, {
           headers: { Accept: 'application/x-ndjson' },
@@ -234,6 +369,8 @@ export function SopAsk({ isAdmin = false }: Props) {
                 break;
               case 'result':
                 patchTurn(turnId, (t) => ({ trail: trailWithResult(t.trail, event) }));
+                // A proposal just landed: draw its card now, not after the answer.
+                if (proposalIdOf(event.output)) void refreshActions(current.id);
                 break;
               case 'done':
                 outcome = event;
@@ -276,7 +413,7 @@ export function SopAsk({ isAdmin = false }: Props) {
         error: 'The answer took too long — try asking again',
       });
     },
-    [patchTurn]
+    [patchTurn, refreshActions]
   );
 
   const ask = useCallback(
@@ -335,9 +472,19 @@ export function SopAsk({ isAdmin = false }: Props) {
             : { id: body.sessionId, token: body.token, nextIndex: 0 };
         session.current = current;
         setActiveSessionId(current.id);
+        if (current.id !== prior?.id) {
+          actionsFor.current = current.id;
+          setActions([]);
+        }
         if (prior && body.fresh) patchTurn(id, { fresh: true });
+        // Remember it before the answer arrives: leaving now and coming back
+        // reopens this conversation and picks the answer up where it is.
+        writeStored({ sessionId: current.id, token: current.token, pending: text });
+        writeConversationParam(current.id);
 
         await streamAnswer(id, current);
+        writeStored({ sessionId: current.id, token: current.token });
+        void refreshActions(current.id);
       } catch (error) {
         patchTurn(id, {
           status: 'error',
@@ -350,13 +497,24 @@ export function SopAsk({ isAdmin = false }: Props) {
         setTimeout(() => void history.reload(), 800);
       }
     },
-    [busy, openingSessionId, patchTurn, streamAnswer, history.reload, resizeComposer]
+    [
+      busy,
+      openingSessionId,
+      patchTurn,
+      streamAnswer,
+      history.reload,
+      resizeComposer,
+      refreshActions,
+    ]
   );
 
-  // Arriving from the global search's "Ask a question" row: ?q= is the
+  // Arriving from the global search's "Ask Pyre Agent" row: ?q= is the
   // question, asked once on mount as a new conversation. The param is dropped
   // from the URL first so a reload (or the back button) doesn't ask it again.
   const askedFromUrl = useRef(false);
+  // The URL as the page opened, before the ?q= handling below rewrites it —
+  // the restore further down must not reopen an old conversation over it.
+  const initialSearch = useRef(typeof window === 'undefined' ? '' : window.location.search);
   useEffect(() => {
     if (askedFromUrl.current) return;
     const params = new URLSearchParams(window.location.search);
@@ -378,42 +536,162 @@ export function SopAsk({ isAdmin = false }: Props) {
     session.current = null;
     setTurns([]);
     setActiveSessionId(null);
+    actionsFor.current = null;
+    setActions([]);
     setNotice(null);
     setQuestion('');
     setHistoryOpen(false);
+    writeStored(null);
+    writeConversationParam(null);
     requestAnimationFrame(() => {
       resizeComposer();
       composerRef.current?.focus();
     });
   };
 
+  /**
+   * Show a conversation from the history and, when its last question is
+   * still being answered, reattach to the answer. `stored` is what this
+   * browser remembered of it — a question sent just before leaving may not
+   * be in the history yet, and the token lets the island stream it anyway.
+   * Quiet (no notice) when restoring on load: a conversation that has gone
+   * just leaves the page empty.
+   */
+  const loadConversation = useCallback(
+    async (
+      sessionId: string,
+      opts: { stored?: StoredConversation | null; quiet?: boolean } = {}
+    ) => {
+      setOpeningSessionId(sessionId);
+      setNotice(null);
+      let reattach: { turnId: string; current: AskSession } | null = null;
+      let token: string | null = null;
+      try {
+        const res = await fetch(`${HISTORY_URL}?sessionId=${encodeURIComponent(sessionId)}`);
+        const stored = opts.stored?.sessionId === sessionId ? opts.stored : null;
+        if (res.status === 404 && stored?.pending) {
+          // Sent, but not logged yet: show the question and stream its answer.
+          const turnId = `local-${nextId.current++}`;
+          setTurns([
+            {
+              id: turnId,
+              question: stored.pending,
+              answer: '',
+              live: '',
+              trail: [],
+              trailOpen: true,
+              status: 'pending',
+            },
+          ]);
+          token = stored.token;
+          reattach = { turnId, current: { id: sessionId, token, nextIndex: null } };
+        } else {
+          if (!res.ok) throw new Error(await readError(res));
+          const body = (await res.json()) as ConversationPayload;
+          token = body.token ?? stored?.token ?? null;
+          const loaded = body.turns.map(turnFromHistory);
+          const last = body.turns[body.turns.length - 1];
+          if (token && last?.status === 'pending' && !last.answer) {
+            // Still being answered (or never finished): replay it live.
+            const turnId = loaded[loaded.length - 1].id;
+            loaded[loaded.length - 1] = {
+              ...loaded[loaded.length - 1],
+              trail: [],
+              trailOpen: true,
+              status: 'pending',
+            };
+            reattach = {
+              turnId,
+              current: { id: body.sessionId, token, nextIndex: null },
+            };
+          } else if (
+            token &&
+            stored?.pending &&
+            last &&
+            !sameQuestion(last.question, stored.pending)
+          ) {
+            // A follow-up sent just before leaving, not in the log yet: show
+            // it and stream its answer (by now its turn is the newest).
+            const turnId = `local-${nextId.current++}`;
+            loaded.push({
+              id: turnId,
+              question: stored.pending,
+              answer: '',
+              live: '',
+              trail: [],
+              trailOpen: true,
+              status: 'pending',
+            });
+            reattach = { turnId, current: { id: body.sessionId, token, nextIndex: null } };
+          }
+          setTurns(loaded);
+        }
+        stickToBottom.current = true;
+        session.current = token ? { id: sessionId, token, nextIndex: null } : null;
+        setActiveSessionId(sessionId);
+        actionsFor.current = sessionId;
+        setActions([]);
+        void refreshActions(sessionId);
+        if (token) {
+          const pending = reattach ? opts.stored?.pending : undefined;
+          writeStored({ sessionId, token, ...(pending ? { pending } : {}) });
+        }
+        writeConversationParam(sessionId);
+      } catch (error) {
+        if (opts.quiet) {
+          writeStored(null);
+          writeConversationParam(null);
+        } else {
+          setNotice(
+            `Could not open that conversation: ${error instanceof Error ? error.message : 'unknown error'}`
+          );
+        }
+      } finally {
+        setOpeningSessionId(null);
+      }
+
+      if (!reattach) return;
+      setBusy(true);
+      try {
+        session.current = reattach.current;
+        await streamAnswer(reattach.turnId, reattach.current, { resume: true });
+        writeStored({ sessionId, token: reattach.current.token });
+        void refreshActions(sessionId);
+      } catch (error) {
+        patchTurn(reattach.turnId, {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Could not reconnect to the answer',
+        });
+      } finally {
+        setBusy(false);
+        setTimeout(() => void history.reload(), 800);
+      }
+    },
+    [patchTurn, refreshActions, streamAnswer, history.reload]
+  );
+
   const openConversation = useCallback(
     async (sessionId: string) => {
       if (busy || openingSessionId) return;
       setHistoryOpen(false);
       if (sessionId === activeSessionId) return;
-      setOpeningSessionId(sessionId);
-      setNotice(null);
-      try {
-        const res = await fetch(`${HISTORY_URL}?sessionId=${encodeURIComponent(sessionId)}`);
-        if (!res.ok) throw new Error(await readError(res));
-        const body = (await res.json()) as ConversationPayload;
-        stickToBottom.current = true;
-        setTurns(body.turns.map(turnFromHistory));
-        session.current = body.token
-          ? { id: body.sessionId, token: body.token, nextIndex: null }
-          : null;
-        setActiveSessionId(body.sessionId);
-      } catch (error) {
-        setNotice(
-          `Could not open that conversation: ${error instanceof Error ? error.message : 'unknown error'}`
-        );
-      } finally {
-        setOpeningSessionId(null);
-      }
+      await loadConversation(sessionId);
     },
-    [activeSessionId, busy, openingSessionId]
+    [activeSessionId, busy, openingSessionId, loadConversation]
   );
+
+  // Coming back: reopen the conversation in the URL, else the one this
+  // browser had open. A ?q= question (handled above) starts a new one instead.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const params = new URLSearchParams(initialSearch.current);
+    if (params.get('q')?.trim()) return;
+    const stored = readStored();
+    const sessionId = params.get(CONVERSATION_PARAM)?.trim() || stored?.sessionId;
+    if (sessionId) void loadConversation(sessionId, { stored, quiet: true });
+  }, [loadConversation]);
 
   const historyPanel = (
     <AskHistory
@@ -430,6 +708,25 @@ export function SopAsk({ isAdmin = false }: Props) {
   );
 
   const canSend = !busy && !openingSessionId && question.trim().length > 0;
+
+  // Each proposal sits under the answer whose trail made it; any the trails
+  // do not account for (a trail cut short) go under the last answer.
+  const actionsByTurn = new Map<string, ActionView[]>();
+  const placed = new Set<string>();
+  for (const turn of turns) {
+    const ids = proposalIdsOf(turn.trail);
+    const mine = actions.filter((a) => ids.includes(a.id));
+    for (const a of mine) placed.add(a.id);
+    actionsByTurn.set(turn.id, mine);
+  }
+  const lastTurn = turns[turns.length - 1];
+  if (lastTurn && lastTurn.status !== 'pending' && lastTurn.status !== 'streaming') {
+    const unplaced = actions.filter((a) => !placed.has(a.id));
+    if (unplaced.length > 0) {
+      actionsByTurn.set(lastTurn.id, [...(actionsByTurn.get(lastTurn.id) ?? []), ...unplaced]);
+    }
+  }
+  const examples = hasBoards ? [...BOARD_EXAMPLES, ...EXAMPLES.slice(0, 2)] : EXAMPLES;
 
   return (
     <div className="flex min-h-0 flex-1 gap-4">
@@ -498,15 +795,15 @@ export function SopAsk({ isAdmin = false }: Props) {
             <div className="flex h-full flex-col justify-center">
               <div className="mx-auto w-full max-w-2xl">
                 <p className="mb-4 text-center text-sm text-white/60">
-                  Ask anything about how we run the sauna, or about your shifts. Answers come only
-                  from the SOPs, shift notes, water log, incident reports, and schedule you can see,
-                  with links to where they come from.
+                  {hasBoards
+                    ? 'Ask about how we run the sauna, your shifts, or where our goals stand. Pyre Agent answers from what you can see, with links to where it comes from, and proposes board changes for you to apply.'
+                    : 'Ask anything about how we run the sauna, or about your shifts. Answers come only from the SOPs, shift notes, water log, incident reports, and schedule you can see, with links to where they come from.'}
                 </p>
                 <h2 className="mb-2 text-center font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
                   Try asking
                 </h2>
                 <ul className="grid gap-2 sm:grid-cols-2">
-                  {EXAMPLES.map((example) => (
+                  {examples.map((example) => (
                     <li key={example}>
                       <button
                         type="button"
@@ -571,6 +868,12 @@ export function SopAsk({ isAdmin = false }: Props) {
                           Writing…
                         </p>
                       )}
+                      <AgentActions
+                        actions={actionsByTurn.get(turn.id) ?? []}
+                        workingId={workingActionId}
+                        onApply={(id) => void decideAction(id, 'apply')}
+                        onDismiss={(id) => void decideAction(id, 'dismiss')}
+                      />
                     </div>
                   </div>
                 </li>
@@ -597,7 +900,11 @@ export function SopAsk({ isAdmin = false }: Props) {
                 className="max-h-40 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm leading-6 text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none"
                 rows={1}
                 placeholder={
-                  turns.length > 0 ? 'Ask a follow-up…' : 'Ask anything about how we run the sauna…'
+                  turns.length > 0
+                    ? 'Ask a follow-up…'
+                    : hasBoards
+                      ? 'Ask about the sauna, your shifts, or our goals…'
+                      : 'Ask anything about how we run the sauna…'
                 }
                 value={question}
                 maxLength={MAX_QUESTION_LENGTH}
@@ -622,8 +929,9 @@ export function SopAsk({ isAdmin = false }: Props) {
               </button>
             </div>
             <p className="mt-1.5 text-[11px] text-white/35">
-              Enter sends, Shift+Enter for a new line. Answers come only from the knowledge base and
-              link to their sources.
+              Enter sends, Shift+Enter for a new line. Answers link to their sources
+              {hasBoards ? ', and board changes wait for you to apply them' : ''}. You can leave and
+              come back — the conversation stays open.
             </p>
           </div>
         </form>

@@ -252,7 +252,7 @@ describe('buildItems', () => {
     const [first, second] = items;
     expect(first.group).toBe('ask');
     expect(first.href).toBe('/admin/ask?q=cold+plunge');
-    expect(first.title).toBe('Ask a question: “cold plunge”');
+    expect(first.title).toBe('Ask Pyre Agent: “cold plunge”');
     expect(second.group).toBe('pages');
 
     const none = buildItems(

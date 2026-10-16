@@ -190,11 +190,21 @@ export const ADMIN_TOOLS: AdminTool[] = [
   },
   {
     href: '/admin/ask',
-    title: 'Ask a Question',
-    navLabel: 'Ask',
-    keywords: ['assistant', 'knowledge', 'help', 'ai'],
+    title: 'Pyre Agent',
+    navLabel: 'Pyre Agent',
+    keywords: [
+      'assistant',
+      'knowledge',
+      'help',
+      'ai',
+      'ask',
+      'question',
+      'agent',
+      'status',
+      'goals',
+    ],
     description:
-      'Ask the knowledge assistant anything about how we run the sauna. It answers from the SOPs, shift notes, water log, and incident reports you can see, with links to its sources.',
+      'Ask Pyre Agent anything about how we run the sauna, your shifts, or where our goals stand. It answers from the SOPs, logs, schedule, and boards you can see, with links to its sources, and proposes board changes for you to apply.',
     section: 'operations',
   },
   {

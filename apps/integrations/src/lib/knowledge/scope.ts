@@ -8,6 +8,7 @@
 
 import { canViewPage, hasIncidentsManage, SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import type { AdminGate } from '@/lib/auth/admin';
+import { canViewBoardsTool } from '@/lib/boards/access';
 import type { SopRole } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
@@ -20,6 +21,12 @@ export interface KnowledgeScope {
   water: boolean;
   /** The staff schedule: shifts, crews, and hours — the board shows all of it to anyone with the page. */
   schedule: boolean;
+  /**
+   * Goals and boards: whether they hold the Boards tool or any single board.
+   * Which boards, and whether they may create one, is resolved per call by
+   * /api/agent/pyre from their email — this only says whether to offer the tools.
+   */
+  boards: boolean;
 }
 
 /** Request headers that turn a pyre-agents session into a knowledge session. */
@@ -51,6 +58,7 @@ export async function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope
     // it (names only — emails and pay stay on the manage/admin side, and the
     // agent never reads them), so the tool needs no all/mine split.
     schedule: canViewPage(gate.access, '/admin/schedule'),
+    boards: canViewBoardsTool(gate.access),
   };
 }
 

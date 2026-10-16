@@ -529,6 +529,35 @@ export interface AgentSuggestionRunRow {
   updated_at: string;
 }
 
+/**
+ * A board change Pyre Agent proposed in a conversation (/admin/ask), applied
+ * only when the asker presses Apply. See lib/pyre-agent.
+ */
+export interface PyreAgentActionRow {
+  id: string;
+  session_id: string;
+  turn_id: string | null;
+  asked_by: string;
+  kind:
+    | 'board.create'
+    | 'board_card.create'
+    | 'board_card.update'
+    | 'board_card.comment'
+    | 'goal_kpi.measure';
+  summary: string;
+  details: string[];
+  rationale: string;
+  /** { steps: [{ method, path, body, resolveColumn? }] } — lib/pyre-agent/types ActionRequest. */
+  request: Record<string, unknown>;
+  status: 'pending' | 'applying' | 'applied' | 'dismissed';
+  result_label: string | null;
+  result_href: string | null;
+  error: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** One proposed action. `payload` is the agent's original and never changes. */
 export interface AgentSuggestionRow {
   id: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relativizeDashboardLinks, turnFromHistory } from './SopAsk';
+import { proposalIdsOf, relativizeDashboardLinks, turnFromHistory } from './SopAsk';
 
 describe('turnFromHistory', () => {
   const base = {
@@ -86,5 +86,28 @@ describe('relativizeDashboardLinks', () => {
     expect(relativizeDashboardLinks('[site](https://pyresauna.com/about)')).toBe(
       '[site](https://pyresauna.com/about)'
     );
+  });
+});
+
+describe('proposalIdsOf', () => {
+  it('finds the proposals a turn made, in order, ignoring failed and other calls', () => {
+    const tool = (tool: string, status: 'completed' | 'failed', output?: string) => ({
+      kind: 'tool' as const,
+      callId: tool,
+      tool,
+      input: {},
+      status,
+      output,
+    });
+    expect(
+      proposalIdsOf([
+        { kind: 'thought', text: 'Checking the board.' },
+        tool('read_board', 'completed', '{"board":{}}'),
+        tool('propose_card', 'completed', '{"proposal":{"id":"a1"}}'),
+        tool('propose_comment', 'failed', '{"proposal":{"id":"nope"}}'),
+        tool('propose_card_update', 'completed', '{"error":"No column"}'),
+        tool('propose_board', 'completed', '{"proposal":{"id":"b2"}}'),
+      ])
+    ).toEqual(['a1', 'b2']);
   });
 });

@@ -105,7 +105,7 @@ export const GROUP_LABELS: Record<SearchGroup, string> = {
   create: 'Create',
 };
 
-/** The Ask page's href; holding it is what puts the "Ask a question" row in the palette. */
+/** The Ask page's href; holding it is what puts the "Ask Pyre Agent" row in the palette. */
 export const ASK_HREF = '/admin/ask';
 
 /** One row of the palette, whatever it came from. */
@@ -184,7 +184,7 @@ export function askHref(term: string): string {
 
 /**
  * The palette's first row, for anyone who holds the Ask page: hand the typed
- * text to the knowledge assistant as a question. Exact matching is what the
+ * text to Pyre Agent as a question. Exact matching is what the
  * rows below do; this is the semantic search — and the way to a real answer
  * when nothing below matched.
  */
@@ -194,13 +194,13 @@ export function askItem(pages: SearchPage[], term: string): SearchItem | null {
     key: 'ask',
     group: 'ask',
     href: askHref(term),
-    title: `Ask a question: “${term}”`,
-    hint: 'Knowledge assistant',
+    title: `Ask Pyre Agent: “${term}”`,
+    hint: 'Assistant',
   };
 }
 
 /**
- * The palette's rows in display order: the "Ask a question" row for anyone
+ * The palette's rows in display order: the "Ask Pyre Agent" row for anyone
  * who holds the Ask page, then pages (matched locally), then boards, then the
  * cards on them the server matched, then inventory items, then SOP documents
  * whose title matched,

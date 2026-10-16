@@ -7,12 +7,13 @@ two roles, chosen per session:
   coverage shifts (synced from Momence by the integrations app), everyone's
   time off, hours, and history patterns, then drafts a week of assignments the
   admin reviews on `/admin/schedule` (approve week, ✓/✗ per item, or discard);
-- the **knowledge assistant**, which answers staff questions ("What are the
-  benefits of cold plunging?", "When was the left tub last shocked?", "When
-  is my next shift?") from the SOP library, shift notes, the cold tub water
-  log, incident reports, and the staff schedule, citing the dashboard pages
-  it drew on. Staff reach it from
-  `/admin/sops/ask`.
+- the **knowledge assistant**, shown to staff as **Pyre Agent**, which
+  answers staff questions ("What are the benefits of cold plunging?", "When
+  was the left tub last shocked?", "When is my next shift?") from the SOP
+  library, shift notes, the cold tub water log, incident reports, and the
+  staff schedule, citing the dashboard pages it drew on — and, for people
+  with boards, gives goal status updates and proposes boards, tasks, and task
+  changes they apply from the chat. Staff reach it from `/admin/ask`.
 
 Jev (TypeSafe AI's evaluation model) is not hosted here: it is an AI
 Gateway model any app calls directly through `@pyre/jev`
@@ -102,6 +103,22 @@ never gets a shell.
   `agent/hooks/knowledge_audit.ts` write it from the event stream, so a
   closed browser tab never loses a record. Admins review it at
   `/admin/ask/log`.
+- **Goals and boards.** When the scope says `boards` (the person holds the
+  Boards tool or a `board:<slug>` grant), the role also gets
+  `get_goals_and_boards`, `read_board`, `find_cards`, and the `propose_*`
+  tools (`agent/lib/knowledge/boards.ts`). All of them call the integrations
+  app's `POST /api/agent/pyre` with the asker's email from the scope; that
+  route resolves their grants fresh on every call and owns the progress
+  math. Proposals never touch a board: each is stored in
+  `public.pyre_agent_actions` (migration `20261016161625_pyre_agent_actions`)
+  as the exact dashboard request to replay, drawn in the chat with Apply and
+  Dismiss, and applied by `/api/admin/agent-actions` through the board routes
+  as the person.
+- **Leaving and coming back.** The Pyre Agent page keeps the open
+  conversation in `?c=` and localStorage. On return it reloads the history
+  and, when the last question is still being answered, reattaches through the
+  ask route's resume mode, which replays the session's newest turn from its
+  `turn.started` and then streams live.
 
 ### Staff-scheduling drafter
 

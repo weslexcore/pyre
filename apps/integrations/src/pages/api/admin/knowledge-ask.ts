@@ -12,6 +12,11 @@
 //                                  otherwise has no stream position for
 //   GET  ?sessionId&token&startIndex → proxies the session's event stream
 //                                  as a reduced NDJSON feed the island renders
+//   GET  ?sessionId&token&resume=1 → the same feed for a conversation the
+//                                  island is coming back to: the newest turn
+//                                  replayed from its start (finished or not),
+//                                  then live — so a question sent before the
+//                                  person left the page picks up where it is
 //
 // The session runs as the asker: their SOP role, email, and page grants ride
 // in as the knowledge scope (lib/knowledge/scope.ts) and the agent's tools
@@ -34,6 +39,8 @@ import {
 } from '@/lib/knowledge/scope';
 import {
   type AskStreamEvent,
+  catchUpEvent,
+  createCatchUpState,
   createStreamReducerState,
   reduceStreamEvent,
   type UpstreamEvent,
@@ -167,12 +174,27 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get('sessionId') ?? '';
   const token = url.searchParams.get('token') ?? '';
-  const startIndex = Number.parseInt(url.searchParams.get('startIndex') ?? '0', 10);
+  const resume = url.searchParams.get('resume') === '1';
+  const startIndex = resume ? 0 : Number.parseInt(url.searchParams.get('startIndex') ?? '0', 10);
   if (!sessionId || !token || !Number.isFinite(startIndex) || startIndex < 0) {
     return json({ error: 'sessionId, token, and startIndex are required' }, 400);
   }
   if (!verifyAskSessionToken(token, sessionId, normalizeEmail(gate.user.email))) {
     return json({ error: 'Not your conversation' }, 403);
+  }
+
+  // Resuming replays from the first event and holds everything back until the
+  // replay reaches the log's length when the read began (stream.ts).
+  let catchUpTo = 0;
+  if (resume) {
+    const count = await countEveSessionEvents(config, sessionId);
+    if (count === null) {
+      return json(
+        { error: 'That conversation is no longer available — ask again to start a new one' },
+        404
+      );
+    }
+    catchUpTo = count;
   }
 
   const abort = new AbortController();
@@ -194,6 +216,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       let index = startIndex;
       let buffer = '';
       const reducerState = createStreamReducerState();
+      const catchUp = createCatchUpState(catchUpTo);
       let closed = false;
       const emit = (event: AskStreamEvent) => {
         if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
@@ -223,12 +246,13 @@ export const GET: APIRoute = async ({ cookies, request }) => {
             }
             index += 1;
             const reduced = reduceStreamEvent(event, index, reducerState);
-            if (!reduced) continue;
-            emit(reduced);
-            if (reduced.type === 'done') {
-              clearTimeout(timer);
-              finish();
-              return;
+            for (const out of catchUpEvent(catchUp, event, index, reduced)) {
+              emit(out);
+              if (out.type === 'done') {
+                clearTimeout(timer);
+                finish();
+                return;
+              }
             }
           }
           if (done) break;

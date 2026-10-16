@@ -128,6 +128,9 @@ export function reduceStreamEvent(
           : {}),
       };
     }
+    case 'turn.started':
+      state.blockText = '';
+      return null;
     case 'session.waiting':
       return { type: 'done', status: 'waiting', nextIndex };
     case 'turn.failed':
@@ -144,4 +147,52 @@ export function reduceStreamEvent(
     default:
       return null;
   }
+}
+
+/**
+ * Reattaching to a conversation whose latest turn may still be running — the
+ * person sent a message, left the page, and came back. The proxy replays the
+ * session from its first event and this keeps only the newest turn: each
+ * `turn.started` drops what was gathered so far, and nothing is emitted until
+ * the replay reaches `until` (the session's event count when the read began),
+ * at which point the newest turn goes out in one burst and the stream carries
+ * on live. Runs of deltas collapse to the last one, since each carries the
+ * block so far.
+ */
+export interface CatchUpState {
+  until: number;
+  buffer: AskStreamEvent[];
+  caughtUp: boolean;
+}
+
+export function createCatchUpState(until: number): CatchUpState {
+  return { until, buffer: [], caughtUp: until <= 0 };
+}
+
+/**
+ * Feed one upstream event (`index` is how many events have been read,
+ * counting this one) and its reduction; returns the events to emit now.
+ */
+export function catchUpEvent(
+  state: CatchUpState,
+  event: UpstreamEvent,
+  index: number,
+  reduced: AskStreamEvent | null
+): AskStreamEvent[] {
+  if (state.caughtUp) return reduced ? [reduced] : [];
+  if (event.type === 'turn.started') {
+    state.buffer = [];
+  } else if (reduced) {
+    const last = state.buffer[state.buffer.length - 1];
+    if (reduced.type === 'delta' && last?.type === 'delta') {
+      state.buffer[state.buffer.length - 1] = reduced;
+    } else {
+      state.buffer.push(reduced);
+    }
+  }
+  if (index < state.until) return [];
+  state.caughtUp = true;
+  const out = state.buffer;
+  state.buffer = [];
+  return out;
 }

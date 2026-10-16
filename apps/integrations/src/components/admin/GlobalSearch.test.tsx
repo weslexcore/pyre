@@ -71,8 +71,8 @@ describe('SearchResults with an Ask row', () => {
           key: 'ask',
           group: 'ask',
           href: '/admin/ask?q=cold',
-          title: 'Ask a question: “cold”',
-          hint: 'Knowledge assistant',
+          title: 'Ask Pyre Agent: “cold”',
+          hint: 'Assistant',
         },
         ...ITEMS,
       ]}

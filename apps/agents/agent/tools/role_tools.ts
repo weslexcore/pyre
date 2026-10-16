@@ -1,6 +1,8 @@
 // The model's tool set, resolved per session from its role (lib/role.ts):
-// scheduler sessions get the drafting tools, knowledge sessions get the
-// read-only knowledge-base tools, suggester sessions get their record's
+// scheduler sessions get the drafting tools, knowledge sessions (Pyre Agent)
+// get the read-only knowledge-base tools plus the goals-and-boards reads and
+// propose_* tools — which only store a proposal the person applies from the
+// chat (lib/knowledge/boards.ts) — suggester sessions get their record's
 // context plus save_suggestions, and none sees another's. Keeping every set
 // dynamic (rather than authoring the scheduler's statically) is what keeps
 // the write paths — save_proposal and save_suggestions — out of reach of a
@@ -29,6 +31,7 @@
 
 import { defineDynamic, defineTool } from 'eve/tools';
 import { z } from 'zod';
+import { findCards, getGoalsAndBoards, propose, readBoard } from '../lib/knowledge/boards';
 import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs';
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
@@ -249,6 +252,160 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return readIncident(scopeOf(ctx), input.reference);
+          },
+        }),
+        get_goals_and_boards: defineTool({
+          description:
+            "Every goal the person can see, open ones first, with where each stands: status, owner, target date and days left, pace (ahead, on track, behind, overdue), task tally (open, done, dropped, % done), and each KPI with its id, start, target, current value and when it was measured. Plus every board they can open, with its slug, goal, and open/total card counts, and whether they may create boards (canManageBoards). Call this first for any status update or planning question. Available only when the person holds the Boards tool or a board.",
+          inputSchema: z.object({}),
+          execute(_input, ctx) {
+            return getGoalsAndBoards(scopeOf(ctx));
+          },
+        }),
+        read_board: defineTool({
+          description:
+            'One board in full: its goal and KPIs, its columns (key, label, and kind: open, done, or dropped), its custom fields, and its cards — every open card plus what finished in the last 30 days — each with id, column, assignees, due date, overdue flag, what it is waiting on, a notes preview, and its url.',
+          inputSchema: z.object({
+            slug: z.string().min(1).max(60).describe('The board slug from get_goals_and_boards.'),
+          }),
+          execute(input, ctx) {
+            return readBoard(scopeOf(ctx), input.slug);
+          },
+        }),
+        find_cards: defineTool({
+          description:
+            'Search cards (tasks, leads) across every board the person can open. Open cards by default, overdue and soonest due first. Use for "what is on my plate", "what is overdue", "who is on the towel order", or to find a card before proposing a change to it.',
+          inputSchema: z.object({
+            query: z.string().max(200).optional().describe('Words that must all appear on the card.'),
+            board: z.string().max(60).optional().describe('Limit to one board, by slug.'),
+            assignee: z
+              .string()
+              .max(120)
+              .optional()
+              .describe('"me" for the person asking, or part of someone\'s name or email.'),
+            state: z.enum(['open', 'finished', 'all']).optional().describe('Default open.'),
+            dueBy: dateString.optional().describe('Only cards due on or before this date.'),
+            overdue: z.boolean().optional().describe('Only open cards past their due date.'),
+            limit: z.number().int().min(1).max(80).optional().describe('Max cards (default 30).'),
+          }),
+          execute(input, ctx) {
+            return findCards(scopeOf(ctx), input);
+          },
+        }),
+        propose_card: defineTool({
+          description:
+            'Propose a new card (task) on an existing board. It is shown to the person with Apply and Dismiss; nothing is created until they apply it. Name the board by slug, the column by key or label (omit for the first open column), people by name or email.',
+          inputSchema: z.object({
+            board: z.string().min(1).max(60).describe('Board slug.'),
+            title: z.string().min(1).max(200),
+            notes: z
+              .string()
+              .max(4000)
+              .optional()
+              .describe('Markdown: what done looks like, context, links.'),
+            column: z.string().max(60).optional(),
+            dueDate: dateString.optional(),
+            assignees: z.array(z.string().max(120)).max(10).optional(),
+            rationale: z
+              .string()
+              .max(600)
+              .describe('One or two sentences on why, for the person deciding.'),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'board_card.create', input);
+          },
+        }),
+        propose_card_update: defineTool({
+          description:
+            'Propose a change to an existing card: move it to another column (including a done or dropped one), set or clear its due date, put it on different people, rename it, replace its notes, or set or clear what it is waiting on. Only the fields given change. Applied only when the person presses Apply.',
+          inputSchema: z.object({
+            cardId: z.string().uuid().describe('The card id from find_cards or read_board.'),
+            column: z.string().max(60).optional().describe('Column key or label on the same board.'),
+            dueDate: dateString.nullable().optional().describe('null clears it.'),
+            assignees: z
+              .array(z.string().max(120))
+              .max(10)
+              .optional()
+              .describe('The full new list; [] unassigns everyone.'),
+            title: z.string().min(1).max(200).optional(),
+            notes: z.string().max(4000).optional().describe('Replaces the notes entirely.'),
+            waitingOn: z.string().max(200).nullable().optional().describe('null clears it.'),
+            rationale: z.string().max(600),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'board_card.update', input);
+          },
+        }),
+        propose_comment: defineTool({
+          description:
+            'Propose a comment on a card — a status note, a question for whoever is on it, a summary of what was decided here. Posted as the person, only when they press Apply.',
+          inputSchema: z.object({
+            cardId: z.string().uuid(),
+            note: z.string().min(1).max(4000),
+            rationale: z.string().max(600),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'board_card.comment', input);
+          },
+        }),
+        propose_board: defineTool({
+          description:
+            "Propose a new board: its name, columns (default To do, Doing, Done, Dropped), the goal it serves (an existing goal's id that has no board yet, or a new goal with a title and target date), and up to 15 starting cards. Only for people whose get_goals_and_boards says canManageBoards. Applied only when the person presses Apply.",
+          inputSchema: z.object({
+            name: z.string().min(1).max(80),
+            description: z.string().max(500).optional(),
+            cardNoun: z
+              .string()
+              .max(30)
+              .optional()
+              .describe('What one card is called: "task" (default), "lead", "event".'),
+            columns: z
+              .array(
+                z.object({
+                  label: z.string().min(1).max(40),
+                  kind: z.enum(['open', 'done', 'dropped']),
+                })
+              )
+              .min(2)
+              .max(12)
+              .optional(),
+            goalId: z.string().uuid().optional(),
+            goal: z
+              .object({
+                title: z.string().min(1).max(200),
+                description: z.string().max(2000).optional(),
+                targetDate: dateString.optional(),
+                status: z.enum(['planned', 'active']).optional(),
+              })
+              .optional(),
+            cards: z
+              .array(
+                z.object({
+                  title: z.string().min(1).max(200),
+                  notes: z.string().max(2000).optional(),
+                  column: z.string().max(40).optional(),
+                  dueDate: dateString.optional(),
+                  assignees: z.array(z.string().max(120)).max(10).optional(),
+                })
+              )
+              .max(15)
+              .optional(),
+            rationale: z.string().max(600),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'board.create', input);
+          },
+        }),
+        propose_kpi_measurement: defineTool({
+          description:
+            'Propose a new current value for a goal\'s KPI, when the person tells you the number ("we\'re at 140 members"). Never guess a number. Applied only when they press Apply.',
+          inputSchema: z.object({
+            kpiId: z.string().uuid().describe('The KPI id from get_goals_and_boards.'),
+            value: z.number(),
+            rationale: z.string().max(600),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'goal_kpi.measure', input);
           },
         }),
       };

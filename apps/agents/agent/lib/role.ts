@@ -78,6 +78,13 @@ export interface KnowledgeScope {
    * asker's own shifts through the staff row matching `email`.
    */
   schedule: boolean;
+  /**
+   * Whether they hold the Boards tool or any single board (goals, boards,
+   * and their cards). Which boards, and whether they may create one, the
+   * integrations app resolves from `email` on every call (/api/agent/pyre),
+   * so this only decides whether the board tools are offered.
+   */
+  boards: boolean;
 }
 
 /** The scope a knowledge session gets when the caller sends none: staff-level SOPs only. */
@@ -88,6 +95,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScope = {
   incidents: null,
   water: false,
   schedule: false,
+  boards: false,
 };
 
 function logScope(value: unknown): LogScope {
@@ -117,6 +125,7 @@ export function parseKnowledgeScope(raw: unknown): KnowledgeScope {
     incidents: logScope(v.incidents),
     water: v.water === true,
     schedule: v.schedule === true,
+    boards: v.boards === true,
   };
 }
 
