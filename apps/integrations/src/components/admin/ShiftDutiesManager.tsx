@@ -11,8 +11,11 @@
 //
 // Off-shift duties (fill the carboys every Monday) sit in their own group:
 // they're done on their days whether or not anyone works a shift, and each
-// day is handed to one person on the schedule board. A duty can require
-// training; then only the people marked trained on it here can be given it.
+// day is handed to one person on the schedule board.
+//
+// Every duty says who can do it: Anyone, or the people picked for it (stored
+// as requires_training plus staff_duty_training). Saving a duty needs one or
+// the other, so a new duty never lands without that choice made.
 
 import {
   DOW_LABELS,
@@ -70,8 +73,17 @@ interface DutyForm {
   sopId: string;
   /** Days of the week it's done (0 = Sunday); all seven for every day. */
   days: number[];
-  requiresTraining: boolean;
+  /** Anyone can do it; null until chosen on a new duty. */
+  anyone: boolean | null;
+  /** Who can do it when not anyone. */
+  staffIds: string[];
 }
+
+/** The "who can do it" choice is made: Anyone, or at least one person. */
+const whoChosen = (form: DutyForm) => form.anyone === true || form.staffIds.length > 0;
+
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+  JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 /** Set-up and break-down: the phases a duty can have an A/B side in. */
 const isHalfPhase = (phase: DutyPhaseKey) => phase === 'setup' || phase === 'breakdown';
@@ -89,10 +101,11 @@ const BLANK_FORM: DutyForm = {
   sessionDefault: '',
   sopId: '',
   days: EVERY_DAY,
-  requiresTraining: false,
+  anyone: null,
+  staffIds: [],
 };
 
-function formFor(duty: DutyView): DutyForm {
+function formFor(duty: DutyView, trained: string[]): DutyForm {
   return {
     label: duty.label,
     detail: duty.detail ?? '',
@@ -101,7 +114,8 @@ function formFor(duty: DutyView): DutyForm {
     sessionDefault: duty.sessionDefault ?? '',
     sopId: duty.sopId ?? '',
     days: duty.days ?? EVERY_DAY,
-    requiresTraining: duty.requiresTraining,
+    anyone: !duty.requiresTraining,
+    staffIds: trained,
   };
 }
 
@@ -116,7 +130,7 @@ function bodyFor(form: DutyForm): Record<string, unknown> {
     sessionDefault: isHalf && form.sessionDefault ? form.sessionDefault : null,
     sopId: form.sopId || null,
     days: normalizeDutyDays(form.days),
-    requiresTraining: form.requiresTraining,
+    requiresTraining: form.anyone !== true,
   };
 }
 
@@ -136,9 +150,7 @@ export function ShiftDutiesManager() {
     return map;
   }, [data]);
   const nameOf = (id: string) => staff.find((p) => p.id === id)?.display_name ?? 'Someone';
-  // The duty whose trained list is open for editing, and the picks so far.
-  const [trainingKey, setTrainingKey] = useState<string | null>(null);
-  const [trainingPicks, setTrainingPicks] = useState<ReadonlySet<string>>(new Set());
+  const trainedOf = (key: string) => trainedBy.get(key) ?? [];
 
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -196,22 +208,41 @@ export function ShiftDutiesManager() {
     if (!form) return;
     // Only send what changed, so an untouched side can't trip the one-per-side rule.
     const next = bodyFor(form);
-    const prev = bodyFor(formFor(duty));
+    const prev = bodyFor(formFor(duty, trainedOf(duty.key)));
     const changes = Object.fromEntries(
       Object.entries(next).filter(
         ([k, v]) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(v)
       )
     );
-    if (Object.keys(changes).length === 0) {
+    // The people go in first, so the duty is never restricted to nobody.
+    const peopleChanged = form.anyone !== true && !sameIds(form.staffIds, trainedOf(duty.key));
+    if (Object.keys(changes).length === 0 && !peopleChanged) {
       setEditing(null);
       setForm(null);
       return;
     }
-    if (await patch(duty.key, changes)) {
+    const ok = await mutate(duty.key, async () => {
+      if (peopleChanged) {
+        await sendJson(TRAINING_ENDPOINT, 'PUT', { key: duty.key, staffIds: form.staffIds });
+      }
+      if (Object.keys(changes).length > 0) {
+        await sendJson(ENDPOINT, 'PATCH', { key: duty.key, ...changes });
+      }
+    });
+    if (ok) {
       setEditing(null);
       setForm(null);
     }
   };
+
+  /** Add a duty, then who can do it (the key comes back from the add). */
+  const addDuty = (form: DutyForm) =>
+    mutate('new', async () => {
+      const { key } = await sendJson<{ key: string }>(ENDPOINT, 'POST', bodyFor(form));
+      if (form.anyone !== true) {
+        await sendJson(TRAINING_ENDPOINT, 'PUT', { key, staffIds: form.staffIds });
+      }
+    });
 
   const remove = async () => {
     if (!deleting) return;
@@ -222,97 +253,19 @@ export function ShiftDutiesManager() {
     if (ok) setDeleting(null);
   };
 
-  const saveTraining = async (key: string) => {
-    const ok = await mutate(key, () =>
-      sendJson(TRAINING_ENDPOINT, 'PUT', { key, staffIds: [...trainingPicks] })
-    );
-    if (ok) setTrainingKey(null);
-  };
-
-  /** Who is trained, and (for a manager) the picker to change it. */
-  const renderTraining = (duty: DutyView) => {
-    const trained = trainedBy.get(duty.key) ?? [];
-    if (trainingKey === duty.key) {
-      // Off-roster people stay listed only while they're still marked trained.
-      const options = staff.filter((p) => p.active || trainingPicks.has(p.id));
-      return (
-        <div className="mt-2 space-y-2 rounded border border-white/10 bg-white/[0.02] p-3">
-          <p className={labelClass}>Trained on {duty.label}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {options.map((p) => {
-              const on = trainingPicks.has(p.id);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={on}
-                  className={`rounded border px-2.5 py-1.5 text-xs transition-colors ${
-                    on
-                      ? 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/20 text-[var(--pyre-creme)]'
-                      : 'border-white/10 bg-white/5 text-white/50 hover:text-white'
-                  }`}
-                  onClick={() => {
-                    const next = new Set(trainingPicks);
-                    if (on) next.delete(p.id);
-                    else next.add(p.id);
-                    setTrainingPicks(next);
-                  }}
-                >
-                  {p.display_name}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={primaryButtonClass}
-              disabled={busy !== null}
-              onClick={() => void saveTraining(duty.key)}
-            >
-              {busy === duty.key ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              className={formButtonClass}
-              disabled={busy !== null}
-              onClick={() => setTrainingKey(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      );
-    }
+  /** "Anyone", or the people who can do it. */
+  const renderWho = (duty: DutyView) => {
+    const people = trainedOf(duty.key).map(nameOf).sort();
     return (
       <p className="mt-1 text-xs text-white/55">
-        {duty.requiresTraining ? (
-          trained.length > 0 ? (
-            <>Trained: {trained.map(nameOf).sort().join(', ')}</>
-          ) : (
-            <span className="text-[var(--pyre-red)]">
-              Requires training, and nobody is trained yet — it can't be assigned.
-            </span>
-          )
-        ) : trained.length > 0 ? (
-          <span className="text-white/40">
-            Anyone can do it · trained: {trained.map(nameOf).sort().join(', ')}
-          </span>
+        {!duty.requiresTraining ? (
+          <span className="text-white/40">Anyone can do it</span>
+        ) : people.length > 0 ? (
+          <>Can do it: {people.join(', ')}</>
         ) : (
-          <span className="text-white/35">Anyone can do it</span>
-        )}
-        {canManage && !duty.archived && (
-          <button
-            type="button"
-            className="ml-2 font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
-            disabled={busy !== null}
-            onClick={() => {
-              setTrainingKey(duty.key);
-              setTrainingPicks(new Set(trained));
-            }}
-          >
-            Who's trained
-          </button>
+          <span className="text-[var(--pyre-red)]">
+            Nobody is picked to do this yet, so it can't be assigned. Edit it to pick people.
+          </span>
         )}
       </p>
     );
@@ -338,7 +291,6 @@ export function ShiftDutiesManager() {
                 {(duty.days || duty.phase === 'off_shift') && (
                   <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>
                 )}
-                {duty.requiresTraining && <QuietBadge>Training required</QuietBadge>}
                 {duty.archived && <QuietBadge>Retired</QuietBadge>}
               </div>
               {duty.detail && <p className="mt-0.5 text-xs text-white/45">{duty.detail}</p>}
@@ -357,7 +309,7 @@ export function ShiftDutiesManager() {
                   <span className="text-white/40"> · usually with {defaultLabel}</span>
                 )}
               </p>
-              {renderTraining(duty)}
+              {renderWho(duty)}
               {canManage && (
                 <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30">
                   {duty.key} · {count} {duty.phase === 'off_shift' ? 'day' : 'assignment'}
@@ -395,7 +347,7 @@ export function ShiftDutiesManager() {
                   disabled={busy !== null}
                   onClick={() => {
                     setEditing(duty.key);
-                    setForm(formFor(duty));
+                    setForm(formFor(duty, trainedOf(duty.key)));
                   }}
                 >
                   Edit
@@ -429,6 +381,7 @@ export function ShiftDutiesManager() {
               onChange={setForm}
               sops={sops}
               sessionDuties={sessionDuties.filter((d) => d.key !== duty.key)}
+              staff={staff}
             />
             {(form.phase === 'off_shift') !== (duty.phase === 'off_shift') && count > 0 && (
               <p className="text-xs text-[var(--pyre-gold)]">
@@ -441,7 +394,9 @@ export function ShiftDutiesManager() {
               <button
                 type="button"
                 className={primaryButtonClass}
-                disabled={busy !== null || !form.label.trim() || form.days.length === 0}
+                disabled={
+                  busy !== null || !form.label.trim() || form.days.length === 0 || !whoChosen(form)
+                }
                 onClick={() => void saveEdit(duty)}
               >
                 {busy === duty.key ? 'Saving…' : 'Save'}
@@ -470,8 +425,9 @@ export function ShiftDutiesManager() {
         <AddDutyForm
           sops={sops}
           sessionDuties={sessionDuties}
+          staff={staff}
           busy={busy !== null}
-          onAdd={(body) => mutate('new', () => sendJson(ENDPOINT, 'POST', body))}
+          onAdd={addDuty}
         />
       )}
 
@@ -551,6 +507,7 @@ function DutyFields({
   onChange,
   sops,
   sessionDuties,
+  staff,
   phases = DUTY_PHASE_KEYS,
 }: {
   idPrefix: string;
@@ -558,6 +515,8 @@ function DutyFields({
   onChange: (form: DutyForm) => void;
   sops: SopOption[];
   sessionDuties: DutyDef[];
+  /** The roster to pick who can do it from. */
+  staff: StaffOption[];
   /** The phases it may be put in; all of them for a new duty. */
   phases?: readonly DutyPhaseKey[];
 }) {
@@ -676,21 +635,59 @@ function DutyFields({
                 : `Only offered on shifts ${formatDutyDays(form.days)}. A job done at set-up one day and break down another is two duties.`}
         </p>
       </fieldset>
-      <label className="flex items-start gap-2 sm:col-span-2">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={form.requiresTraining}
-          onChange={(e) => onChange({ ...form, requiresTraining: e.target.checked })}
-        />
-        <span>
-          <span className="text-sm text-[var(--pyre-creme)]">Requires training</span>
-          <span className="block text-xs text-white/40">
-            Only the people marked trained on it can be given it. Mark who's trained from the duty
-            list once it's saved.
-          </span>
-        </span>
-      </label>
+      <fieldset className="sm:col-span-2">
+        <legend className={labelClass}>Who can do it</legend>
+        <label className="mb-2 flex items-center gap-2 text-sm text-[var(--pyre-creme)]">
+          <input
+            type="checkbox"
+            checked={form.anyone === true}
+            onChange={(e) => onChange({ ...form, anyone: e.target.checked })}
+          />
+          Anyone
+        </label>
+        {form.anyone !== true && (
+          <div className="flex flex-wrap gap-1.5">
+            {/* Off-roster people stay listed only while they're still picked. */}
+            {staff
+              .filter((p) => p.active || form.staffIds.includes(p.id))
+              .map((p) => {
+                const on = form.staffIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    className={`rounded border px-2.5 py-1.5 text-xs transition-colors ${
+                      on
+                        ? 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/20 text-[var(--pyre-creme)]'
+                        : 'border-white/10 bg-white/5 text-white/50 hover:text-white'
+                    }`}
+                    onClick={() =>
+                      onChange({
+                        ...form,
+                        anyone: false,
+                        staffIds: on
+                          ? form.staffIds.filter((id) => id !== p.id)
+                          : [...form.staffIds, p.id],
+                      })
+                    }
+                  >
+                    {p.display_name}
+                  </button>
+                );
+              })}
+          </div>
+        )}
+        <p
+          className={`mt-1 text-xs ${whoChosen(form) ? 'text-white/40' : 'text-[var(--pyre-red)]'}`}
+        >
+          {form.anyone === true
+            ? 'Anyone on the roster can be given it.'
+            : whoChosen(form)
+              ? 'Only the people picked can be given it — on the board, by the scheduling agent, or when taking a sub.'
+              : 'Tick Anyone, or pick the people who can do it.'}
+        </p>
+      </fieldset>
       {isHalf && (
         <>
           <div>
@@ -741,13 +738,15 @@ function DutyFields({
 function AddDutyForm({
   sops,
   sessionDuties,
+  staff,
   busy,
   onAdd,
 }: {
   sops: SopOption[];
   sessionDuties: DutyDef[];
+  staff: StaffOption[];
   busy: boolean;
-  onAdd: (body: Record<string, unknown>) => Promise<boolean>;
+  onAdd: (form: DutyForm) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<DutyForm>(BLANK_FORM);
@@ -772,14 +771,15 @@ function AddDutyForm({
           onChange={setForm}
           sops={sops}
           sessionDuties={sessionDuties}
+          staff={staff}
         />
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             className={primaryButtonClass}
-            disabled={busy || !form.label.trim() || form.days.length === 0}
+            disabled={busy || !form.label.trim() || form.days.length === 0 || !whoChosen(form)}
             onClick={async () => {
-              if (await onAdd(bodyFor(form))) {
+              if (await onAdd(form)) {
                 setForm(BLANK_FORM);
                 setOpen(false);
               }

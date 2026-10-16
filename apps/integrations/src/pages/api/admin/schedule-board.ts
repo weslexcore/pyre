@@ -111,7 +111,8 @@ export interface ScheduleBoardPayload {
   /**
    * Who does each off-shift duty (fill the carboys, weigh the propane) on the
    * days in range. Everyone sees them, like the shift crews. Days a duty runs
-   * with no row here are open — see offShiftOccurrences.
+   * with no row here are open — see offShiftOccurrences. Agent drafts are
+   * included only with includeDrafts, like draft shift assignments.
    */
   dutyAssignments: DutyAssignmentRow[];
   /**
@@ -165,12 +166,20 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     db.from('time_off').select('*').order('created_at'),
     db.from('staff_stipends').select('*').order('created_at'),
     db.from('stipend_overrides').select('*').order('week_start'),
-    db
-      .from('duty_assignments')
-      .select('*')
-      .gte('duty_date', start)
-      .lte('duty_date', end)
-      .order('duty_date'),
+    includeDrafts
+      ? db
+          .from('duty_assignments')
+          .select('*')
+          .gte('duty_date', start)
+          .lte('duty_date', end)
+          .order('duty_date')
+      : db
+          .from('duty_assignments')
+          .select('*')
+          .gte('duty_date', start)
+          .lte('duty_date', end)
+          .eq('is_draft', false)
+          .order('duty_date'),
   ]);
   const firstError =
     staffRes.error ??

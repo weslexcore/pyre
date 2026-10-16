@@ -108,6 +108,7 @@ export const GET: APIRoute = async ({ request, url }) => {
           .from('duty_assignments')
           .select('*')
           .eq('staff_id', person.id)
+          .eq('is_draft', false)
           .gte('duty_date', start)
           .lte('duty_date', end),
   ]);

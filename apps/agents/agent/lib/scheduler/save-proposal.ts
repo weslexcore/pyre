@@ -61,7 +61,20 @@ export const saveProposalTool = defineTool({
           notes: z.string().max(500).nullish(),
         })
       )
-      .min(1),
+      .default([])
+      .describe('Who works the shifts. May be empty when every shift is already covered.'),
+    dutyAssignments: z
+      .array(
+        z.object({
+          dutyKey: z.string().min(1).describe("An off-shift duty's key from get_week_context"),
+          date: dateString.describe('A day from offShiftDays with no assignedStaffId'),
+          staffId: z.string().min(1),
+        })
+      )
+      .default([])
+      .describe(
+        "Who does each open off-shift duty day (get_week_context's offShiftDays without an assignedStaffId): one person per duty per day, someone in its trainedStaffIds when it requiresTraining, never someone in that day's offAllDay."
+      ),
   }),
   async execute(input, ctx) {
     const { status, body } = await postProposal({
@@ -82,6 +95,7 @@ export const saveProposalTool = defineTool({
         overfilled: body.overfilled ?? [],
         restViolations: body.restViolations ?? [],
         overShiftCap: body.overShiftCap ?? [],
+        dutyProblems: body.dutyProblems ?? [],
       };
     }
     return { saved: true, ...body };

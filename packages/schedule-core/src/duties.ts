@@ -545,6 +545,10 @@ export interface DutyAssignmentRow {
 	done_by: string | null;
 	created_by: string | null;
 	updated_by: string | null;
+	/** Set when the scheduler agent proposed it. */
+	proposal_id: string | null;
+	/** Proposed and awaiting review; only the review UI shows it. */
+	is_draft: boolean;
 	created_at: string;
 	updated_at: string;
 }

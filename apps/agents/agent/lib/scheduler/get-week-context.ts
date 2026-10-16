@@ -23,6 +23,7 @@ import {
   dutyRunsOn,
   formatDutyDays,
   isShiftDuty,
+  offShiftOccurrences,
   type ShiftDutyRow,
   sortCatalog,
   rollupHours,
@@ -65,7 +66,8 @@ export const getWeekContextTool = defineTool({
     const dayBefore = addDays(weekStart, -1);
     const dayAfter = addDays(weekEnd, 1);
 
-    const [staffRes, shiftsRes, timeOffRes, dutiesRes, bufferRes, trainingRes] = await Promise.all([
+    const [staffRes, shiftsRes, timeOffRes, dutiesRes, bufferRes, trainingRes, dutyDaysRes] =
+      await Promise.all([
       db.from('staff').select('*').eq('active', true).order('display_name'),
       db
         .from('shifts')
@@ -90,6 +92,14 @@ export const getWeekContextTool = defineTool({
         .in('key', ['arrive_before_min', 'leave_after_min']),
       // Who may hold the duties that require training (staff_duty_training).
       db.from('staff_duty_training').select('staff_id, duty_key'),
+      // Off-shift duty days handed out (live) over the history and the week:
+      // who usually does them, and which of this week's are already taken.
+      db
+        .from('duty_assignments')
+        .select('duty_key, duty_date, staff_id')
+        .gte('duty_date', historyStart)
+        .lte('duty_date', weekEnd)
+        .eq('is_draft', false),
     ]);
     for (const res of [staffRes, shiftsRes, timeOffRes]) {
       if (res.error) throw new Error(res.error.message);
@@ -99,13 +109,18 @@ export const getWeekContextTool = defineTool({
     const shifts = (shiftsRes.data ?? []) as ShiftRow[];
     const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
     // A failed read falls back to the built-in list rather than failing the draft.
-    // Off-shift duties (fill the carboys Monday) aren't held on a shift, so
-    // they never reach the drafter.
-    const duties: DutyDef[] = (
-      dutiesRes.error
-        ? DEFAULT_DUTY_CATALOG.filter((d) => !d.archived)
-        : sortCatalog(((dutiesRes.data ?? []) as ShiftDutyRow[]).map((r) => dutyDefFromRow(r, null)))
-    ).filter(isShiftDuty);
+    const allDuties: DutyDef[] = dutiesRes.error
+      ? DEFAULT_DUTY_CATALOG.filter((d) => !d.archived)
+      : sortCatalog(((dutiesRes.data ?? []) as ShiftDutyRow[]).map((r) => dutyDefFromRow(r, null)));
+    // Shift duties go on assignments; off-shift duties (fill the carboys
+    // Monday) are handed out by the day in `dutyAssignments`.
+    const duties = allDuties.filter(isShiftDuty);
+    const offShiftDuties = allDuties.filter((d) => !isShiftDuty(d));
+    const dutyDays = (dutyDaysRes.error ? [] : (dutyDaysRes.data ?? [])) as Array<{
+      duty_key: string;
+      duty_date: string;
+      staff_id: string;
+    }>;
     // Duty key -> the staff trained on it. A failed read leaves the lists
     // empty; the proposals endpoint still drops any duty given to someone
     // untrained, so the worst case is duties left for the admin to hand out.
@@ -271,6 +286,12 @@ export const getWeekContextTool = defineTool({
         byWeekday[String(weekday)] = (byWeekday[String(weekday)] ?? 0) + 1;
         for (const duty of a.duties ?? []) byDuty[duty] = (byDuty[duty] ?? 0) + 1;
       }
+      // Off-shift duty days they've done count under the same keys.
+      for (const d of dutyDays) {
+        if (d.staff_id === person.id && d.duty_date < weekStart) {
+          byDuty[d.duty_key] = (byDuty[d.duty_key] ?? 0) + 1;
+        }
+      }
       return { staffId: person.id, name: person.display_name, byLabel, byWeekday, byDuty };
     });
 
@@ -347,6 +368,32 @@ export const getWeekContextTool = defineTool({
         // dropped from the draft.
         requiresTraining: d.requiresTraining,
         ...(d.requiresTraining && { trainedStaffIds: trainedByDuty.get(d.key) ?? [] }),
+      })),
+      // Jobs done on their days whether or not anyone works a shift (fill the
+      // carboys Monday). Hand each open day in offShiftDays to one person in
+      // save_proposal's dutyAssignments.
+      offShiftDuties: offShiftDuties.map((d) => ({
+        key: d.key,
+        label: d.label,
+        detail: d.detail,
+        days: formatDutyDays(d.days),
+        requiresTraining: d.requiresTraining,
+        ...(d.requiresTraining && { trainedStaffIds: trainedByDuty.get(d.key) ?? [] }),
+      })),
+      // Every day this week an off-shift duty is done. assignedStaffId is
+      // set when someone already has it (leave those alone); offAllDay lists
+      // the people with time off covering the whole day.
+      offShiftDays: offShiftOccurrences(offShiftDuties, weekStart, weekEnd).map((o) => ({
+        dutyKey: o.duty.key,
+        date: o.date,
+        assignedStaffId:
+          dutyDays.find((d) => d.duty_key === o.duty.key && d.duty_date === o.date)?.staff_id ??
+          null,
+        offAllDay: staff
+          .filter(
+            (person) => availabilityFor(timeOff, person.id, o.date, 0, 24 * 60).status === 'busy'
+          )
+          .map((person) => person.id),
       })),
     };
   },

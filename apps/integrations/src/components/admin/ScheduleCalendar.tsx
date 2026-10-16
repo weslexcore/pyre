@@ -3,17 +3,23 @@
 // off as per-person colored markers along the cell bottom — so the month's
 // shape and everyone's availability read at a glance. Days the viewer works
 // are tinted gold, with their own name first in the block, and paydays carry
-// a label by the date. Read-only; editing happens on the Week board.
+// a label by the date. Off-shift duties (fill the carboys Monday) sit under
+// the shifts as sage lines: who has each, or "open" when nobody does yet.
+// Read-only; editing happens on the Week board.
 
 import {
   addDays,
   busyIntervalsFor,
+  DEFAULT_DUTY_CATALOG,
+  type DutyAssignmentRow,
+  type DutyDef,
   firstTentativeDate,
   formatCompactTime,
   formatShiftNotes,
   isTentativeShift,
   minutesToTime,
   missingShiftLead,
+  offShiftOccurrences,
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useMemo, useState } from 'react';
@@ -39,6 +45,8 @@ interface BoardData {
   selfStaffId?: string | null;
   /** Paydays in the fetched range, per the admin's pay schedule. */
   paydays?: string[];
+  /** Who does each off-shift duty on the days in range (live rows only). */
+  dutyAssignments?: DutyAssignmentRow[];
 }
 
 // Distinct per-person hues for the time-off markers, assigned by roster order.
@@ -174,6 +182,28 @@ export function ScheduleCalendar() {
 
   const selfId = data?.selfStaffId ?? null;
   const paydays = useMemo(() => new Set(data?.paydays ?? []), [data]);
+
+  // Off-shift duty days in the grid, each with whoever has it (null = open).
+  const { data: dutyData } = useCachedJson<{ duties: DutyDef[] }>('/api/admin/shift-duties');
+  const dutiesByDate = useMemo(() => {
+    const catalog = dutyData?.duties ?? DEFAULT_DUTY_CATALOG;
+    const rows = data?.dutyAssignments ?? [];
+    const map = new Map<string, Array<{ key: string; label: string; staffId: string | null }>>();
+    const add = (date: string, entry: { key: string; label: string; staffId: string | null }) =>
+      map.set(date, [...(map.get(date) ?? []), entry]);
+    for (const o of offShiftOccurrences(catalog, gridStart, gridEnd)) {
+      const row = rows.find((r) => r.duty_key === o.duty.key && r.duty_date === o.date);
+      add(o.date, { key: o.duty.key, label: o.duty.label, staffId: row?.staff_id ?? null });
+    }
+    // Days handed out that the list no longer has (retired, days changed).
+    for (const r of rows) {
+      if (!map.get(r.duty_date)?.some((e) => e.key === r.duty_key)) {
+        const label = catalog.find((d) => d.key === r.duty_key)?.label ?? r.duty_key;
+        add(r.duty_date, { key: r.duty_key, label, staffId: r.staff_id });
+      }
+    }
+    return map;
+  }, [dutyData, data, gridStart, gridEnd]);
 
   // Shifts the viewer is on — those blocks get the gold ring (the shift, not
   // its whole day cell: a day can hold slots they aren't working).
@@ -353,6 +383,12 @@ export function ScheduleCalendar() {
                     s.assignments.some((a) => staffFilter.has(a.staff_id))
                   );
                 }
+                let duties = dutiesByDate.get(date) ?? [];
+                if (!showPast && !monthIsPast && date < today) duties = [];
+                if (mineOnly && selfId) duties = duties.filter((d) => d.staffId === selfId);
+                if (staffFilter.size > 0) {
+                  duties = duties.filter((d) => d.staffId && staffFilter.has(d.staffId));
+                }
                 const markers = (timeOffByDate.get(date) ?? []).filter(
                   (m) => staffFilter.size === 0 || staffFilter.has(m.staff.id)
                 );
@@ -435,6 +471,38 @@ export function ScheduleCalendar() {
                       })}
                     </div>
 
+                    {duties.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {duties.map((duty) => (
+                          <a
+                            key={duty.key}
+                            href={`/admin/schedule?view=week&date=${date}`}
+                            title={`${duty.label} (off-shift) · ${
+                              duty.staffId
+                                ? (staffById.get(duty.staffId)?.display_name ?? '?')
+                                : 'nobody yet'
+                            }`}
+                            className="block truncate rounded-sm border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1 font-mono text-[10px] leading-4 text-[var(--pyre-sage)]"
+                          >
+                            {duty.label} ·{' '}
+                            {duty.staffId ? (
+                              <span
+                                className={
+                                  duty.staffId === selfId
+                                    ? 'font-bold text-[var(--pyre-gold)]'
+                                    : 'text-white/70'
+                                }
+                              >
+                                {staffById.get(duty.staffId)?.display_name ?? '?'}
+                              </span>
+                            ) : (
+                              <span className="text-[var(--pyre-red)]">open</span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
                     {markers.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {markers.map((marker) => (
@@ -485,6 +553,12 @@ export function ScheduleCalendar() {
           dashed = tentative (not locked or confirmed yet)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
+        {dutiesByDate.size > 0 && (
+          <span className="text-[var(--pyre-sage)]">
+            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 align-middle" />
+            off-shift duty (who has it, or open)
+          </span>
+        )}
         {paydays.size > 0 && (
           <span className="text-[var(--pyre-sage)]">
             <span className="mr-1 rounded-sm bg-[var(--pyre-sage)]/15 px-1 text-[9px] font-bold uppercase">

@@ -107,7 +107,8 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
     .from('duty_assignments')
     .select('*')
     .gte('duty_date', weekStart)
-    .lte('duty_date', weekEnd);
+    .lte('duty_date', weekEnd)
+    .eq('is_draft', false);
   if (dutyError) return { ...base, skipped: `duty-assignments-query-failed:${dutyError.message}` };
   const dutyAssignments = (dutyRows ?? []) as DutyAssignmentRow[];
   if (shifts.length === 0 && dutyAssignments.length === 0) {

@@ -6,7 +6,9 @@
 // and trained on it when the duty requires training — or takes them off. The
 // person it's assigned to (or a manager) ticks it done. A row someone already
 // holds stays visible even after the duty is retired or its days change, so
-// nothing assigned silently disappears.
+// nothing assigned silently disappears. A day the scheduler agent drafted
+// shows dashed with accept / reject, like its draft shift assignments;
+// picking someone in the select takes it live too.
 
 import {
   type DutyAssignmentRow,
@@ -38,6 +40,7 @@ export function OffShiftDuties({
   onAssign,
   onUnassign,
   onDone,
+  onDraft,
 }: {
   date: string;
   /** The off-shift duties done on `date` (offShiftOccurrences). */
@@ -54,6 +57,8 @@ export function OffShiftDuties({
   onAssign: (dutyKey: string, staffId: string) => void;
   onUnassign: (id: string) => void;
   onDone: (id: string, done: boolean) => void;
+  /** Accept (true) or reject an agent-drafted day. */
+  onDraft: (id: string, accept: boolean) => void;
 }) {
   const byKey = new Map(assignments.map((a) => [a.duty_key, a]));
   // Every duty done today, then any assigned one that no longer is.
@@ -75,8 +80,9 @@ export function OffShiftDuties({
           const def = dutyDef(catalog, key);
           const label = def?.label ?? key;
           const row = byKey.get(key);
+          const draft = !!row?.is_draft;
           const mine = !!row && row.staff_id === selfId;
-          const canTick = !!row && (canManage || mine);
+          const canTick = !!row && !draft && (canManage || mine);
           // Who can take it: active, and trained when it requires training.
           // Whoever has it now stays listed so the select shows them.
           const candidates = staff.filter(
@@ -84,7 +90,12 @@ export function OffShiftDuties({
               s.id === row?.staff_id || (s.active && isTrainedFor(catalog, training, s.id, key))
           );
           return (
-            <li key={key} className="flex flex-wrap items-center gap-2 text-xs">
+            <li
+              key={key}
+              className={`flex flex-wrap items-center gap-2 text-xs ${
+                draft ? 'rounded border border-dashed border-[var(--pyre-gold)]/50 px-1 py-0.5' : ''
+              }`}
+            >
               {canViewSops && def?.sopSlug ? (
                 <a
                   className={`${chipClass} underline decoration-[var(--pyre-sage)]/40 hover:text-[var(--pyre-creme)]`}
@@ -134,7 +145,32 @@ export function OffShiftDuties({
               {canManage && !row && (
                 <span className="font-mono text-[10px] text-[var(--pyre-gold)]">needs someone</span>
               )}
-              {row && (
+              {draft && row && canManage && (
+                <span className="flex items-center gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                    Draft
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded border border-white/10 bg-white/5 px-1.5 text-white/70 hover:text-white"
+                    title="Accept this draft"
+                    disabled={busy}
+                    onClick={() => onDraft(row.id, true)}
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-white/10 bg-white/5 px-1.5 text-[var(--pyre-red)]"
+                    title="Reject this draft"
+                    disabled={busy}
+                    onClick={() => onDraft(row.id, false)}
+                  >
+                    ✗
+                  </button>
+                </span>
+              )}
+              {row && !draft && (
                 <label
                   className={`flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide ${
                     row.done_at ? 'text-[var(--pyre-sage)]' : 'text-white/40'

@@ -9,6 +9,11 @@
 // to say it's done. Only an off-shift duty, on one of its days, to an active
 // person trained on it (when it requires training) can be assigned. Read
 // through GET /api/admin/schedule-board.
+//
+// A day the scheduler agent drafted is a draft row: assigning it by hand
+// (the drafted person or someone else) takes it live, the way editing a
+// draft shift assignment does. Drafts are accepted or rejected as a batch
+// through /api/admin/schedule-proposals.
 
 import { type DutyAssignmentRow, dutyRunsOn } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
@@ -18,6 +23,7 @@ import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, gateMutation, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { actorFromGate, logScheduleChange, staffNameOf } from '@/lib/schedule/change-log';
+import { resolveProposalIfDone } from '@/lib/schedule/draft-accept';
 import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 import { DUTY_KEY_RE } from '@/lib/schedule/duty-validate';
 import { DATE_RE, trainingError } from '@/lib/schedule/validate';
@@ -92,7 +98,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .maybeSingle();
   if (fetchError) return dbError(fetchError);
   const before = existing as DutyAssignmentRow | null;
-  if (before?.staff_id === staffId) return json({ assignment: before });
+  if (before?.staff_id === staffId && !before.is_draft) return json({ assignment: before });
 
   const email = normalizeEmail(gate.user.email);
   const now = new Date().toISOString();
@@ -104,6 +110,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           staff_id: staffId,
           done_at: null,
           done_by: null,
+          is_draft: false,
           updated_by: email,
           updated_at: now,
         })
@@ -125,14 +132,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, 'Someone was just assigned this — reload and try again');
 
   const assignment = data as DutyAssignmentRow;
+  if (before?.is_draft && before.proposal_id) await resolveProposalIfDone(db, before.proposal_id);
   await logScheduleChange(db, {
     actor: actorFromGate(gate),
     entityType: 'duty_assignment',
     entityId: assignment.id,
     action: before ? 'update' : 'create',
-    summary: before
-      ? `Gave ${duty.label} on ${date} to ${person.display_name} (was ${await staffNameOf(db, before.staff_id)})`
-      : `Gave ${duty.label} on ${date} to ${person.display_name}`,
+    summary: before?.is_draft
+      ? `Gave ${duty.label} on ${date} to ${person.display_name} (accepting the draft${
+          before.staff_id === staffId ? '' : ` for ${await staffNameOf(db, before.staff_id)}`
+        })`
+      : before
+        ? `Gave ${duty.label} on ${date} to ${person.display_name} (was ${await staffNameOf(db, before.staff_id)})`
+        : `Gave ${duty.label} on ${date} to ${person.display_name}`,
     details: { before, after: assignment },
   });
 
@@ -158,6 +170,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Not found' }, 404);
   const row = existing as DutyAssignmentRow;
+  if (row.is_draft) return json({ error: 'Accept the draft before updating it' }, 409);
 
   // The person it's assigned to, or anyone who manages the schedule.
   if (!hasScheduleManage(gate.access) && (await selfStaffId(db, gate)) !== row.staff_id) {
@@ -228,6 +241,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Not found' }, 404);
   const row = existing as DutyAssignmentRow;
+  if (row.is_draft && row.proposal_id) await resolveProposalIfDone(db, row.proposal_id);
 
   await logScheduleChange(db, {
     actor: actorFromGate(gate),

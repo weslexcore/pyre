@@ -1,12 +1,13 @@
 // Review actions for agent draft proposals, from the schedule board:
 //   approve      — accept the whole batch (draft rows go live)
 //   discard      — reject the whole batch (draft rows deleted)
-//   accept-item  — one draft shift/assignment goes live
-//   reject-item  — one draft shift/assignment is deleted
+//   accept-item  — one draft shift/assignment/off-shift duty goes live
+//   reject-item  — one draft shift/assignment/off-shift duty is deleted
 // Accepting an assignment on a still-draft shift accepts that shift too (a
 // live assignment must never point at an invisible shift). When a proposal
 // has no draft rows left after an item action, it auto-resolves to approved.
 
+import { dutyLabel } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
@@ -27,6 +28,7 @@ import {
   resolveProposalIfDone,
   settleOnCallForWeek,
 } from '@/lib/schedule/draft-accept';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 
 export const prerender = false;
 
@@ -94,6 +96,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
               .eq('proposal_id', proposalId)
               .eq('is_draft', true),
             db
+              .from('duty_assignments')
+              .update({ is_draft: false })
+              .eq('proposal_id', proposalId)
+              .eq('is_draft', true),
+            db
               .from('schedule_proposals')
               .update({ status: 'approved', decided_at: now })
               .eq('id', proposalId),
@@ -105,6 +112,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
               .eq('proposal_id', proposalId)
               .eq('is_draft', true),
             db.from('shifts').delete().eq('proposal_id', proposalId).eq('is_draft', true),
+            db.from('duty_assignments').delete().eq('proposal_id', proposalId).eq('is_draft', true),
             db
               .from('schedule_proposals')
               .update({ status: 'discarded', decided_at: now })
@@ -138,8 +146,45 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (action === 'accept-item' || action === 'reject-item') {
     const kind = body.kind;
     const id = body.id;
-    if ((kind !== 'shift' && kind !== 'assignment') || typeof id !== 'string' || !id) {
-      return json({ error: "kind ('shift'|'assignment') and id are required" }, 400);
+    if (
+      (kind !== 'shift' && kind !== 'assignment' && kind !== 'duty') ||
+      typeof id !== 'string' ||
+      !id
+    ) {
+      return json({ error: "kind ('shift'|'assignment'|'duty') and id are required" }, 400);
+    }
+
+    // A drafted off-shift duty day: no parent shift, no notice beyond the log.
+    if (kind === 'duty') {
+      const { data: dutyRow, error: dutyError } = await db
+        .from('duty_assignments')
+        .select('id, proposal_id, is_draft, duty_key, duty_date, staff_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (dutyError) return dbError(dutyError);
+      if (!dutyRow?.is_draft) return json({ error: 'Draft item not found' }, 404);
+      const accepted = action === 'accept-item';
+      if (accepted) {
+        const acceptError = await acceptDraftRow(db, {
+          kind: 'duty',
+          id,
+          proposalId: dutyRow.proposal_id as string | null,
+        });
+        if (acceptError) return json({ error: acceptError }, 500);
+      } else {
+        const { error } = await db.from('duty_assignments').delete().eq('id', id);
+        if (error) return dbError(error);
+        if (dutyRow.proposal_id) await resolveProposalIfDone(db, dutyRow.proposal_id as string);
+      }
+      await logScheduleChange(db, {
+        actor: actorFromGate(gate),
+        entityType: 'duty_assignment',
+        entityId: id,
+        action: accepted ? 'accept_item' : 'reject_item',
+        summary: `${accepted ? 'Accepted' : 'Rejected'} draft ${dutyLabel(await loadDutyCatalog(db), dutyRow.duty_key as string)} on ${dutyRow.duty_date} for ${await staffNameOf(db, dutyRow.staff_id as string)}`,
+        details: { proposalId: dutyRow.proposal_id },
+      });
+      return json({ ok: true });
     }
     const table = kind === 'shift' ? 'shifts' : 'shift_assignments';
 

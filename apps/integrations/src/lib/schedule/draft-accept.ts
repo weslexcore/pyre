@@ -20,14 +20,19 @@ const RESOLVE_ACTOR: ChangeActor = { kind: 'system', email: null, label: 'Draft 
 export async function acceptDraftRow(
   db: SupabaseClient,
   item: {
-    kind: 'shift' | 'assignment';
+    kind: 'shift' | 'assignment' | 'duty';
     id: string;
     /** The assignment's parent shift — required when kind is 'assignment'. */
     shiftId?: string;
     proposalId: string | null;
   }
 ): Promise<string | null> {
-  const table = item.kind === 'shift' ? 'shifts' : 'shift_assignments';
+  const table =
+    item.kind === 'shift'
+      ? 'shifts'
+      : item.kind === 'duty'
+        ? 'duty_assignments'
+        : 'shift_assignments';
   const { error } = await db.from(table).update({ is_draft: false }).eq('id', item.id);
   if (error) return error.message;
 
@@ -72,7 +77,7 @@ export async function settleOnCallForWeek(
  * open for the next action to close.
  */
 export async function resolveProposalIfDone(db: SupabaseClient, proposalId: string): Promise<void> {
-  const [shiftsLeft, assignmentsLeft] = await Promise.all([
+  const [shiftsLeft, assignmentsLeft, dutiesLeft] = await Promise.all([
     db
       .from('shifts')
       .select('id', { count: 'exact', head: true })
@@ -83,8 +88,14 @@ export async function resolveProposalIfDone(db: SupabaseClient, proposalId: stri
       .select('id', { count: 'exact', head: true })
       .eq('proposal_id', proposalId)
       .eq('is_draft', true),
+    db
+      .from('duty_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('proposal_id', proposalId)
+      .eq('is_draft', true),
   ]);
-  if (!shiftsLeft.error && !assignmentsLeft.error && !shiftsLeft.count && !assignmentsLeft.count) {
+  const left = [shiftsLeft, assignmentsLeft, dutiesLeft];
+  if (left.every((r) => !r.error && !r.count)) {
     const { data } = await db
       .from('schedule_proposals')
       .update({ status: 'approved', decided_at: new Date().toISOString() })

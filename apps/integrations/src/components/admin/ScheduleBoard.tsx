@@ -1990,6 +1990,13 @@ export function ScheduleBoard() {
                       onDone={(id, done) =>
                         void run(() => api('PATCH', '/api/admin/duty-assignments', { id, done }))
                       }
+                      onDraft={(id, accept) =>
+                        void proposalAction({
+                          action: accept ? 'accept-item' : 'reject-item',
+                          kind: 'duty',
+                          id,
+                        })
+                      }
                     />
                   )}
                 </section>

@@ -9,6 +9,11 @@
 // previous draft, and writes the batch as is_draft rows for review on
 // /admin/schedule.
 //
+// The batch may also hand out the week's off-shift duties (fill the carboys
+// Monday): `dutyAssignments`, one person per duty per day, only on days the
+// duty is done and nobody has yet, only to someone who can do it (trained,
+// when it requires training) and isn't off the whole day.
+//
 // It also works out who would be on call for each shift of the week if the
 // draft went live as-is (the same rule as the board's Auto on-call — see
 // lib/schedule/on-call.ts) and stores that on the proposal's summary as
@@ -38,6 +43,7 @@ import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
+import { checkDraftDuties, type DraftDuty } from '@/lib/schedule/draft-duties';
 import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 import { type OnCallRecommendation, recommendOnCall } from '@/lib/schedule/on-call';
 import { getShiftBufferSettings } from '@/lib/schedule/settings';
@@ -47,6 +53,7 @@ export const prerender = false;
 
 const MAX_SHIFTS = 40;
 const MAX_ASSIGNMENTS = 120;
+const MAX_DUTY_ASSIGNMENTS = 60;
 
 interface ConflictEntry {
   staffId: string;
@@ -94,11 +101,15 @@ export const POST: APIRoute = async ({ request }) => {
 
   const rawShifts = Array.isArray(body.shifts) ? body.shifts : [];
   const rawAssignments = Array.isArray(body.assignments) ? body.assignments : [];
+  const rawDuties = Array.isArray(body.dutyAssignments) ? body.dutyAssignments : [];
   if (rawShifts.length > MAX_SHIFTS) return json({ error: `At most ${MAX_SHIFTS} shifts` }, 400);
   if (rawAssignments.length > MAX_ASSIGNMENTS) {
     return json({ error: `At most ${MAX_ASSIGNMENTS} assignments` }, 400);
   }
-  if (rawAssignments.length === 0 && rawShifts.length === 0) {
+  if (rawDuties.length > MAX_DUTY_ASSIGNMENTS) {
+    return json({ error: `At most ${MAX_DUTY_ASSIGNMENTS} dutyAssignments` }, 400);
+  }
+  if (rawAssignments.length === 0 && rawShifts.length === 0 && rawDuties.length === 0) {
     return json({ error: 'Proposal is empty' }, 400);
   }
 
@@ -248,6 +259,44 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     draftAssignments.push({ shiftId, shiftKey, staffId, columns, date, startsAt, endsAt });
+  }
+
+  // --- Off-shift duty days ---
+  // Days already handed out live are the admin's; drafts of this week are
+  // superseded below, so they don't count.
+  let draftDuties: DraftDuty[] = [];
+  if (rawDuties.length > 0) {
+    const { data: takenRows, error: takenError } = await db
+      .from('duty_assignments')
+      .select('duty_key, duty_date')
+      .gte('duty_date', weekStart)
+      .lte('duty_date', weekEnd)
+      .eq('is_draft', false);
+    if (takenError) return dbError(takenError);
+    const checked = checkDraftDuties(rawDuties, {
+      catalog: dutyCatalog,
+      training: dutyTraining,
+      staffById,
+      timeOff,
+      weekStart,
+      weekEnd,
+      taken: new Set(
+        ((takenRows ?? []) as Array<{ duty_key: string; duty_date: string }>).map(
+          (r) => `${r.duty_key}:${r.duty_date}`
+        )
+      ),
+    });
+    if ('error' in checked) return json({ error: checked.error }, 400);
+    if ('problems' in checked) {
+      return json(
+        {
+          error: 'Some off-shift duty days can not be given as drafted — fix these and resubmit',
+          dutyProblems: checked.problems,
+        },
+        422
+      );
+    }
+    draftDuties = checked.duties;
   }
 
   // --- Hard time-off enforcement + conflict report ---
@@ -454,6 +503,7 @@ export const POST: APIRoute = async ({ request }) => {
       weekStart,
       shifts: draftShifts.length,
       assignments: draftAssignments.length,
+      dutyAssignments: draftDuties.length,
       conflicts,
       onCall,
     });
@@ -472,6 +522,7 @@ export const POST: APIRoute = async ({ request }) => {
     const deletes = [
       db.from('shift_assignments').delete().eq('proposal_id', prior.id).eq('is_draft', true),
       db.from('shifts').delete().eq('proposal_id', prior.id).eq('is_draft', true),
+      db.from('duty_assignments').delete().eq('proposal_id', prior.id).eq('is_draft', true),
       db
         .from('schedule_proposals')
         .update({ status: 'superseded', decided_at: new Date().toISOString() })
@@ -545,6 +596,21 @@ export const POST: APIRoute = async ({ request }) => {
     if (error) return dbError(error);
   }
 
+  if (draftDuties.length > 0) {
+    const { error } = await db.from('duty_assignments').insert(
+      draftDuties.map((d) => ({
+        duty_key: d.dutyKey,
+        duty_date: d.date,
+        staff_id: d.staffId,
+        created_by: 'scheduling-agent',
+        updated_by: 'scheduling-agent',
+        proposal_id: proposalId,
+        is_draft: true,
+      }))
+    );
+    if (error) return dbError(error, 'An off-shift duty day was assigned while drafting');
+  }
+
   // The rationale doubles as the agent's reply in the draft conversation
   // thread (keyed by Eve session id; see schedule_draft_messages). Dry runs
   // and rejected submissions return earlier, so only landed drafts speak.
@@ -566,7 +632,7 @@ export const POST: APIRoute = async ({ request }) => {
     entityType: 'proposal',
     entityId: proposalId,
     action: 'propose',
-    summary: `Proposed draft schedule for week of ${weekStart} (${draftShifts.length} shifts, ${draftAssignments.length} assignments)`,
+    summary: `Proposed draft schedule for week of ${weekStart} (${draftShifts.length} shifts, ${draftAssignments.length} assignments, ${draftDuties.length} off-shift duty days)`,
     details: { source, agentSessionId, superseded: (openProposals ?? []).map((p) => p.id) },
   });
 
@@ -577,6 +643,7 @@ export const POST: APIRoute = async ({ request }) => {
       weekStart,
       shifts: draftShifts.length,
       assignments: draftAssignments.length,
+      dutyAssignments: draftDuties.length,
       conflicts,
       onCall,
     },
