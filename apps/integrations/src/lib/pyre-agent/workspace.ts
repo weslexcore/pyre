@@ -12,6 +12,7 @@ import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PageAccess } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
+import { describeRepeat } from '@/lib/boards/recurrence';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { loadAllColumns, loadBoardBundle, loadBoards } from '@/lib/boards/store';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalKpiRow } from '@/lib/db';
@@ -143,6 +144,10 @@ function cardView(
     state: column?.kind ?? 'open',
     assignees: card.assignee_emails.map((email) => ({ name: personName(email, people), email })),
     dueDate: card.due_date,
+    repeats:
+      card.repeat_every && card.repeat_unit
+        ? describeRepeat({ every: card.repeat_every, unit: card.repeat_unit })
+        : null,
     overdue: open && card.due_date !== null && card.due_date < today,
     waitingOn: card.waiting_on,
     notes:

@@ -51,6 +51,19 @@ import { readSopForEdit, suggesterSopContents } from '../lib/suggester/sops';
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 
+/**
+ * A recurring task: finishing the card brings it back to the board's first
+ * open column, due one interval after its due date.
+ */
+const repeatRule = z
+  .object({
+    every: z.number().int().min(1).max(365).describe('How many units between rounds (1 = every).'),
+    unit: z.enum(['day', 'week', 'month', 'year']),
+  })
+  .describe(
+    'Makes it a recurring task: when it is finished it comes back, due one interval after its due date. Give dueDate as the first round; without one it starts due today.'
+  );
+
 function scopeOf(ctx: {
   session?: { auth?: Parameters<typeof resolveRole>[0] };
 }): KnowledgeScope {
@@ -294,7 +307,7 @@ export default defineDynamic({
         }),
         propose_card: defineTool({
           description:
-            'Propose a new card (task) on an existing board. It is shown to the person with Apply and Dismiss; nothing is created until they apply it. Name the board by slug, the column by key or label (omit for the first open column), people by name or email.',
+            'Propose a new card (task) on an existing board — one-off, or recurring with `repeat` (weekly restock, monthly deep clean). It is shown to the person with Apply and Dismiss; nothing is created until they apply it. Name the board by slug, the column by key or label (omit for the first open column), people by name or email.',
           inputSchema: z.object({
             board: z.string().min(1).max(60).describe('Board slug.'),
             title: z.string().min(1).max(200),
@@ -305,6 +318,7 @@ export default defineDynamic({
               .describe('Markdown: what done looks like, context, links.'),
             column: z.string().max(60).optional(),
             dueDate: dateString.optional(),
+            repeat: repeatRule.optional(),
             assignees: z.array(z.string().max(120)).max(10).optional(),
             rationale: z
               .string()
@@ -317,11 +331,15 @@ export default defineDynamic({
         }),
         propose_card_update: defineTool({
           description:
-            'Propose a change to an existing card: move it to another column (including a done or dropped one), set or clear its due date, put it on different people, rename it, replace its notes, or set or clear what it is waiting on. Only the fields given change. Applied only when the person presses Apply.',
+            'Propose a change to an existing card: move it to another column (including a done or dropped one), set or clear its due date, make it recurring or change or stop its repeat, put it on different people, rename it, replace its notes, or set or clear what it is waiting on. Only the fields given change. Applied only when the person presses Apply.',
           inputSchema: z.object({
             cardId: z.string().uuid().describe('The card id from find_cards or read_board.'),
             column: z.string().max(60).optional().describe('Column key or label on the same board.'),
             dueDate: dateString.nullable().optional().describe('null clears it.'),
+            repeat: repeatRule
+              .nullable()
+              .optional()
+              .describe('Make it recurring, change how often, or null to stop it repeating.'),
             assignees: z
               .array(z.string().max(120))
               .max(10)
@@ -385,6 +403,7 @@ export default defineDynamic({
                   notes: z.string().max(2000).optional(),
                   column: z.string().max(40).optional(),
                   dueDate: dateString.optional(),
+                  repeat: repeatRule.optional(),
                   assignees: z.array(z.string().max(120)).max(10).optional(),
                 })
               )

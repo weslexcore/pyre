@@ -18,6 +18,13 @@ import type { PageAccess } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { columnKeyOf } from '@/lib/boards/columns';
 import { listAssignable } from '@/lib/boards/people';
+import {
+  describeRepeat,
+  isRepeatUnit,
+  REPEAT_EVERY_MAX,
+  type RepeatRule,
+  repeatRuleOf,
+} from '@/lib/boards/recurrence';
 import { canReachGoal, loadBoardBySlug, loadCard, loadColumns } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import { parseBoardCreate, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
@@ -126,6 +133,43 @@ function dateInput(
   return fail(`${field} must be a YYYY-MM-DD date, or null to clear it`);
 }
 
+/**
+ * A repeat rule from the agent: { every, unit }, null to stop repeating, or
+ * undefined when absent. The board API takes the same shape as `repeat`.
+ */
+export function repeatInput(
+  value: unknown,
+  field: string
+): { ok: true; value: RepeatRule | null | undefined } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (value === null) return { ok: true, value: null };
+  const rule = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const every = typeof rule.every === 'number' ? rule.every : Number(rule.every ?? 1);
+  if (
+    !Number.isInteger(every) ||
+    every < 1 ||
+    every > REPEAT_EVERY_MAX ||
+    !isRepeatUnit(rule.unit)
+  ) {
+    return fail(
+      `${field} must be { every: 1–${REPEAT_EVERY_MAX}, unit: day, week, month, or year }, or null`
+    );
+  }
+  return { ok: true, value: { every, unit: rule.unit } };
+}
+
+/**
+ * A repeating card's next round is dated from its due date, so a new
+ * repeating card with none starts due today rather than drifting from
+ * whenever it happens to be finished.
+ */
+export function firstDueDate(
+  due: string | null | undefined,
+  repeat: RepeatRule | null | undefined
+) {
+  return due ?? (repeat ? todayEastern() : null);
+}
+
 async function liveBoard(
   db: SupabaseClient,
   access: PageAccess,
@@ -160,6 +204,9 @@ async function proposeCardCreate(
   }
   const due = dateInput(input.dueDate, 'dueDate');
   if (!due.ok) return due;
+  const repeat = repeatInput(input.repeat, 'repeat');
+  if (!repeat.ok) return repeat;
+  const dueDate = firstDueDate(due.value, repeat.value);
   const people = input.assignees === undefined ? null : await resolvePeople(input.assignees);
   if (people && !people.ok) return people;
 
@@ -168,7 +215,8 @@ async function proposeCardCreate(
     title: str(input.title),
     notesMd: str(input.notes),
     ...(column ? { columnId: column.id } : {}),
-    ...(due.value ? { dueDate: due.value } : {}),
+    ...(dueDate ? { dueDate } : {}),
+    ...(repeat.value ? { repeat: repeat.value } : {}),
     ...(people && people.emails.length > 0 ? { assigneeEmails: people.emails } : {}),
   };
   const parsed = parseCardCreate(body);
@@ -176,7 +224,10 @@ async function proposeCardCreate(
 
   const details = [
     column ? `In ${column.label}` : null,
-    due.value ? `Due ${due.value}` : null,
+    dueDate ? `${repeat.value ? 'First due' : 'Due'} ${dueDate}` : null,
+    repeat.value
+      ? `Repeats ${describeRepeat(repeat.value).toLowerCase()}: finishing it brings it back, due on the next date`
+      : null,
     people && people.labels.length > 0
       ? `On ${people.labels.join(', ')}`
       : board.default_assignee_emails.length > 0
@@ -241,6 +292,28 @@ async function proposeCardUpdate(
         ? `Clear the due date (was ${card.due_date})`
         : `Due ${due.value}${card.due_date ? ` (was ${card.due_date})` : ''}`
     );
+  }
+  const repeat = repeatInput(input.repeat, 'repeat');
+  if (!repeat.ok) return repeat;
+  if (repeat.value !== undefined) {
+    const current = repeatRuleOf(card);
+    const same =
+      repeat.value === null
+        ? current === null
+        : current?.every === repeat.value.every && current?.unit === repeat.value.unit;
+    if (!same) {
+      body.repeat = repeat.value;
+      details.push(
+        repeat.value === null
+          ? `Stop repeating (was ${describeRepeat(current as RepeatRule).toLowerCase()})`
+          : `Repeat ${describeRepeat(repeat.value).toLowerCase()}${current ? ` (was ${describeRepeat(current).toLowerCase()})` : ''}`
+      );
+      // Anchor a newly repeating card that has no date, as a new one is.
+      if (repeat.value && !card.due_date && body.dueDate === undefined) {
+        body.dueDate = todayEastern();
+        details.push(`First due ${body.dueDate}`);
+      }
+    }
   }
   if (input.assignees !== undefined) {
     const people = await resolvePeople(input.assignees);
@@ -418,6 +491,9 @@ async function proposeBoardCreate(
     const card = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     const due = dateInput(card.dueDate, `cards[${index}].dueDate`);
     if (!due.ok) return due;
+    const repeat = repeatInput(card.repeat, `cards[${index}].repeat`);
+    if (!repeat.ok) return repeat;
+    const dueDate = firstDueDate(due.value, repeat.value);
     const people = card.assignees === undefined ? null : await resolvePeople(card.assignees);
     if (people && !people.ok) return people;
     let key: string | null = null;
@@ -431,7 +507,8 @@ async function proposeBoardCreate(
       board: parsed.value.slug,
       title: str(card.title),
       notesMd: str(card.notes),
-      ...(due.value ? { dueDate: due.value } : {}),
+      ...(dueDate ? { dueDate } : {}),
+      ...(repeat.value ? { repeat: repeat.value } : {}),
       ...(people && people.emails.length > 0 ? { assigneeEmails: people.emails } : {}),
     };
     const checked = parseCardCreate(cardBody);
@@ -443,7 +520,7 @@ async function proposeBoardCreate(
       ...(key ? { resolveColumn: { board: parsed.value.slug, key } } : {}),
     });
     cardLines.push(
-      `Card: ${checked.value.title}${due.value ? ` (due ${due.value})` : ''}${people && people.labels.length > 0 ? ` — ${people.labels.join(', ')}` : ''}`
+      `Card: ${checked.value.title}${dueDate ? ` (${repeat.value ? 'first due' : 'due'} ${dueDate})` : ''}${repeat.value ? `, repeats ${describeRepeat(repeat.value).toLowerCase()}` : ''}${people && people.labels.length > 0 ? ` — ${people.labels.join(', ')}` : ''}`
     );
   }
 
