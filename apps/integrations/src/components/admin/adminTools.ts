@@ -697,6 +697,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     keywords: ['kanban', 'to do', 'in progress', 'done', 'cards', 'goals'],
   },
   {
+    href: '/admin/ask/routines',
+    title: 'Pyre Agent Routines',
+    parent: '/admin/ask',
+    keywords: ['schedule', 'recurring', 'weekly', 'summary', 'report', 'automation', 'routine'],
+  },
+  {
     href: '/admin/ask/log',
     title: 'Question Log',
     parent: '/admin/ask',

@@ -114,6 +114,15 @@ never gets a shell.
   as the exact dashboard request to replay, drawn in the chat with Apply and
   Dismiss, and applied by `/api/admin/agent-actions` through the board routes
   as the person.
+- **Routines.** People save requests on `/admin/ask/routines` to run on a
+  cadence (daily, chosen weekdays, or a day of the month, at an Eastern
+  hour). The integrations cron tick (`pyre-agent-routines`) opens each due
+  run as a knowledge session for the routine's owner, with
+  `x-pyre-routine-run: <run id>`; the channel stamps it on the session as
+  `routine`, and when the turn ends it reports to the integrations app's
+  `POST /api/agent/routines` (`agent/lib/knowledge/routines.ts`), which closes
+  the run and notifies the owner. Tables: `pyre_agent_routines`,
+  `pyre_agent_routine_runs` (migration `20261016170216_pyre_agent_routines`).
 - **Leaving and coming back.** The Pyre Agent page keeps the open
   conversation in `?c=` and localStorage. On return it reloads the history
   and, when the last question is still being answered, reattaches through the

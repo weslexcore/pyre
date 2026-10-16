@@ -19,6 +19,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'goal_activity',
   'agent_suggestion',
   'inventory_low',
+  'agent_routine',
 ];
 
 export function isNotificationKind(value: unknown): value is NotificationKind {
@@ -36,6 +37,7 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   goal_activity: 'Goals',
   agent_suggestion: 'Suggestion',
   inventory_low: 'Low stock',
+  agent_routine: 'Pyre Agent',
 };
 
 /**
@@ -86,6 +88,10 @@ export const KIND_DETAILS: Record<
     label: 'Low stock',
     description: 'Inventory items that have dropped to their re-order level.',
     adminOnly: true,
+  },
+  agent_routine: {
+    label: 'Pyre Agent routines',
+    description: 'A routine you saved for Pyre Agent has run and its answer is ready.',
   },
 };
 

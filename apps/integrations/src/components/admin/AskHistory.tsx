@@ -124,16 +124,22 @@ export function AskHistory({
         ))}
       </nav>
 
-      {isAdmin && (
-        <div className="shrink-0 border-t border-white/10 p-3">
+      <div className="shrink-0 space-y-1.5 border-t border-white/10 p-3">
+        <a
+          href="/admin/ask/routines"
+          className="block font-mono text-[11px] uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
+        >
+          Routines →
+        </a>
+        {isAdmin && (
           <a
             href="/admin/ask/log"
-            className="font-mono text-[11px] uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
+            className="block font-mono text-[11px] uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
           >
             Review everyone's questions →
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

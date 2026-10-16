@@ -32,6 +32,7 @@ import {
   auditTrailResult,
   auditTurnStarted,
 } from '../lib/knowledge/audit';
+import { reportRoutineEnded } from '../lib/knowledge/routines';
 import { reportTurnEnded } from '../lib/suggester/report';
 import {
   AGENT_HEADER,
@@ -39,7 +40,9 @@ import {
   parseKnowledgeScope,
   parseSuggestRun,
   parseSuggestSource,
+  ROUTINE_RUN_HEADER,
   resolveRole,
+  routineRunOf,
   SCOPE_HEADER,
   SUGGEST_RUN_HEADER,
   SUGGEST_SOURCE_HEADER,
@@ -110,10 +113,18 @@ export default eveChannel({
     // Normalise through the parser so the stored attribute is always a
     // well-formed scope, whatever the header carried.
     const scope = parseKnowledgeScope(ctx.eve.request.headers.get(SCOPE_HEADER));
+    // A saved routine's run (Pyre Agent routines): reported back on when the
+    // turn ends, so its owner is told the answer is ready.
+    const routine = parseSuggestRun(ctx.eve.request.headers.get(ROUTINE_RUN_HEADER));
     return {
       auth: {
         ...caller,
-        attributes: { ...caller.attributes, agent: 'knowledge', scope: JSON.stringify(scope) },
+        attributes: {
+          ...caller.attributes,
+          agent: 'knowledge',
+          scope: JSON.stringify(scope),
+          ...(routine ? { routine } : {}),
+        },
       },
     };
   },
@@ -183,6 +194,8 @@ export default eveChannel({
       }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'answered');
+      const routine = routineRunOf(ctx.session.auth);
+      if (routine) await reportRoutineEnded(routine, ctx.session.id);
     },
     async 'turn.failed'(data, _channel, ctx) {
       const run = suggestRunOf(ctx);
@@ -192,6 +205,8 @@ export default eveChannel({
       }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'failed', `${data.code}: ${data.message}`);
+      const routine = routineRunOf(ctx.session.auth);
+      if (routine) await reportRoutineEnded(routine, ctx.session.id, `${data.code}: ${data.message}`);
     },
     async 'turn.cancelled'(data, _channel, ctx) {
       const run = suggestRunOf(ctx);
@@ -201,6 +216,8 @@ export default eveChannel({
       }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'cancelled');
+      const routine = routineRunOf(ctx.session.auth);
+      if (routine) await reportRoutineEnded(routine, ctx.session.id, 'The run was cancelled');
     },
   },
 });

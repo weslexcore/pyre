@@ -44,6 +44,12 @@ import {
   trailWithResult,
   trailWithThought,
 } from '@/lib/knowledge/trail';
+import {
+  CONVERSATION_PARAM,
+  readStored,
+  type StoredConversation,
+  writeStored,
+} from '@/lib/pyre-agent/conversation';
 import { type ActionView, isProposeTool, proposalIdOf } from '@/lib/pyre-agent/types';
 import { AgentActions } from './AgentActions';
 import { AskHistory } from './AskHistory';
@@ -87,40 +93,6 @@ interface ConversationPayload {
 
 const HISTORY_URL = '/api/admin/knowledge-history';
 const ACTIONS_URL = '/api/admin/agent-actions';
-
-/** Which conversation is open, so leaving the page and coming back lands in it. */
-const STORAGE_KEY = 'pyre-agent:conversation';
-/** The URL parameter naming the open conversation. */
-const CONVERSATION_PARAM = 'c';
-
-interface StoredConversation {
-  sessionId: string;
-  token: string;
-  /** A question sent but maybe not logged yet — shown if the history has nothing. */
-  pending?: string;
-}
-
-function readStored(): StoredConversation | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<StoredConversation>;
-    return typeof value.sessionId === 'string' && typeof value.token === 'string'
-      ? { sessionId: value.sessionId, token: value.token, pending: value.pending }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(value: StoredConversation | null): void {
-  try {
-    if (value) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    else window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage unavailable (private mode): the URL still carries the conversation.
-  }
-}
 
 /** Put the open conversation in the URL (or take it out) without a navigation. */
 function writeConversationParam(sessionId: string | null): void {
@@ -822,10 +794,18 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
             <ol className="mx-auto max-w-3xl space-y-5">
               {turns.map((turn) => (
                 <li key={turn.id} className="space-y-3">
-                  <div className="flex justify-end">
+                  <div className="flex flex-col items-end">
                     <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-4 py-2 text-sm text-[var(--pyre-creme)]">
                       {turn.question}
                     </p>
+                    {turn.status === 'done' && (
+                      <a
+                        href={`/admin/ask/routines?prompt=${encodeURIComponent(turn.question)}`}
+                        className="mt-1 font-mono text-[10px] uppercase tracking-wide text-white/30 hover:text-[var(--pyre-gold)]"
+                      >
+                        Save as routine
+                      </a>
+                    )}
                   </div>
                   <div className="flex justify-start">
                     <div className="max-w-[95%] rounded-2xl rounded-bl-sm border border-white/10 bg-white/5 px-4 py-3">

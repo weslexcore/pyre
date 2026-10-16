@@ -132,6 +132,13 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Pyre Agent routines: requests people saved to run on a cadence. Starts
+    // each one that is due as a conversation in its owner's history, and
+    // settles runs the agent never reported back on. Hour granularity, Eastern.
+    name: 'pyre-agent-routines',
+    run: async (ctx) => (await import('@/lib/pyre-agent/routines')).runDueRoutines(ctx),
+  },
+  {
     // Monday morning: each employee's locked-in shifts for the week ahead,
     // one deep link per shift. Runs after sync-shifts so the roundup reflects
     // the latest Momence coverage. No-op on every other day/hour.

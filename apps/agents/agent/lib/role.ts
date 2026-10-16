@@ -19,6 +19,8 @@ export const SCOPE_HEADER = 'x-pyre-knowledge-scope';
 /** Suggester sessions: the suggestion run to save into, and the record it is about. */
 export const SUGGEST_RUN_HEADER = 'x-pyre-suggest-run';
 export const SUGGEST_SOURCE_HEADER = 'x-pyre-suggest-source';
+/** Knowledge sessions a saved routine opened: the run to report back on when the turn ends. */
+export const ROUTINE_RUN_HEADER = 'x-pyre-routine-run';
 
 /** The record types a suggester session can be about (the integrations app's sources). */
 export const SUGGEST_SOURCE_TYPES = ['shift_note'] as const;
@@ -166,6 +168,16 @@ export function resolveRole(auth: SessionAuth | undefined): {
     default:
       return { role: 'scheduler', scope: { ...DEFAULT_KNOWLEDGE_SCOPE }, suggest: null };
   }
+}
+
+/**
+ * The routine run a knowledge session was opened for, or null for a person's
+ * own conversation. Read from the initiator only, like the role.
+ */
+export function routineRunOf(auth: SessionAuth | undefined): string | null {
+  const principal = auth?.initiator ?? auth?.current ?? null;
+  if (attribute(principal, 'agent') !== 'knowledge') return null;
+  return parseSuggestRun(attribute(principal, 'routine'));
 }
 
 /**

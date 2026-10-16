@@ -1,0 +1,17 @@
+---
+// Pyre Agent routines: requests saved to run on a cadence — "every Monday at
+// 8am, summarize last week's shift notes for the team update". Each run is a
+// conversation in the person's own Pyre Agent history, and the bell says
+// when it is ready. Everyone with the Ask page grant keeps their own (the
+// page grant reaches this path through AdminLayout's prefix rule; the API,
+// /api/admin/agent-routines, checks it on every request).
+import { AgentRoutines } from '@/components/admin/AgentRoutines';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Routines"
+  subtitle="Requests Pyre Agent runs for you on a schedule — each answer lands in your conversations and the bell tells you when it is ready"
+>
+  <AgentRoutines client:load />
+</AdminLayout>

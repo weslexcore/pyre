@@ -32,42 +32,89 @@ export interface KnowledgeScope {
 /** Request headers that turn a pyre-agents session into a knowledge session. */
 export const KNOWLEDGE_AGENT_HEADER = 'x-pyre-agent';
 export const KNOWLEDGE_SCOPE_HEADER = 'x-pyre-knowledge-scope';
+/** A routine run's id, on sessions a routine opens, so the agent reports back when it ends. */
+export const ROUTINE_RUN_HEADER = 'x-pyre-routine-run';
 
-export async function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope> {
-  const email = normalizeEmail(gate.user.email);
-  const role = await getSopRole(email, gate.access);
+export function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope> {
+  return knowledgeScopeForAccess(gate.user.email, gate.access);
+}
+
+/**
+ * The same scope for a person by email and access, with no request behind it
+ * — a scheduled routine runs as its owner from the cron tick.
+ */
+export async function knowledgeScopeForAccess(
+  rawEmail: string,
+  access: AdminGate['access']
+): Promise<KnowledgeScope> {
+  const email = normalizeEmail(rawEmail);
+  const role = await getSopRole(email, access);
   return {
     role,
     email,
     // Shift notes: only with the page; then admins read every note, everyone
     // else the shared notes plus their own admin-only ones ('mine').
-    shiftNotes: canViewPage(gate.access, SHIFT_NOTES_HREF)
-      ? gate.access.isAdmin
-        ? 'all'
-        : 'mine'
-      : null,
+    shiftNotes: canViewPage(access, SHIFT_NOTES_HREF) ? (access.isAdmin ? 'all' : 'mine') : null,
     // Incidents: incidents:manage (or admin) reads the whole log, a plain page
     // grant is reporter-level — only the reports they filed.
-    incidents: hasIncidentsManage(gate.access)
+    incidents: hasIncidentsManage(access)
       ? 'all'
-      : canViewPage(gate.access, '/admin/incidents')
+      : canViewPage(access, '/admin/incidents')
         ? 'mine'
         : null,
-    water: canViewPage(gate.access, '/admin/water'),
+    water: canViewPage(access, '/admin/water'),
     // Schedule: a plain page grant already shows every shift and who is on
     // it (names only — emails and pay stay on the manage/admin side, and the
     // agent never reads them), so the tool needs no all/mine split.
-    schedule: canViewPage(gate.access, '/admin/schedule'),
-    boards: canViewBoardsTool(gate.access),
+    schedule: canViewPage(access, '/admin/schedule'),
+    boards: canViewBoardsTool(access),
   };
 }
 
-export function knowledgeHeaders(scope: KnowledgeScope): Record<string, string> {
+export function knowledgeHeaders(
+  scope: KnowledgeScope,
+  routineRunId?: string
+): Record<string, string> {
   return {
     [KNOWLEDGE_AGENT_HEADER]: 'knowledge',
     [KNOWLEDGE_SCOPE_HEADER]: JSON.stringify(scope),
+    ...(routineRunId ? { [ROUTINE_RUN_HEADER]: routineRunId } : {}),
   };
 }
+
+/**
+ * The message that carries a routine's request into a fresh session. The
+ * request rides in the same <staff-question> block a typed question does, so
+ * the audit log and the history show it as the question; the lead tells the
+ * agent nobody is waiting on the other end and when it last ran.
+ */
+export function buildRoutineMessage(
+  routine: { title: string; prompt: string },
+  lastRunAt: string | null
+): string {
+  const since = lastRunAt
+    ? `It last ran ${lastRunAt} (UTC); where the request says "since last time", that is the window.`
+    : 'This is its first run.';
+  return (
+    `This is a scheduled request the staff member saved as "${sanitizeQuestion(routine.title)}". ` +
+    'Nobody is watching it run: do not ask questions back — make reasonable assumptions, say ' +
+    'what they were, and deliver the complete answer in one reply. ' +
+    `${since} Answer it per your instructions, with links to what you used.\n` +
+    `<staff-question>\n${sanitizeRoutinePrompt(routine.prompt)}\n</staff-question>`
+  );
+}
+
+/** sanitizeQuestion's rules at the routine length. */
+export function sanitizeRoutinePrompt(raw: string): string {
+  return raw
+    .replace(/<\/?staff-question>?/gi, '')
+    .replace(CONTROL_CHARS, '')
+    .trim()
+    .slice(0, ROUTINE_PROMPT_MAX)
+    .trim();
+}
+
+const ROUTINE_PROMPT_MAX = 2000;
 
 import { normalizeEmail } from '@/lib/email/address';
 import { MAX_QUESTION_LENGTH } from './question';

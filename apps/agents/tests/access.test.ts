@@ -6,7 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { canViewSop, type SopRow } from '../agent/lib/knowledge/sops';
-import { DEFAULT_KNOWLEDGE_SCOPE, parseKnowledgeScope, resolveRole } from '../agent/lib/role';
+import {
+  DEFAULT_KNOWLEDGE_SCOPE,
+  parseKnowledgeScope,
+  resolveRole,
+  routineRunOf,
+} from '../agent/lib/role';
 
 const principal = (attributes: Record<string, string>) => ({
   authenticator: 'channel-secret',
@@ -136,5 +141,25 @@ describe('canViewSop', () => {
     expect(canViewSop(lead, archived)).toBe(false);
     expect(canViewSop(admin, archived)).toBe(true);
     expect(canViewSop(admin, sop({ view_roles: [], edit_roles: [] }))).toBe(true);
+  });
+});
+
+describe('routineRunOf', () => {
+  const run = '6f1c2a9e-3b7d-4c55-9a10-2f4e8d1b7c33';
+
+  it('reads the routine run off a knowledge session it opened', () => {
+    expect(
+      routineRunOf({ initiator: principal({ agent: 'knowledge', routine: run }), current: principal({}) })
+    ).toBe(run);
+  });
+
+  it('is null for a person’s own conversation, another role, or a malformed id', () => {
+    expect(routineRunOf({ initiator: principal({ agent: 'knowledge' }), current: principal({}) })).toBeNull();
+    expect(
+      routineRunOf({ initiator: principal({ agent: 'suggester', routine: run }), current: principal({}) })
+    ).toBeNull();
+    expect(
+      routineRunOf({ initiator: principal({ agent: 'knowledge', routine: 'x' }), current: principal({}) })
+    ).toBeNull();
   });
 });
