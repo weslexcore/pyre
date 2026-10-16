@@ -3,11 +3,16 @@
 // picker the SOP access settings use, a pin toggle, and — for a new message —
 // whether to email it to the audience too (on by default). A message that
 // hasn't gone out yet can also be saved as a draft, kept private or shared
-// with other admins to work on together. Admin-only by the routes; the parent
+// with other admins to work on together. A new message can start from a
+// template (lib/messages/templates fills its date placeholders); the
+// template editor reuses this form too. Admin-only by the routes; the parent
 // decides what "save" and "save draft" mean (create or update).
 import { useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
+import type { AdminMessageTemplateRow } from '@/lib/db';
 import { roleIsNotified } from '@/lib/messages/access';
+import { fillPlaceholders } from '@/lib/messages/templates';
 import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
 import { LinkTextarea } from './LinkTextarea';
@@ -27,6 +32,20 @@ export interface MessageDraft {
 }
 
 export const EVERYONE: SopRole[] = ['staff', 'shift_lead', 'admin'];
+
+/** A template copied into a fresh message, its placeholders filled for today. */
+export function draftFromTemplate(
+  template: AdminMessageTemplateRow,
+  base: MessageDraft
+): MessageDraft {
+  return {
+    ...base,
+    title: fillPlaceholders(template.title),
+    bodyMd: fillPlaceholders(template.body_md),
+    audience: { roles: template.audience_roles.slice(), emails: template.audience_emails.slice() },
+    pinned: template.pinned,
+  };
+}
 
 export function emptyDraft(): MessageDraft {
   return {
@@ -99,6 +118,8 @@ export function MessageComposer({
   submitLabel,
   offerEmail = false,
   authorEmail,
+  templates,
+  submitDisabled = false,
   onSubmit,
   onSaveDraft,
   onCancel,
@@ -112,6 +133,10 @@ export function MessageComposer({
   offerEmail?: boolean;
   /** The draft's author — left out of the sharing picker, they always have it. */
   authorEmail?: string;
+  /** Offer "Start from a template" (new messages only). */
+  templates?: AdminMessageTemplateRow[];
+  /** Hold the submit buttons off for a reason outside the form (a blank template name). */
+  submitDisabled?: boolean;
   onSubmit: (draft: MessageDraft) => void;
   /** Offer "Save draft" and the sharing picker (messages not yet sent). */
   onSaveDraft?: (draft: MessageDraft) => void;
@@ -121,7 +146,27 @@ export function MessageComposer({
   const [preview, setPreview] = useState(false);
   const hasAudience = draft.audience.roles.length > 0 || draft.audience.emails.length > 0;
   const canSubmit =
-    draft.title.trim().length > 0 && draft.bodyMd.trim().length > 0 && hasAudience && !busy;
+    draft.title.trim().length > 0 &&
+    draft.bodyMd.trim().length > 0 &&
+    hasAudience &&
+    !busy &&
+    !submitDisabled;
+
+  const applyTemplate = async (id: string) => {
+    const template = templates?.find((t) => t.id === id);
+    if (!template) return;
+    const written = draft.title.trim().length > 0 || draft.bodyMd.trim().length > 0;
+    if (
+      written &&
+      !(await confirmAction({
+        title: `Replace what you've written with "${template.name}"?`,
+        confirmLabel: 'Replace',
+      }))
+    ) {
+      return;
+    }
+    setDraft((d) => draftFromTemplate(template, d));
+  };
   // Who a new message will ping, by the same rule the server fans out with.
   const sent = {
     audience_roles: draft.audience.roles,
@@ -142,6 +187,31 @@ export function MessageComposer({
         if (canSubmit) onSubmit(draft);
       }}
     >
+      {templates && templates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor="message-template"
+            className="font-mono text-[10px] uppercase tracking-wide text-white/40"
+          >
+            Start from a template
+          </label>
+          <select
+            id="message-template"
+            className={compactInputClass}
+            value=""
+            disabled={busy}
+            onChange={(e) => void applyTemplate(e.target.value)}
+          >
+            <option value="">Choose…</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <input
         type="text"
         className={`${compactInputClass} w-full`}

@@ -609,6 +609,25 @@ export interface AdminMessageRow {
   updated_at: string;
 }
 
+// A reusable starting point for an admin message (see the message templates
+// migration). Placeholders in title/body are filled by lib/messages/templates.
+export interface AdminMessageTemplateRow {
+  id: string;
+  /** What the picker calls it ("Weekly update"); unique ignoring case. */
+  name: string;
+  title: string;
+  body_md: string;
+  audience_roles: ('staff' | 'shift_lead' | 'admin')[];
+  audience_emails: string[];
+  pinned: boolean;
+  /** Session email of the admin who made it. */
+  created_by: string;
+  /** Session email of the last admin to edit it; null until edited. */
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // One reply in a message's thread — anyone who can see the message may
 // answer; editing and deleting is author-or-admin.
 export interface AdminMessageReplyRow {

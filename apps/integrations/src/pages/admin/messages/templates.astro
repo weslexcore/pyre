@@ -1,0 +1,29 @@
+---
+// Message templates: the reusable starting points admins pick from when
+// writing a message. Admins only; everyone else is told so here, and
+// /api/admin/message-templates refuses them on every request.
+import { MessageTemplates } from '@/components/admin/MessageTemplates';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { normalizeEmail } from '@/lib/email/address';
+import { getSopRole } from '@/lib/sops/role';
+
+const access = Astro.locals.adminAccess ?? null;
+const email = Astro.locals.adminUser?.email ?? null;
+const isAdmin = !!access && normalizeEmail(email) !== '' && (await getSopRole(email, access)) === 'admin';
+if (!isAdmin) Astro.response.status = 403;
+---
+
+<AdminLayout
+  title="Message templates"
+  subtitle="Starting points for messages you write often. Pick one when writing a new message."
+>
+  {
+    isAdmin ? (
+      <MessageTemplates client:load />
+    ) : (
+      <p role="alert" class="text-sm text-[var(--pyre-red)]">
+        Only admins can manage message templates.
+      </p>
+    )
+  }
+</AdminLayout>

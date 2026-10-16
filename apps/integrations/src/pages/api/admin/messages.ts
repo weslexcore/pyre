@@ -44,14 +44,9 @@ import {
   canViewMessage,
   isDraft,
 } from '@/lib/messages/access';
+import { checkedAudience } from '@/lib/messages/roster';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
-import {
-  BODY_MAX,
-  normalizeBody,
-  normalizeTitle,
-  parseAudience,
-  parseSharedWith,
-} from '@/lib/messages/validate';
+import { BODY_MAX, normalizeBody, normalizeTitle, parseSharedWith } from '@/lib/messages/validate';
 import {
   emailMessagePosted,
   notifyDraftShared,
@@ -68,21 +63,6 @@ async function viewerOf(gate: AdminGate): Promise<SopViewer> {
     role: await getSopRole(gate.user.email ?? null, gate.access),
     email: normalizeEmail(gate.user.email),
   };
-}
-
-/** The audience emails a request names, checked against the roster. */
-async function checkedAudience(
-  roles: unknown,
-  emails: unknown
-): Promise<{ roles: AdminMessageRow['audience_roles']; emails: string[] } | { error: string }> {
-  const parsed = parseAudience(roles, emails);
-  if (!parsed.ok) return { error: parsed.error };
-  const roster = new Set((await listGrantablePeople()).map((person) => person.email));
-  const unknown = parsed.audience.emails.filter((email) => !roster.has(email));
-  if (unknown.length > 0) {
-    return { error: `audienceEmails names people not on the roster: ${unknown.join(', ')}` };
-  }
-  return parsed.audience;
 }
 
 /** The admins a draft is shared with, checked against the roster. */

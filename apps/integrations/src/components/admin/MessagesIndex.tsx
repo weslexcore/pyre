@@ -1,14 +1,15 @@
 // /admin/messages: the messages the admins have written that this person
 // may read, pinned first, each linking to its thread. Admins also get the
 // composer for a new message (send it, or save it as a draft) and can peek
-// at the archive; the drafts they can work on sit above the sent list.
+// at the archive; the drafts they can work on sit above the sent list. The
+// composer offers the message templates (/admin/messages/templates).
 import { useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { goldButtonClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
-import type { AdminMessageRow } from '@/lib/db';
+import type { AdminMessageRow, AdminMessageTemplateRow } from '@/lib/db';
 import type { MessageSummary } from '@/lib/messages/store';
 import { excerpt } from '@/lib/notifications/types';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
@@ -33,6 +34,9 @@ export function MessagesIndex() {
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = feed.data?.viewer.role === 'admin';
+  const templates = useCachedJson<{ templates: AdminMessageTemplateRow[] }>(
+    composing && isAdmin ? '/api/admin/message-templates' : null
+  );
   const people = feed.data?.people ?? {};
   const all = feed.data?.messages ?? [];
   const drafts = all.filter((m) => m.sent_at === null);
@@ -75,9 +79,12 @@ export function MessagesIndex() {
               New message
             </button>
           )}
+          <a href="/admin/messages/templates" className={`${buttonClass} ml-auto`}>
+            Templates
+          </a>
           <button
             type="button"
-            className={`${buttonClass} ml-auto ${showArchived ? 'border-white/40 text-white' : ''}`}
+            className={`${buttonClass} ${showArchived ? 'border-white/40 text-white' : ''}`}
             aria-pressed={showArchived}
             onClick={() => setShowArchived((v) => !v)}
           >
@@ -98,6 +105,7 @@ export function MessagesIndex() {
             submitLabel="Send"
             offerEmail
             authorEmail={feed.data?.viewer.email}
+            templates={templates.data?.templates}
             onSubmit={(draft) => void create(draft, false)}
             onSaveDraft={(draft) => void create(draft, true)}
             onCancel={() => setComposing(false)}
