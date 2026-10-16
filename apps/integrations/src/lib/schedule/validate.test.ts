@@ -87,6 +87,16 @@ describe('off-shift duties and training', () => {
     );
   });
 
+  it('keeps one held from before it moved off-shift', () => {
+    expect(
+      parse(
+        { duties: ['host', 'fill_carboys'] },
+        [...DEFAULT_DUTY_CATALOG, carboys],
+        ['fill_carboys']
+      )
+    ).toEqual({ duties: ['host', 'fill_carboys'] });
+  });
+
   it('names the duties someone is not trained on, sparing ones they hold', () => {
     const catalog = DEFAULT_DUTY_CATALOG.map((d) =>
       d.key === 'host' ? { ...d, requiresTraining: true } : d

@@ -2772,6 +2772,19 @@ function ShiftDetail({
                         not done {DOW_LABELS[dayOfWeek(shift.shift_date)]}
                       </span>
                     )}
+                    {a.duties.some((key) => dutyDef(dutyCatalog, key)?.phase === 'off_shift') && (
+                      <span
+                        className="font-mono text-[10px] text-[var(--pyre-gold)]"
+                        title="This duty moved off-shift — it's handed out by the day now, in the off-shift row under the day. Take it off this shift."
+                      >
+                        ⚠{' '}
+                        {formatDutyList(
+                          dutyCatalog,
+                          a.duties.filter((key) => dutyDef(dutyCatalog, key)?.phase === 'off_shift')
+                        )}{' '}
+                        is off-shift now
+                      </span>
+                    )}
                     {untrainedDuties(dutyCatalog, dutyTraining, a.staff_id, a.duties).length >
                       0 && (
                       <span
@@ -3429,8 +3442,7 @@ function AssignmentEditor({
   const phases = dutyPhases(
     dutyCatalog.filter(
       (d) =>
-        isShiftDuty(d) &&
-        ((!d.archived && dutyRunsOn(d, date)) || assignment.duties.includes(d.key))
+        (isShiftDuty(d) && !d.archived && dutyRunsOn(d, date)) || assignment.duties.includes(d.key)
     ),
     { includeArchived: true }
   );

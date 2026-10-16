@@ -90,8 +90,9 @@ export function checkShiftWindow(startsAt: string, endsAt: string): string | nul
  * parseShiftFields. Duties are checked against the admin-edited catalog
  * (loadDutyCatalog): a live duty is always accepted, an archived one only if
  * the assignment already `held` it — retiring a duty stops new assignments
- * without making old ones unsaveable. Off-shift duties are never held on a
- * shift (they're assigned per day in duty_assignments). Training is checked
+ * without making old ones unsaveable. Off-shift duties are assigned per day
+ * in duty_assignments, not on a shift — but, like an archived one, a duty
+ * held from before it moved off-shift can stay. Training is checked
  * separately (trainingError), since it depends on who the assignment is for.
  */
 export function parseAssignmentFields(
@@ -117,9 +118,10 @@ export function parseAssignmentFields(
   if (body.duties !== undefined) {
     if (!Array.isArray(body.duties)) return 'duties must be an array';
     const shiftCatalog = catalog.filter(isShiftDuty);
-    const allowed = new Set(
-      shiftCatalog.filter((d) => !d.archived || held.includes(d.key)).map((d) => d.key)
-    );
+    const allowed = new Set([
+      ...shiftCatalog.filter((d) => !d.archived).map((d) => d.key),
+      ...catalog.filter((d) => held.includes(d.key)).map((d) => d.key),
+    ]);
     const unknown = body.duties.find((d) => typeof d !== 'string' || !allowed.has(d));
     if (unknown !== undefined) {
       const live = shiftCatalog.filter((d) => !d.archived).map((d) => d.key);

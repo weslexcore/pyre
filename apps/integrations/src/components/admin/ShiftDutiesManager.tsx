@@ -24,7 +24,6 @@ import {
   dutyPhases,
   formatDutyDays,
   normalizeDutyDays,
-  SHIFT_PHASE_KEYS,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -430,9 +429,14 @@ export function ShiftDutiesManager() {
               onChange={setForm}
               sops={sops}
               sessionDuties={sessionDuties.filter((d) => d.key !== duty.key)}
-              // A duty can't move between the shift and off-shift.
-              phases={duty.phase === 'off_shift' ? ['off_shift'] : SHIFT_PHASE_KEYS}
             />
+            {(form.phase === 'off_shift') !== (duty.phase === 'off_shift') && count > 0 && (
+              <p className="text-xs text-[var(--pyre-gold)]">
+                {form.phase === 'off_shift'
+                  ? `Shifts that already have ${duty.label} keep it, flagged on the board — take it off them there. From now on it's handed out by the day instead.`
+                  : `Days already handed out for ${duty.label} stay on the board, flagged. From now on it's assigned on shifts instead.`}
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"

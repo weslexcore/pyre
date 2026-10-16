@@ -233,15 +233,19 @@ describe('off-shift duties and training', () => {
     ).toMatchObject({ ok: false });
   });
 
-  it('never moves a duty between the shift and off-shift', () => {
-    expect(normalizeDutyPatch({ phase: 'off_shift' }, row('host'), C)).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('stays on the shift'),
+  it('moves a duty off the shift, dropping its side and in-session default', () => {
+    const catalog = C.filter((d) => d.key !== 'breakdown_b');
+    expect(normalizeDutyPatch({ phase: 'off_shift' }, row('setup_b'), catalog)).toEqual({
+      ok: true,
+      value: { phase: 'off_shift', side: null, session_default: null },
     });
+  });
+
+  it('moves an off-shift duty back onto the shift', () => {
     const carboys: ShiftDutyRow = { ...row('host'), key: 'carboys', phase: 'off_shift' };
-    expect(normalizeDutyPatch({ phase: 'session' }, carboys, C)).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('stays off-shift'),
+    expect(normalizeDutyPatch({ phase: 'session' }, carboys, C)).toEqual({
+      ok: true,
+      value: { phase: 'session' },
     });
   });
 

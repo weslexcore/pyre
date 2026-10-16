@@ -7,9 +7,12 @@
 //     ambiguous — the DB's partial unique index is the backstop);
 //   - a half's in-session default names a live, in-session duty;
 //   - a session duty another half defaults to stays a session duty;
-//   - an off-shift duty has neither a side nor an in-session default, and a
-//     duty never moves between shift and off-shift (the two are assigned in
-//     different tables, so the move would strand what's already assigned).
+//   - an off-shift duty has neither a side nor an in-session default.
+//
+// A duty may move between the shift and off-shift. What was already assigned
+// stays where it is and readable: shifts keep holding a duty that went
+// off-shift (the board flags it so it can be taken off), and days handed out
+// for a duty that came back onto the shift stay on the board, flagged.
 //
 // Keys are derived from the label once and never change: they're what the
 // duties[] arrays on every assignment store.
@@ -207,15 +210,6 @@ export function normalizeDutyPatch(
   };
   const cols = readFields(body, base);
   if (typeof cols === 'string') return { ok: false, error: cols };
-  if ((cols.phase === 'off_shift') !== (base.phase === 'off_shift')) {
-    return {
-      ok: false,
-      error:
-        base.phase === 'off_shift'
-          ? 'An off-shift duty stays off-shift. Add a shift duty instead.'
-          : 'A shift duty stays on the shift. Add an off-shift duty instead.',
-    };
-  }
   const incoherent = checkCoherent(existing.key, cols, catalog);
   if (incoherent) return { ok: false, error: incoherent };
   const changes: Partial<DutyColumns> = {};
