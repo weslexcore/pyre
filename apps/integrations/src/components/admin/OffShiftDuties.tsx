@@ -8,7 +8,9 @@
 // holds stays visible even after the duty is retired or its days change, so
 // nothing assigned silently disappears. A day the scheduler agent drafted
 // shows dashed with accept / reject, like its draft shift assignments;
-// picking someone in the select takes it live too.
+// picking someone in the select takes it live too. The done box leads each
+// row and is drawn like an SOP checklist task's: gold with a tick when done,
+// the duty struck through.
 
 import {
   type DutyAssignmentRow,
@@ -22,6 +24,60 @@ import type { StaffRow } from '@/lib/db';
 
 const chipClass =
   'rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-sage)]';
+
+/**
+ * The SOP checklist's box (Checklist.tsx), a size down for the board: the
+ * real input is visually hidden and drives a drawn box. Faint and inert when
+ * there's nothing to tick yet (unassigned, a draft) or it isn't yours.
+ */
+function DoneBox({
+  done,
+  disabled,
+  label,
+  onChange,
+}: {
+  done: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: (done: boolean) => void;
+}) {
+  return (
+    <label
+      className={`flex shrink-0 items-center ${disabled ? 'opacity-40' : 'group cursor-pointer'}`}
+      title={label}
+    >
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        checked={done}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span
+        aria-hidden="true"
+        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--pyre-gold)]/50 ${
+          done
+            ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]'
+            : 'border-white/30 group-hover:border-white/50'
+        }`}
+      >
+        <svg
+          viewBox="0 0 12 12"
+          className={`h-3 w-3 transition-opacity ${done ? 'opacity-100' : 'opacity-0'}`}
+          fill="none"
+          stroke="var(--pyre-black)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          role="presentation"
+        >
+          <path d="M2 6.5 4.8 9.2 10 3.2" />
+        </svg>
+      </span>
+    </label>
+  );
+}
 
 const selectClass =
   'rounded bg-white/5 border border-white/10 px-2 py-1 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
@@ -83,6 +139,8 @@ export function OffShiftDuties({
           const draft = !!row?.is_draft;
           const mine = !!row && row.staff_id === selfId;
           const canTick = !!row && !draft && (canManage || mine);
+          const done = !!row?.done_at && !draft;
+          const struck = done ? ' line-through opacity-50' : '';
           // Who can take it: active, and trained when it requires training.
           // Whoever has it now stays listed so the select shows them.
           const candidates = staff.filter(
@@ -96,16 +154,30 @@ export function OffShiftDuties({
                 draft ? 'rounded border border-dashed border-[var(--pyre-gold)]/50 px-1 py-0.5' : ''
               }`}
             >
+              <DoneBox
+                done={done}
+                disabled={busy || !canTick}
+                label={
+                  !row
+                    ? `${label}: nobody has it yet`
+                    : draft
+                      ? `${label}: accept the draft first`
+                      : done
+                        ? `${label}: done — untick to undo`
+                        : `Mark ${label} done`
+                }
+                onChange={(next) => row && onDone(row.id, next)}
+              />
               {canViewSops && def?.sopSlug ? (
                 <a
-                  className={`${chipClass} underline decoration-[var(--pyre-sage)]/40 hover:text-[var(--pyre-creme)]`}
+                  className={`${chipClass} underline decoration-[var(--pyre-sage)]/40 hover:text-[var(--pyre-creme)]${struck}`}
                   href={`/admin/sops/${def.sopSlug}`}
                   title={def.detail ? `${label} — ${def.detail}` : label}
                 >
                   {label}
                 </a>
               ) : (
-                <span className={chipClass} title={def?.detail ?? undefined}>
+                <span className={`${chipClass}${struck}`} title={def?.detail ?? undefined}>
                   {label}
                 </span>
               )}
@@ -169,21 +241,6 @@ export function OffShiftDuties({
                     ✗
                   </button>
                 </span>
-              )}
-              {row && !draft && (
-                <label
-                  className={`flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide ${
-                    row.done_at ? 'text-[var(--pyre-sage)]' : 'text-white/40'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!row.done_at}
-                    disabled={busy || !canTick}
-                    onChange={(e) => onDone(row.id, e.target.checked)}
-                  />
-                  Done
-                </label>
               )}
               {def && (def.archived || !occurrences.some((o) => o.duty.key === key)) && (
                 <span
