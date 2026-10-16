@@ -370,7 +370,7 @@ export function ScheduleCalendar() {
                       }`}
                     >
                       {paydays.has(date) && (
-                        <span className="mr-auto rounded-sm bg-[var(--pyre-creme)]/15 px-1 text-[9px] font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
+                        <span className="mr-auto rounded-sm bg-[var(--pyre-sage)]/15 px-1 text-[9px] font-bold uppercase tracking-wide text-[var(--pyre-sage)]">
                           Payday
                         </span>
                       )}
@@ -486,8 +486,8 @@ export function ScheduleCalendar() {
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
         {paydays.size > 0 && (
-          <span className="text-[var(--pyre-creme)]">
-            <span className="mr-1 rounded-sm bg-[var(--pyre-creme)]/15 px-1 text-[9px] font-bold uppercase">
+          <span className="text-[var(--pyre-sage)]">
+            <span className="mr-1 rounded-sm bg-[var(--pyre-sage)]/15 px-1 text-[9px] font-bold uppercase">
               Payday
             </span>
             = pay lands that day

@@ -1562,7 +1562,7 @@ export function ScheduleBoard() {
                       {formatChipDate(date)}
                       {paydays.has(date) && (
                         <span
-                          className="rounded bg-[var(--pyre-creme)]/15 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-creme)]"
+                          className="rounded bg-[var(--pyre-sage)]/15 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-sage)]"
                           title="Pay lands today"
                         >
                           Payday
