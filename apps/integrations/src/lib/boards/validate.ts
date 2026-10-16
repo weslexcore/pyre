@@ -19,6 +19,7 @@ import {
 } from '@/lib/goals/validate';
 import { formatChecklist, normalizeChecklist } from './checklist';
 import { dateTimeOf, timeOfDateTime } from './datetime';
+import { DEFAULT_DUE_EVERY_MAX, type DefaultDueUnit, isDefaultDueUnit } from './default-due';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
 import { isRepeatUnit, REPEAT_EVERY_MAX, type RepeatUnit } from './recurrence';
@@ -545,6 +546,9 @@ export interface BoardPatch {
   include_in_all_tasks?: boolean;
   default_assignee_emails?: string[];
   due_on_calendar?: boolean;
+  /** Set together: how long after it is made a new card is due; both null for undated. */
+  default_due_every?: number | null;
+  default_due_unit?: DefaultDueUnit | null;
   archived?: boolean;
   sort_order?: number;
   /** Absent leaves the goal alone; null detaches it. */
@@ -601,6 +605,36 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
       return fail('dueOnCalendar must be true or false');
     }
     patch.due_on_calendar = body.dueOnCalendar;
+  }
+
+  if (body.defaultDue !== undefined) {
+    const rule = body.defaultDue;
+    if (rule === null) {
+      patch.default_due_every = null;
+      patch.default_due_unit = null;
+    } else {
+      const every =
+        typeof rule === 'object' && !Array.isArray(rule)
+          ? numberOf((rule as Record<string, unknown>).every)
+          : undefined;
+      const unit =
+        typeof rule === 'object' && !Array.isArray(rule)
+          ? (rule as Record<string, unknown>).unit
+          : undefined;
+      if (
+        every === undefined ||
+        !Number.isInteger(every) ||
+        every < 1 ||
+        every > DEFAULT_DUE_EVERY_MAX ||
+        !isDefaultDueUnit(unit)
+      ) {
+        return fail(
+          `defaultDue must be null or { every: 1–${DEFAULT_DUE_EVERY_MAX}, unit: hour, day, week, or month }`
+        );
+      }
+      patch.default_due_every = every;
+      patch.default_due_unit = unit;
+    }
   }
 
   if (body.archived !== undefined) {

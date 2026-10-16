@@ -1,8 +1,8 @@
 // The board's own shape: its name, what it calls a card, whether its cards
-// belong on All Tasks, who a new card is assigned to, and its columns — each
-// of which can name who a card moving into it is handed to — and, at the
-// bottom, the two things that take a board off the index: archiving it and
-// deleting it.
+// belong on All Tasks, who a new card is assigned to and when it is due, and
+// its columns — each of which can name who a card moving into it is handed
+// to — and, at the bottom, the two things that take a board off the index:
+// archiving it and deleting it.
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
 // key, so renaming a column keeps its cards, and removing one deletes it if
@@ -34,6 +34,7 @@
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
+import { defaultDueRuleOf } from '@/lib/boards/default-due';
 import { formBuilderHref } from '@/lib/boards/forms';
 import type { ColumnKind, FieldKind } from '@/lib/boards/types';
 import {
@@ -67,6 +68,7 @@ import { SetBoardGoal } from './BoardGoal';
 import { BoardSopLinks } from './BoardSopLinks';
 import { AssigneePicker } from './CardMeta';
 import { ColumnOrder } from './ColumnOrder';
+import { DefaultDueSetting } from './DefaultDueSetting';
 import { type LinkDraft, LinkFieldSettings } from './LinkFieldSettings';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -157,6 +159,7 @@ export function BoardSettings({
   const [includeInAllTasks, setIncludeInAllTasks] = useState(board.include_in_all_tasks);
   const [dueOnCalendar, setDueOnCalendar] = useState(board.due_on_calendar);
   const [defaultAssignees, setDefaultAssignees] = useState(board.default_assignee_emails ?? []);
+  const [defaultDue, setDefaultDue] = useState(() => defaultDueRuleOf(board));
   const [drafts, setDrafts] = useState<ColumnDraft[]>(() =>
     [...columns]
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -284,6 +287,7 @@ export function BoardSettings({
     includeInAllTasks,
     dueOnCalendar,
     defaultAssigneeEmails: defaultAssignees,
+    defaultDue,
     columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
     // A link field goes out once it knows its board: until then there is
     // nothing the route could save, and holding it back keeps the rest of
@@ -435,6 +439,10 @@ export function BoardSettings({
           Every new {cardNoun} — added here, from a form, or from the web — lands on these people
           unless whoever adds it picks someone else, or its column has assignees of its own.
         </p>
+      </div>
+
+      <div className="mt-4">
+        <DefaultDueSetting value={defaultDue} nounPlural={nounPlural} onChange={setDefaultDue} />
       </div>
 
       {!hasGoal && mutate && (
