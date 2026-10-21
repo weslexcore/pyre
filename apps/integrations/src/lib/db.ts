@@ -1103,6 +1103,10 @@ export interface BoardRow {
   default_assignee_emails: string[];
   /** Whether cards here put their due_date on the calendar, as an all-day entry. */
   due_on_calendar: boolean;
+  /** With default_due_unit, how long after it is made a new card is due; null leaves it undated. */
+  default_due_every: number | null;
+  /** hour, day, week, or month (lib/boards/default-due.ts). */
+  default_due_unit: 'hour' | 'day' | 'week' | 'month' | null;
   /** The goal this board serves, judged by its KPIs; null for a plain list. */
   goal_id: string | null;
   /** The index heading this board sits under; null for the unnamed group last. */

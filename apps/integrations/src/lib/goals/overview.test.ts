@@ -37,6 +37,8 @@ function board(id: string, goal_id: string | null, archived = false): BoardRow {
     include_in_all_tasks: true,
     default_assignee_emails: [],
     due_on_calendar: true,
+    default_due_every: null,
+    default_due_unit: null,
     goal_id,
     section_id: null,
     sort_order: 0,
