@@ -52,6 +52,11 @@ export interface ConversationTurn {
   /** What the assistant said to itself and looked at on the way to the answer. */
   trail: TrailStep[];
   askedAt: string;
+  /**
+   * Set on the first question a new session took after the conversation's
+   * earlier session ended — it was handed the conversation so far.
+   */
+  continuesConversation?: boolean;
 }
 
 /** What the list endpoint reads per row. */

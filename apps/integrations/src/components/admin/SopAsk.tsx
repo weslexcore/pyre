@@ -74,8 +74,13 @@ interface Turn {
   /** 'empty' is a logged question the assistant never answered (cancelled, or lost). */
   status: 'pending' | 'streaming' | 'done' | 'error' | 'empty';
   error?: string;
-  /** Set when the previous conversation had expired and this turn started anew. */
+  /** Set when the session had ended and the conversation could not be carried over. */
   fresh?: boolean;
+  /**
+   * Set on the first question a new session took after the conversation's
+   * earlier session ended: it was handed everything above and carried on.
+   */
+  continued?: boolean;
 }
 
 interface AskSession {
@@ -90,7 +95,10 @@ interface HistoryPayload {
 }
 
 interface ConversationPayload {
+  /** The live session: the newest one the conversation runs in. */
   sessionId: string;
+  /** The conversation (its first session) — what the sidebar and ?c= name. */
+  conversationId?: string;
   token: string | null;
   turns: ConversationTurn[];
   /** Set when a saved routine opened this conversation. */
@@ -214,6 +222,7 @@ export function turnFromHistory(turn: ConversationTurn): Turn {
     trail: turn.trail,
     trailOpen: false,
     status: answer ? 'done' : turn.status === 'failed' ? 'error' : 'empty',
+    ...(turn.continuesConversation ? { continued: true } : {}),
     error:
       !answer && turn.status === 'failed'
         ? (turn.error ?? 'The assistant hit an error')
@@ -232,7 +241,12 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  /** The conversation on screen (its first session's id), as the sidebar and ?c= name it. */
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  // The same, for callbacks that must not wait for a render. The live session
+  // (session.current) differs from it once a conversation outlived its
+  // first session and carried on in a new one.
+  const conversationRef = useRef<string | null>(null);
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -398,7 +412,9 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
               case 'result':
                 patchTurn(turnId, (t) => ({ trail: trailWithResult(t.trail, event) }));
                 // A proposal just landed: draw its card now, not after the answer.
-                if (proposalIdOf(event.output)) void refreshActions(current.id);
+                if (proposalIdOf(event.output)) {
+                  void refreshActions(conversationRef.current ?? current.id);
+                }
                 break;
               case 'done':
                 outcome = event;
@@ -489,8 +505,11 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         if (!res.ok) throw new Error(await readError(res));
         const body = (await res.json()) as {
           sessionId: string;
+          conversationId?: string;
           token: string;
           fresh: boolean;
+          /** How many earlier questions a new session was handed, when it carried the conversation. */
+          carried?: number;
           nextIndex?: number;
         };
 
@@ -499,22 +518,28 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
             ? { ...prior, nextIndex: prior.nextIndex ?? body.nextIndex ?? 0 }
             : { id: body.sessionId, token: body.token, nextIndex: 0 };
         session.current = current;
-        setActiveSessionId(current.id);
-        if (current.id !== prior?.id) {
-          actionsFor.current = current.id;
+        // A new session that carried the conversation is still the same
+        // conversation: same sidebar row, same proposals, same routine.
+        const conversationId = body.conversationId ?? body.sessionId;
+        const sameConversation = conversationRef.current === conversationId;
+        conversationRef.current = conversationId;
+        setActiveSessionId(conversationId);
+        if (!sameConversation) {
+          actionsFor.current = conversationId;
           setActions([]);
-          // A fresh session is the person's own, even when it continues a routine's.
           setRoutine(null);
         }
-        if (prior && body.fresh) patchTurn(id, { fresh: true });
+        if (prior && body.fresh) {
+          patchTurn(id, body.carried ? { continued: true } : { fresh: true });
+        }
         // Remember it before the answer arrives: leaving now and coming back
         // reopens this conversation and picks the answer up where it is.
-        writeStored({ sessionId: current.id, token: current.token, pending: text });
-        writeConversationParam(current.id);
+        writeStored({ sessionId: current.id, conversationId, token: current.token, pending: text });
+        writeConversationParam(conversationId);
 
         await streamAnswer(id, current);
-        writeStored({ sessionId: current.id, token: current.token });
-        void refreshActions(current.id);
+        writeStored({ sessionId: current.id, conversationId, token: current.token });
+        void refreshActions(conversationId);
       } catch (error) {
         patchTurn(id, {
           status: 'error',
@@ -564,6 +589,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   const startNew = () => {
     if (busy) return;
     session.current = null;
+    conversationRef.current = null;
     setTurns([]);
     setActiveSessionId(null);
     actionsFor.current = null;
@@ -597,9 +623,17 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
       setNotice(null);
       let reattach: { turnId: string; current: AskSession } | null = null;
       let token: string | null = null;
+      // The live session and the conversation it belongs to; they differ
+      // once a conversation carried on after its first session ended.
+      let live = sessionId;
+      let conversationId = sessionId;
       try {
         const res = await fetch(`${HISTORY_URL}?sessionId=${encodeURIComponent(sessionId)}`);
-        const stored = opts.stored?.sessionId === sessionId ? opts.stored : null;
+        const stored =
+          opts.stored &&
+          (opts.stored.sessionId === sessionId || opts.stored.conversationId === sessionId)
+            ? opts.stored
+            : null;
         if (res.status === 404 && stored?.pending) {
           // Sent, but not logged yet: show the question and stream its answer.
           const turnId = `local-${nextId.current++}`;
@@ -615,11 +649,15 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
             },
           ]);
           token = stored.token;
-          reattach = { turnId, current: { id: sessionId, token, nextIndex: null } };
+          live = stored.sessionId;
+          conversationId = stored.conversationId ?? stored.sessionId;
+          reattach = { turnId, current: { id: live, token, nextIndex: null } };
           setRoutine(null);
         } else {
           if (!res.ok) throw new Error(await readError(res));
           const body = (await res.json()) as ConversationPayload;
+          live = body.sessionId;
+          conversationId = body.conversationId ?? body.sessionId;
           token = body.token ?? stored?.token ?? null;
           const loaded = body.turns.map(turnFromHistory);
           const last = body.turns[body.turns.length - 1];
@@ -676,16 +714,22 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
           setTurns(loaded);
         }
         stickToBottom.current = true;
-        session.current = token ? { id: sessionId, token, nextIndex: null } : null;
-        setActiveSessionId(sessionId);
-        actionsFor.current = sessionId;
+        session.current = token ? { id: live, token, nextIndex: null } : null;
+        conversationRef.current = conversationId;
+        setActiveSessionId(conversationId);
+        actionsFor.current = conversationId;
         setActions([]);
-        void refreshActions(sessionId);
+        void refreshActions(conversationId);
         if (token) {
           const pending = reattach ? opts.stored?.pending : undefined;
-          writeStored({ sessionId, token, ...(pending ? { pending } : {}) });
+          writeStored({
+            sessionId: live,
+            conversationId,
+            token,
+            ...(pending ? { pending } : {}),
+          });
         }
-        writeConversationParam(sessionId);
+        writeConversationParam(conversationId);
       } catch (error) {
         if (opts.quiet) {
           writeStored(null);
@@ -704,8 +748,12 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
       try {
         session.current = reattach.current;
         await streamAnswer(reattach.turnId, reattach.current, { resume: true });
-        writeStored({ sessionId, token: reattach.current.token });
-        void refreshActions(sessionId);
+        writeStored({
+          sessionId: reattach.current.id,
+          conversationId,
+          token: reattach.current.token,
+        });
+        void refreshActions(conversationId);
       } catch (error) {
         patchTurn(reattach.turnId, {
           status: 'error',
@@ -738,7 +786,8 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     const params = new URLSearchParams(initialSearch.current);
     if (params.get('q')?.trim()) return;
     const stored = readStored();
-    const sessionId = params.get(CONVERSATION_PARAM)?.trim() || stored?.sessionId;
+    const sessionId =
+      params.get(CONVERSATION_PARAM)?.trim() || stored?.conversationId || stored?.sessionId;
     if (sessionId) void loadConversation(sessionId, { stored, quiet: true });
   }, [loadConversation]);
 
@@ -873,6 +922,13 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
               <ol className="mx-auto max-w-3xl space-y-5">
                 {turns.map((turn, index) => (
                   <li key={turn.id} className="space-y-3">
+                    {turn.continued && (
+                      <p className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-wide text-white/35">
+                        <span className="h-px flex-1 bg-white/10" />
+                        Session ended — picked back up with everything above
+                        <span className="h-px flex-1 bg-white/10" />
+                      </p>
+                    )}
                     <div className="flex flex-col items-end">
                       {routine && index === 0 ? (
                         // The routine's saved request, not something the person
@@ -913,7 +969,8 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                       <div className="max-w-[95%] rounded-2xl rounded-bl-sm border border-white/10 bg-white/5 px-4 py-3">
                         {turn.fresh && (
                           <p className="mb-2 text-xs text-white/40">
-                            The earlier conversation had expired, so this answer starts fresh.
+                            The earlier session had ended and the conversation could not be carried
+                            over, so this answer starts fresh.
                           </p>
                         )}
                         <AskTrail

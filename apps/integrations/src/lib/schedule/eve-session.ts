@@ -104,6 +104,22 @@ export function classifyTailEvent(event: unknown): EveSessionTail {
 }
 
 /**
+ * The first event line in what a stream has sent so far, once it is
+ * complete: blank lines are skipped (the stream opens with an empty
+ * keep-alive line before the first event) and a line still being received
+ * is not one yet. Exported for tests.
+ */
+export function firstEventLine(buffer: string, done = false): string | null {
+  const lines = buffer.split('\n');
+  if (!done) lines.pop();
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+/**
  * Classify a session's tail event: waiting, running, or gone. The stream endpoint holds its connection open,
  * so this reads only the first NDJSON line (the current latest event with
  * startIndex=-1) and aborts. Network/parse failures classify as 'gone' —
@@ -125,16 +141,17 @@ export async function readEveSessionTail(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let firstLine: string | null = null;
     try {
-      while (!buffer.includes('\n')) {
+      while (firstLine === null) {
         const { value, done } = await reader.read();
         if (value) buffer += decoder.decode(value, { stream: true });
+        firstLine = firstEventLine(buffer, done);
         if (done) break;
       }
     } finally {
       abort.abort(); // release the held-open stream
     }
-    const firstLine = buffer.split('\n')[0]?.trim();
     if (!firstLine) return { state: 'gone' };
     return classifyTailEvent(JSON.parse(firstLine));
   } catch {

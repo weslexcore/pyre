@@ -123,6 +123,14 @@ never gets a shell.
   `POST /api/agent/routines` (`agent/lib/knowledge/routines.ts`), which closes
   the run and notifies the owner. Tables: `pyre_agent_routines`,
   `pyre_agent_routine_runs` (migration `20261016170216_pyre_agent_routines`).
+- **Conversations that outlive their session.** When someone writes into a
+  conversation whose session has ended, the integrations ask route starts a
+  new session whose opening message carries the conversation so far in an
+  `<earlier-conversation>` block (newest turns first to fit, scrubbed of the
+  message's own tags; `lib/knowledge/carry.ts` there) and links the new
+  session to the conversation in `public.pyre_agent_session_links`
+  (migration `20261016172954_pyre_agent_session_links`), so the history shows
+  one conversation across sessions.
 - **Leaving and coming back.** The Pyre Agent page keeps the open
   conversation in `?c=` and localStorage. On return it reloads the history
   and, when the last question is still being answered, reattaches through the

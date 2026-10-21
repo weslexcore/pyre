@@ -5,8 +5,9 @@
 //
 //   POST { question, session? }  → opens a knowledge session (or sends a
 //                                  follow-up into the caller's own session)
-//                                  and returns { sessionId, token, fresh,
-//                                  nextIndex? } — nextIndex only for a
+//                                  and returns { sessionId, conversationId,
+//                                  token, fresh, carried?, nextIndex? } —
+//                                  nextIndex only for a
 //                                  conversation reopened from the history
 //                                  sidebar (session.resume), which the island
 //                                  otherwise has no stream position for
@@ -27,9 +28,12 @@
 import type { APIRoute } from 'astro';
 import { agentsEveConfig } from '@/lib/agent/eve-config';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
+import { buildCarryOver } from '@/lib/knowledge/carry';
+import { conversationOf, conversationTurns, linkSession } from '@/lib/knowledge/conversation';
 import {
   buildAskMessage,
   knowledgeHeaders,
@@ -88,6 +92,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const question = sanitizeQuestion(body.question);
   if (!question) return json({ error: 'question is required' }, 400);
 
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
   const email = normalizeEmail(gate.user.email);
   const scope = await knowledgeScopeFor(gate);
   const sessionConfig: EveConfig = { ...config, headers: knowledgeHeaders(scope) };
@@ -123,6 +129,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
             {
               ok: true,
               sessionId: session.id,
+              conversationId: await conversationOf(db, email, session.id),
               token: session.token,
               fresh: false,
               ...(nextIndex !== undefined ? { nextIndex } : {}),
@@ -137,12 +144,31 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         // 'gone': the session ended between the tail read and the send.
       }
     }
-    // 'gone' — fall through to a fresh session; the island tells the reader.
+    // 'gone' — fall through to a fresh session that carries the conversation.
+  }
+
+  // The session behind this conversation has ended: a new one is handed the
+  // conversation so far and linked to it, so the person carries on in the
+  // same conversation. Every read is scoped to the caller's own questions,
+  // so a session id that is not theirs carries nothing.
+  const priorId = session && typeof session.id === 'string' ? session.id.trim() : '';
+  let carry: { conversationId: string; block: string; count: number } | null = null;
+  if (priorId) {
+    try {
+      const conversationId = await conversationOf(db, email, priorId);
+      const built = buildCarryOver(await conversationTurns(db, email, conversationId));
+      if (built) carry = { conversationId, block: built.block, count: built.count };
+    } catch (error) {
+      console.warn('[knowledge-ask] could not read the conversation to carry:', error);
+    }
   }
 
   let sessionId: string | null;
   try {
-    sessionId = await startEveSession(sessionConfig, buildAskMessage(question));
+    sessionId = await startEveSession(
+      sessionConfig,
+      buildAskMessage(question, false, carry?.block)
+    );
   } catch (error) {
     return json(
       {
@@ -156,7 +182,26 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const token = createAskSessionToken(sessionId, email);
   if (!token) return json({ error: 'Assistant not configured (EVE_CHANNEL_SECRET)' }, 503);
 
-  return json({ ok: true, sessionId, token, fresh: true }, 202);
+  if (carry) {
+    await linkSession(db, {
+      sessionId,
+      conversationId: carry.conversationId,
+      email,
+      carriedTurns: carry.count,
+    });
+  }
+
+  return json(
+    {
+      ok: true,
+      sessionId,
+      conversationId: carry?.conversationId ?? sessionId,
+      token,
+      fresh: true,
+      ...(carry ? { carried: carry.count } : {}),
+    },
+    202
+  );
 };
 
 /** Leave the function budget (60s) headroom; the island resumes from nextIndex. */

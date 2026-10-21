@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyTailEvent, countEveSessionEvents, sendEveFollowUp } from './eve-session';
+import {
+  classifyTailEvent,
+  countEveSessionEvents,
+  firstEventLine,
+  readEveSessionTail,
+  sendEveFollowUp,
+} from './eve-session';
 
 describe('classifyTailEvent', () => {
   it('reads a parked session as waiting', () => {
@@ -78,5 +84,36 @@ describe('sendEveFollowUp', () => {
     expect(await sent).toEqual({ ok: true });
     expect(fetch).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+});
+
+describe('firstEventLine', () => {
+  it('skips the blank keep-alive line the stream opens with', () => {
+    expect(firstEventLine('\n{"type":"session.waiting"}\n')).toBe('{"type":"session.waiting"}');
+  });
+
+  it('waits for a line to finish arriving, unless the stream has ended', () => {
+    expect(firstEventLine('\n{"type":"sess')).toBeNull();
+    expect(firstEventLine('{"type":"session.waiting"}', true)).toBe('{"type":"session.waiting"}');
+    expect(firstEventLine('\n\n', true)).toBeNull();
+  });
+});
+
+describe('readEveSessionTail', () => {
+  const config = { baseUrl: 'https://agents.test', channelSecret: 'secret' };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('reads a parked session as waiting past the leading blank line', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('\n{"type":"session.waiting","data":{}}\n')
+    );
+    expect(await readEveSessionTail(config, 'sess_1')).toEqual({ state: 'waiting' });
+  });
+
+  it('reads a session mid-turn as running', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('\n{"type":"message.appended","data":{}}\n')
+    );
+    expect(await readEveSessionTail(config, 'sess_1')).toEqual({ state: 'running' });
   });
 });

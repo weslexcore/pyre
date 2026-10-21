@@ -15,8 +15,11 @@ interface AskSessionPayload {
   exp: number;
 }
 
-/** A conversation is resumable for this long; Eve's own retention is the real bound. */
-const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+/**
+ * A conversation is resumable for this long — eve keeps a session 30 days,
+ * so a page left open overnight can still follow up in the same session.
+ */
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const SIGNING = {
   // process.env fallback: vars added after the cached build only exist at runtime.
