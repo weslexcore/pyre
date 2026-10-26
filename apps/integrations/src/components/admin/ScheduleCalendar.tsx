@@ -5,7 +5,7 @@
 // are tinted gold, with their own name first in the block, and paydays carry
 // a label by the date. Off-shift duties (fill the carboys Monday) sit under
 // the shifts as sage lines: who has each, or "open" when nobody does yet.
-// Read-only; editing happens on the Week board.
+// Read-only; editing happens on the Schedule tab.
 
 import {
   addDays,
@@ -355,7 +355,7 @@ export function ScheduleCalendar() {
           onward is <span className="font-bold text-[var(--pyre-red)]">tentative</span> — dashed
           shifts are a working plan and can still change until the week locks, but keep requesting
           shifts and logging time off out there. A solid block out there was confirmed by hand on
-          the Week board.
+          the Schedule tab.
         </p>
       )}
 

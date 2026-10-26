@@ -20,7 +20,7 @@ const access = Astro.locals.adminAccess ?? null;
 const canManage = !!access && hasScheduleManage(access);
 
 const tabs = [
-  { href: '/admin/schedule', label: 'Week' },
+  { href: '/admin/schedule', label: 'Schedule' },
   { href: '/admin/schedule/calendar', label: 'Calendar' },
   { href: '/admin/schedule/timesheet', label: 'Timesheet' },
   { href: '/admin/schedule/availability', label: 'Availability' },
