@@ -11,6 +11,7 @@ const MAX_NAME = 120;
 const MAX_VENDOR = 120;
 const MAX_CATEGORY = 60;
 const MAX_HOW_TO_ORDER = 2000;
+const MAX_INSTRUCTIONS = 2000;
 const MAX_COST_CENTS = 10_000_000;
 const DAY_MS = 86_400_000;
 
@@ -133,6 +134,11 @@ export function normalizeFields(
     const how = optionalText(body.how_to_order, MAX_HOW_TO_ORDER, 'How to order');
     if (how instanceof Error) return { ok: false, error: how.message };
     out.how_to_order = how;
+  }
+  if (has('count_instructions')) {
+    const how = optionalText(body.count_instructions, MAX_INSTRUCTIONS, 'Count instructions');
+    if (how instanceof Error) return { ok: false, error: how.message };
+    out.count_instructions = how;
   }
   if (has('unit_cost_cents')) {
     const cents = body.unit_cost_cents;

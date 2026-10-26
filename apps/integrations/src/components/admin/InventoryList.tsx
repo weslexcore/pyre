@@ -198,6 +198,8 @@ export function InventoryList() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   // The item whose ordering instructions are open.
   const [orderId, setOrderId] = useState<string | null>(null);
+  // The item whose count dialog (from its Due chip) is open.
+  const [countId, setCountId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [widths, setWidths] = useState<Widths>({});
   const widthOf = (c: Column) => widths[c.key] ?? c.width;
@@ -336,6 +338,7 @@ export function InventoryList() {
   const { canManage, people } = data;
   const detailsItem = detailsId ? items.find((i) => i.id === detailsId) : undefined;
   const orderItem = orderId ? items.find((i) => i.id === orderId) : undefined;
+  const countItem = countId ? items.find((i) => i.id === countId) : undefined;
 
   const filters: { key: InventoryFilter; label: string }[] = [
     { key: 'all', label: `All (${items.length})` },
@@ -403,6 +406,15 @@ export function InventoryList() {
       </div>
 
       {saveError && <ErrorBanner>{saveError}</ErrorBanner>}
+
+      {countItem && (
+        <CountDialog
+          key={countItem.id}
+          item={countItem}
+          onSave={(n) => saveDetails(countItem.id, { in_stock: n })}
+          onClose={() => setCountId(null)}
+        />
+      )}
 
       {orderItem && (
         <OrderInstructions
@@ -507,6 +519,7 @@ export function InventoryList() {
                 onSave={(patch) => save(item.id, patch)}
                 onDetails={() => setDetailsId(item.id)}
                 onShowOrder={() => setOrderId(item.id)}
+                onCount={() => setCountId(item.id)}
                 onDelete={() => remove(item)}
               />
             ))}
@@ -592,6 +605,7 @@ function ItemRow({
   onSave,
   onDetails,
   onShowOrder,
+  onCount,
   onDelete,
 }: {
   item: InventoryRow;
@@ -605,6 +619,7 @@ function ItemRow({
   onSave: (patch: Patch) => Promise<boolean>;
   onDetails: () => void;
   onShowOrder: () => void;
+  onCount: () => void;
   onDelete: () => void;
 }) {
   const due = isDue(item, now);
@@ -624,11 +639,14 @@ function ItemRow({
         {(due || low) && (
           <div className="flex flex-wrap items-center gap-1.5 px-1.5 pb-1">
             {due && (
-              <span
-                className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`}
+              <button
+                type="button"
+                onClick={onCount}
+                className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/20`}
+                title={item.count_instructions ? 'Count instructions' : 'Count it'}
               >
-                Due
-              </span>
+                Due{item.count_instructions ? ' · how to count' : ''}
+              </button>
             )}
             {low && (
               <ReorderChip
@@ -816,6 +834,103 @@ function ReorderChip({
     >
       Re-order
     </button>
+  );
+}
+
+/**
+ * Counting one item, opened from its Due chip: its count instructions (when
+ * it has any) above an In stock box. Saving — even the same number — records
+ * the count.
+ */
+function CountDialog({
+  item,
+  onSave,
+  onClose,
+}: {
+  item: InventoryRow;
+  /** Resolves to an error message, or null once saved. */
+  onSave: (inStock: number) => Promise<string | null>;
+  onClose: () => void;
+}) {
+  const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(formatQuantity(item.in_stock));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => inputRef.current?.select(), []);
+
+  const submit = async () => {
+    const n = parseQuantity(value);
+    if (n == null) return setError('Enter how many are in stock');
+    setBusy(true);
+    const failure = await onSave(n);
+    setBusy(false);
+    if (failure) setError(failure);
+    else onClose();
+  };
+
+  return (
+    <Modal
+      labelledBy={id}
+      onClose={onClose}
+      initialFocus={inputRef}
+      panelClassName={`${modalPanelClass} flex max-h-[90vh] max-w-lg flex-col overflow-y-auto p-5`}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id={id} className="truncate text-lg font-semibold text-[var(--pyre-creme)]">
+            Count {item.name}
+          </h2>
+          <p className="mt-1 text-xs text-white/50">
+            {item.count_every_days ? countEveryLabel(item.count_every_days) : 'No schedule'}
+            {item.last_counted_at
+              ? ` · last counted ${etStamp(item.last_counted_at)}`
+              : ' · never counted'}
+          </p>
+        </div>
+        <button type="button" className={buttonClass} onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {item.count_instructions && (
+        <div className="mb-4 rounded border border-[var(--pyre-gold)]/30 bg-[var(--pyre-gold)]/5 p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+            How to count
+          </p>
+          <p className="whitespace-pre-wrap break-words text-sm text-[var(--pyre-creme)]">
+            {item.count_instructions}
+          </p>
+        </div>
+      )}
+      <form
+        className="flex items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <label className="flex-1">
+          <span className="mb-1.5 block font-mono text-xs uppercase tracking-wide text-white/50">
+            In stock
+          </span>
+          <input
+            ref={inputRef}
+            inputMode="decimal"
+            value={value}
+            disabled={busy}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+            }}
+            className={`${compactInputClass} w-full text-lg`}
+          />
+        </label>
+        <button type="submit" className={goldButtonClass} disabled={busy}>
+          {busy ? 'Saving…' : 'Save count'}
+        </button>
+      </form>
+      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+    </Modal>
   );
 }
 

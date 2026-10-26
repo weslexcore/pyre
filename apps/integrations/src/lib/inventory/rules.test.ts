@@ -21,6 +21,7 @@ function row(overrides: Partial<InventoryRow> = {}): InventoryRow {
     unit_cost_cents: null,
     vendor: null,
     how_to_order: null,
+    count_instructions: null,
     count_every_days: null,
     last_counted_at: null,
     last_counted_by: null,
@@ -112,6 +113,16 @@ describe('normalizeFields', () => {
     expect(normalizeFields({ in_stock: 5 }, { partial: true })).toEqual({
       ok: true,
       value: { in_stock: 5 },
+    });
+    expect(normalizeFields({ count_instructions: '  Weigh the tank ' }, { partial: true })).toEqual(
+      {
+        ok: true,
+        value: { count_instructions: 'Weigh the tank' },
+      }
+    );
+    expect(normalizeFields({ count_instructions: '' }, { partial: true })).toEqual({
+      ok: true,
+      value: { count_instructions: null },
     });
     expect(normalizeFields({ reorder_at: null }, { partial: true })).toEqual({
       ok: true,

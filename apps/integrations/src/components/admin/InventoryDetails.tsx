@@ -42,6 +42,7 @@ interface Draft {
   cost: string;
   vendor: string;
   how_to_order: string;
+  count_instructions: string;
 }
 
 function draftOf(item: InventoryRow): Draft {
@@ -57,6 +58,7 @@ function draftOf(item: InventoryRow): Draft {
     cost: formatCents(item.unit_cost_cents).replace(/^\$/, ''),
     vendor: item.vendor ?? '',
     how_to_order: item.how_to_order ?? '',
+    count_instructions: item.count_instructions ?? '',
   };
 }
 
@@ -94,6 +96,8 @@ function changesFrom(item: InventoryRow, d: Draft): Record<string, unknown> | st
   if (vendor !== item.vendor) out.vendor = vendor;
   const how = d.how_to_order.trim() || null;
   if (how !== item.how_to_order) out.how_to_order = how;
+  const countHow = d.count_instructions.trim() || null;
+  if (countHow !== item.count_instructions) out.count_instructions = countHow;
   return out;
 }
 
@@ -287,6 +291,21 @@ export function InventoryDetails({
                 </label>
               )}
             </div>
+          </div>
+
+          <div>
+            <label htmlFor={field('count-how')} className={labelClass}>
+              Count instructions <span className="normal-case text-white/30">(optional)</span>
+            </label>
+            <textarea
+              id={field('count-how')}
+              value={draft.count_instructions}
+              onChange={set('count_instructions')}
+              readOnly={readOnly}
+              rows={3}
+              placeholder="Shown when someone presses Due to count it, e.g. count unopened bottles only"
+              className={`${inputClass} w-full`}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -21,6 +21,8 @@ export interface InventoryRow {
   vendor: string | null;
   /** A URL to order from, or written instructions. */
   how_to_order: string | null;
+  /** How to count it, shown when someone presses its Due chip. */
+  count_instructions: string | null;
   /** Count at least every this many studio days (1 = daily); null = no schedule. */
   count_every_days: number | null;
   last_counted_at: string | null;
@@ -42,6 +44,7 @@ export type InventoryFields = Pick<
   | 'unit_cost_cents'
   | 'vendor'
   | 'how_to_order'
+  | 'count_instructions'
   | 'count_every_days'
   | 'in_stock'
   | 'reorder_at'
