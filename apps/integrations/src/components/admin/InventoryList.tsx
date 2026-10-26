@@ -12,6 +12,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
   useRef,
@@ -84,27 +85,63 @@ function takeLinkParams(): { filter: InventoryFilter | null; item: string | null
 
 type Patch = Partial<Record<keyof InventoryRow, unknown>> & { counted?: true };
 
+type ColumnKey = SortKey | 'how_to_order';
+
 interface Column {
-  key: SortKey | 'how_to_order';
+  key: ColumnKey;
   label: string;
+  /** Starting width in px; the viewer can drag it wider or narrower. */
+  width: number;
   className?: string;
 }
 
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Item', className: 'min-w-[12rem]' },
-  { key: 'in_stock', label: 'In stock', className: 'text-right' },
-  { key: 'reorder_at', label: 'Re-order at', className: 'text-right' },
-  { key: 'due', label: 'Count' },
-  { key: 'last_counted_at', label: 'Last counted' },
-  { key: 'count_every_days', label: 'Count every' },
-  { key: 'unit_cost_cents', label: 'Cost / unit', className: 'text-right' },
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'how_to_order', label: 'How to order', className: 'min-w-[14rem]' },
+  { key: 'name', label: 'Item', width: 240 },
+  { key: 'in_stock', label: 'In stock', width: 96, className: 'text-right' },
+  { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right' },
+  { key: 'last_counted_at', label: 'Last counted', width: 180 },
+  { key: 'count_every_days', label: 'Count every', width: 170 },
+  { key: 'unit_cost_cents', label: 'Cost / unit', width: 112, className: 'text-right' },
+  { key: 'vendor', label: 'Vendor', width: 160 },
+  { key: 'how_to_order', label: 'How to order', width: 300 },
 ];
+
+const ACTIONS_WIDTH = 72;
+const MIN_WIDTH = 60;
+const MAX_WIDTH = 800;
+const clampWidth = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w)));
+
+// The viewer's column widths, so the list opens the way they left it.
+const WIDTHS_KEY = 'pyre-inventory-widths';
+
+type Widths = Partial<Record<ColumnKey, number>>;
+
+function readWidthsPref(): Widths {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WIDTHS_KEY) ?? '{}');
+    const out: Widths = {};
+    for (const c of COLUMNS) {
+      if (typeof saved?.[c.key] === 'number') out[c.key] = clampWidth(saved[c.key]);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeWidthsPref(widths: Widths): void {
+  try {
+    localStorage.setItem(WIDTHS_KEY, JSON.stringify(widths));
+  } catch {
+    // Private mode etc. — resizing still works for the session.
+  }
+}
+
+const chipClass = 'rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide';
 
 const cellClass = 'border-b border-white/5 px-2 py-1 align-middle';
 const readClass =
-  'block w-full min-h-[2rem] rounded px-1.5 py-1 text-left hover:bg-white/5 focus:bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/30';
+  'block w-full min-h-[2rem] truncate rounded px-1.5 py-1 text-left hover:bg-white/5 focus:bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/30';
 const editClass = `${compactInputClass} w-full`;
 
 export function InventoryList() {
@@ -119,6 +156,16 @@ export function InventoryList() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [widths, setWidths] = useState<Widths>({});
+  const widthOf = (c: Column) => widths[c.key] ?? c.width;
+  const resize = (key: ColumnKey, width: number | null, persist: boolean) =>
+    setWidths((prev) => {
+      const next = { ...prev };
+      if (width == null) delete next[key];
+      else next[key] = clampWidth(width);
+      if (persist) writeWidthsPref(next);
+      return next;
+    });
   // Re-read once a minute so a daily count turns due at midnight on an open tab.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -129,6 +176,7 @@ export function InventoryList() {
   // Read after mount: the island is server-rendered, where there is no URL or storage.
   useEffect(() => {
     const saved = readSortPref();
+    setWidths(readWidthsPref());
     const link = takeLinkParams();
     setQuery((q) => ({ ...q, ...saved, ...(link.filter ? { filter: link.filter } : {}) }));
     if (link.item) setHighlight(link.item);
@@ -274,14 +322,23 @@ export function InventoryList() {
       {saveError && <ErrorBanner>{saveError}</ErrorBanner>}
 
       <div className="overflow-x-auto rounded border border-white/10">
-        <table className="w-full min-w-[64rem] border-collapse text-sm text-[var(--pyre-creme)]">
+        <table
+          className="table-fixed border-collapse text-sm text-[var(--pyre-creme)]"
+          style={{ width: COLUMNS.reduce((sum, c) => sum + widthOf(c), ACTIONS_WIDTH) }}
+        >
+          <colgroup>
+            {COLUMNS.map((c) => (
+              <col key={c.key} style={{ width: widthOf(c) }} />
+            ))}
+            <col style={{ width: ACTIONS_WIDTH }} />
+          </colgroup>
           <thead>
             <tr className="border-b border-white/10 bg-white/[0.03] text-left font-mono text-[10px] uppercase tracking-wide text-white/50">
               {COLUMNS.map((c) => (
                 <th
                   key={c.key}
                   scope="col"
-                  className={`px-2 py-2 font-normal ${c.className ?? ''} ${c.key === 'name' ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : ''}`}
+                  className={`px-2 py-2 font-normal ${c.className ?? ''} ${c.key === 'name' ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : 'relative'}`}
                   aria-sort={
                     query.sort === c.key ? (query.desc ? 'descending' : 'ascending') : undefined
                   }
@@ -298,6 +355,12 @@ export function InventoryList() {
                       {query.sort === c.key ? (query.desc ? ' ↓' : ' ↑') : ''}
                     </button>
                   )}
+                  <ResizeHandle
+                    label={c.label}
+                    width={widthOf(c)}
+                    onResize={(w, persist) => resize(c.key, w, persist)}
+                    onReset={() => resize(c.key, null, true)}
+                  />
                 </th>
               ))}
               <th scope="col" className="px-2 py-2">
@@ -417,6 +480,34 @@ function ItemRow({
           editable={isAdmin}
           onSave={(v) => (v ? onSave({ name: v }) : Promise.resolve(false))}
         />
+        {(due || low) && (
+          <div className="flex flex-wrap items-center gap-1.5 px-1.5 pb-1">
+            {due && (
+              <>
+                <span
+                  className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`}
+                >
+                  Due
+                </span>
+                <button
+                  type="button"
+                  className={`${chipClass} border-white/15 bg-white/5 text-white/70 hover:border-white/30 hover:text-white`}
+                  onClick={() => void onSave({ counted: true })}
+                  title={`Confirm ${formatQuantity(item.in_stock)} on the shelf`}
+                >
+                  Counted
+                </button>
+              </>
+            )}
+            {low && (
+              <span
+                className={`${chipClass} border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/15 text-[var(--pyre-red)]`}
+              >
+                Re-order
+              </span>
+            )}
+          </div>
+        )}
       </td>
       <td className={`${cellClass} text-right`}>
         <TextCell
@@ -444,31 +535,7 @@ function ItemRow({
           }}
         />
       </td>
-      <td className={`${cellClass} whitespace-nowrap`}>
-        {due ? (
-          <span className="inline-flex items-center gap-2">
-            <span className="rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
-              Due
-            </span>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => void onSave({ counted: true })}
-              title={`Confirm ${formatQuantity(item.in_stock)} on the shelf`}
-            >
-              Counted
-            </button>
-          </span>
-        ) : (
-          <span className="px-1.5 text-white/40">{item.count_every_days ? 'OK' : ''}</span>
-        )}
-        {low && (
-          <span className="ml-2 rounded border border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-red)]">
-            Re-order
-          </span>
-        )}
-      </td>
-      <td className={`${cellClass} whitespace-nowrap px-3.5 text-white/70`}>
+      <td className={`${cellClass} truncate whitespace-nowrap px-3.5 text-white/70`}>
         {item.last_counted_at ? (
           <>
             {fmtShortDate(item.last_counted_at)}
@@ -507,7 +574,7 @@ function ItemRow({
           onSave={(v) => onSave({ vendor: v || null })}
         />
       </td>
-      <td className={`${cellClass} max-w-[20rem]`}>
+      <td className={cellClass}>
         <TextCell
           value={item.how_to_order ?? ''}
           label={`How to order ${item.name}`}
@@ -665,6 +732,66 @@ function TextCell({
     <textarea {...props} rows={3} placeholder="A link, or how to order it" />
   ) : (
     <input {...props} inputMode={numeric ? 'decimal' : undefined} />
+  );
+}
+
+/**
+ * The drag strip on a header's right edge. Dragging sets the column's width
+ * (saved when the drag ends), arrow keys nudge it, double-click resets it.
+ */
+function ResizeHandle({
+  label,
+  width,
+  onResize,
+  onReset,
+}: {
+  label: string;
+  width: number;
+  onResize: (width: number, persist: boolean) => void;
+  onReset: () => void;
+}) {
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    let last = startWidth;
+    const move = (ev: PointerEvent) => {
+      last = startWidth + ev.clientX - startX;
+      onResize(last, false);
+    };
+    const up = () => {
+      onResize(last, true);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable splitter has no native element
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${label} column`}
+      aria-valuenow={width}
+      aria-valuemin={MIN_WIDTH}
+      aria-valuemax={MAX_WIDTH}
+      tabIndex={0}
+      title="Drag to resize, double-click to reset"
+      onPointerDown={onPointerDown}
+      onDoubleClick={onReset}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          onResize(width + (e.key === 'ArrowRight' ? 16 : -16), true);
+        }
+      }}
+      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none after:absolute after:inset-y-1.5 after:left-1/2 after:w-px after:bg-white/15 hover:after:bg-[var(--pyre-gold)] focus:outline-none focus-visible:after:bg-[var(--pyre-gold)]"
+    />
   );
 }
 
