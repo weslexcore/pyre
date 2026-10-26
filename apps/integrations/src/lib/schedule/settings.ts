@@ -1,7 +1,8 @@
 // Admin settings for the staff schedule, backed by the schedule_settings
 // table (see the shift_requests_and_leads and shift_arrival_departure
-// migrations): on/off switches for the employee-facing actions, and how long
-// before the first session staff arrive and after the last one they leave.
+// migrations): on/off switches for the employee-facing actions, how long
+// before the first session staff arrive and after the last one they leave,
+// and how many days from each Monday the schedule is set in stone.
 // Same shape as the email gate: DB rows as source of truth, a ~30s in-process
 // cache, explicit invalidation from the mutation route. A missing row (or an
 // unreachable DB) reads as enabled / the built-in minutes — the switches gate
@@ -9,8 +10,10 @@
 // anyway.
 
 import {
+  CONFIRMED_HORIZON_DAYS,
   DEFAULT_ARRIVE_BEFORE_MIN,
   DEFAULT_LEAVE_AFTER_MIN,
+  isValidConfirmedHorizonDays,
   MAX_SHIFT_BUFFER_MIN,
   type ShiftBufferSettings,
 } from '@pyre/schedule-core';
@@ -23,6 +26,10 @@ export type ScheduleSettingKey = (typeof SCHEDULE_SETTING_KEYS)[number];
 export const SCHEDULE_MINUTE_SETTING_KEYS = ['arrive_before_min', 'leave_after_min'] as const;
 export type ScheduleMinuteSettingKey = (typeof SCHEDULE_MINUTE_SETTING_KEYS)[number];
 
+/** The day-count settings: how far ahead each Monday locks the schedule. */
+export const SCHEDULE_DAY_SETTING_KEYS = ['confirmed_horizon_days'] as const;
+export type ScheduleDaySettingKey = (typeof SCHEDULE_DAY_SETTING_KEYS)[number];
+
 export interface ScheduleSettings extends ShiftBufferSettings {
   /** Employees may request open shifts (manager approval creates the assignment). */
   shiftRequestsEnabled: boolean;
@@ -30,11 +37,14 @@ export interface ScheduleSettings extends ShiftBufferSettings {
   subRequestsEnabled: boolean;
   /** Employees may ask to change their own hours on a shift (a manager approves). */
   hoursChangesEnabled: boolean;
+  /** Days from each Monday the schedule is set in stone; later dates are tentative. */
+  confirmedHorizonDays: number;
 }
 
 interface SettingRow {
   enabled: boolean | null;
   minutes: number | null;
+  days: number | null;
 }
 
 const CACHE_TTL_MS = 30_000;
@@ -50,7 +60,7 @@ async function loadRows(): Promise<Record<string, SettingRow> | null> {
 
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
 
-  const { data, error } = await db.from('schedule_settings').select('key, enabled, minutes');
+  const { data, error } = await db.from('schedule_settings').select('key, enabled, minutes, days');
   if (error) {
     console.error('[schedule-settings] fetch failed:', error.message);
     // A stale snapshot beats flapping to defaults mid-flight.
@@ -60,7 +70,7 @@ async function loadRows(): Promise<Record<string, SettingRow> | null> {
   const rows = Object.fromEntries(
     (data as Array<SettingRow & { key: string }>).map((r) => [
       r.key,
-      { enabled: r.enabled, minutes: r.minutes },
+      { enabled: r.enabled, minutes: r.minutes, days: r.days },
     ])
   );
   cache = { rows, at: Date.now() };
@@ -75,7 +85,13 @@ export async function getScheduleSettings(): Promise<ScheduleSettings> {
     hoursChangesEnabled: rows.hours_changes?.enabled ?? true,
     arriveBeforeMin: rows.arrive_before_min?.minutes ?? DEFAULT_ARRIVE_BEFORE_MIN,
     leaveAfterMin: rows.leave_after_min?.minutes ?? DEFAULT_LEAVE_AFTER_MIN,
+    confirmedHorizonDays: rows.confirmed_horizon_days?.days ?? CONFIRMED_HORIZON_DAYS,
   };
+}
+
+/** Just the commitment horizon, for anything that only needs the tentative boundary. */
+export async function getConfirmedHorizonDays(): Promise<number> {
+  return (await getScheduleSettings()).confirmedHorizonDays;
 }
 
 /** Just the arrive-before / leave-after minutes, for defaulting a new assignment's hours. */
@@ -92,6 +108,11 @@ export function parseSettingMinutes(value: unknown): number | null {
     value <= MAX_SHIFT_BUFFER_MIN
     ? value
     : null;
+}
+
+/** A day setting's value if it's a whole number of days in range, else null. */
+export function parseSettingDays(value: unknown): number | null {
+  return isValidConfirmedHorizonDays(value) ? value : null;
 }
 
 export async function setScheduleSetting(
@@ -126,6 +147,30 @@ export async function setScheduleMinuteSetting(
   const { error } = await db
     .from('schedule_settings')
     .upsert({ key, minutes, enabled: null, updated_by: updatedBy }, { onConflict: 'key' });
+  if (error) return { error: error.message };
+
+  invalidateScheduleSettingsCache();
+  return { error: null };
+}
+
+/**
+ * Save a day setting. Purely a display boundary — moving it re-labels which
+ * dates read as set in stone vs tentative; no shift data changes.
+ */
+export async function setScheduleDaySetting(
+  key: ScheduleDaySettingKey,
+  days: number,
+  updatedBy: string | null
+): Promise<{ error: string | null }> {
+  const db = getDb();
+  if (!db) return { error: 'Storage unavailable' };
+
+  const { error } = await db
+    .from('schedule_settings')
+    .upsert(
+      { key, days, enabled: null, minutes: null, updated_by: updatedBy },
+      { onConflict: 'key' }
+    );
   if (error) return { error: error.message };
 
   invalidateScheduleSettingsCache();

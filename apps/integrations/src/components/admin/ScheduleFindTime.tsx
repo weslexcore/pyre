@@ -66,7 +66,7 @@ interface CandidateDay {
   statuses: PersonStatus[];
   freeCount: number;
   allFree: boolean;
-  /** Past the two-week commitment horizon — times may still move. */
+  /** Past the commitment horizon — times may still move. */
   tentative: boolean;
   dayShiftCount: number;
   /** Active shifts whose window overlaps the searched one — duplicate risk. */
@@ -199,7 +199,7 @@ export function ScheduleFindTime() {
     );
     const weekLoadByStart = new Map(weeks.map((w) => [w.weekStart, w.byStaff]));
 
-    const tentativeFrom = firstTentativeDate(today);
+    const tentativeFrom = firstTentativeDate(today, data.settings.confirmedHorizonDays);
     const days: CandidateDay[] = [];
 
     for (let date = clampedStart; date <= clampedEnd; date = addDays(date, 1)) {

@@ -47,6 +47,8 @@ interface BoardData {
   paydays?: string[];
   /** Who does each off-shift duty on the days in range (live rows only). */
   dutyAssignments?: DutyAssignmentRow[];
+  /** Admin schedule settings — only the commitment horizon is read here. */
+  settings?: { confirmedHorizonDays: number };
 }
 
 // Distinct per-person hues for the time-off markers, assigned by roster order.
@@ -256,11 +258,12 @@ export function ScheduleCalendar() {
   // A month wholly behind us has nothing upcoming — hiding its shifts would
   // blank the grid, so history months always show everything (no toggle).
   const monthIsPast = monthStart < monthStartOf(today);
-  // The commitment boundary (schedule-core): every Monday locks the week
-  // that just started plus the next, so this is always the Monday after
-  // next. Shift blocks on later dates render dashed, and the banner
-  // explains it when the grid reaches past the boundary.
-  const firstTentative = firstTentativeDate(today);
+  // The commitment boundary (schedule-core): every Monday locks the admin's
+  // confirmed-horizon setting worth of days (two weeks by default). Shift
+  // blocks on later dates render dashed, and the banner explains it when the
+  // grid reaches past the boundary.
+  const horizonDays = data?.settings?.confirmedHorizonDays;
+  const firstTentative = firstTentativeDate(today, horizonDays);
   const formatShortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
   return (
@@ -411,7 +414,8 @@ export function ScheduleCalendar() {
                         </span>
                       )}
                       {date >= firstTentative &&
-                        (shifts.length === 0 || shifts.some((s) => isTentativeShift(s, today))) && (
+                        (shifts.length === 0 ||
+                          shifts.some((s) => isTentativeShift(s, today, horizonDays))) && (
                           <span
                             className="mr-0.5 text-[var(--pyre-red)]"
                             title="This week hasn't locked yet — tentative"
@@ -432,7 +436,7 @@ export function ScheduleCalendar() {
                         const noLead =
                           shift.status === 'active' &&
                           missingShiftLead(shift.assignments, staffById);
-                        const tentative = isTentativeShift(shift, today);
+                        const tentative = isTentativeShift(shift, today, horizonDays);
                         const selfWorks = selfShiftIds.has(shift.id);
                         return (
                           <a

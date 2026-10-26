@@ -11,6 +11,7 @@ import {
   addDays,
   assignmentHours,
   availabilityFor,
+  CONFIRMED_HORIZON_DAYS,
   DEFAULT_ARRIVE_BEFORE_MIN,
   DEFAULT_DUTY_CATALOG,
   DEFAULT_LEAVE_AFTER_MIN,
@@ -36,8 +37,10 @@ import {
   isShiftDuty,
   isTentativeShift,
   isTrainedFor,
+  MAX_CONFIRMED_HORIZON_DAYS,
   MAX_SHIFT_BUFFER_MIN,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
+  MIN_CONFIRMED_HORIZON_DAYS,
   minutesToTime,
   mismatchedDutyPairs,
   missingShiftLead,
@@ -93,6 +96,8 @@ interface BoardSettings {
   arriveBeforeMin: number;
   /** Minutes after the last session a person added to a shift leaves. */
   leaveAfterMin: number;
+  /** Days from each Monday the schedule is set in stone; later dates are tentative. */
+  confirmedHorizonDays: number;
 }
 
 const DEFAULT_SETTINGS: BoardSettings = {
@@ -101,6 +106,7 @@ const DEFAULT_SETTINGS: BoardSettings = {
   hoursChangesEnabled: true,
   arriveBeforeMin: DEFAULT_ARRIVE_BEFORE_MIN,
   leaveAfterMin: DEFAULT_LEAVE_AFTER_MIN,
+  confirmedHorizonDays: CONFIRMED_HORIZON_DAYS,
 };
 
 interface BoardData {
@@ -568,11 +574,12 @@ export function ScheduleBoard() {
     });
   };
 
-  // The commitment boundary (schedule-core): every Monday locks the week
-  // that just started plus the next, so this is always the Monday after
-  // next. Dates from here on get the "≈ tentative" treatment, and a banner
-  // explains it whenever the visible range reaches past the boundary.
-  const firstTentative = firstTentativeDate(todayLocal());
+  // The commitment boundary (schedule-core): every Monday locks the admin's
+  // confirmed-horizon setting worth of days (two weeks by default). Dates
+  // from here on get the "≈ tentative" treatment, and a banner explains it
+  // whenever the visible range reaches past the boundary.
+  const horizonDays = settings.confirmedHorizonDays;
+  const firstTentative = firstTentativeDate(todayLocal(), horizonDays);
 
   // Uncovered shifts from today forward (the fetched range reaches back to
   // Monday only for the hours math — past gaps aren't actionable).
@@ -1301,8 +1308,8 @@ export function ScheduleBoard() {
               </span>{' '}
               onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a
               working plan to keep requesting shifts and logging time off into, but times and
-              assignments can still change until the week locks (every Monday locks the two weeks
-              ahead).
+              assignments can still change until the week locks (every Monday locks the next{' '}
+              {horizonDays} days).
               {canManage &&
                 ' To promise a shift sooner, open it and choose Confirm, or confirm a whole day from its heading.'}
             </p>
@@ -1466,6 +1473,32 @@ export function ScheduleBoard() {
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                  Set in stone
+                </p>
+                <p className="font-mono text-xs text-white/50">
+                  How far ahead the schedule is locked, counted from each Monday. Dates after that
+                  read as tentative on the board, the calendar, and Find a time, and stay out of
+                  subscribed calendar feeds until they lock or are confirmed by hand.
+                </p>
+                <DaysSetting
+                  label="Locked from each Monday"
+                  value={settings.confirmedHorizonDays}
+                  min={MIN_CONFIRMED_HORIZON_DAYS}
+                  max={MAX_CONFIRMED_HORIZON_DAYS}
+                  disabled={busy}
+                  onSave={(days) =>
+                    run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'confirmed_horizon_days',
+                        days,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
                   Payday
                 </p>
                 <p className="font-mono text-xs text-white/50">
@@ -1602,7 +1635,7 @@ export function ScheduleBoard() {
               const beyondHorizon = date >= firstTentative;
               const today = todayLocal();
               const tentativeShiftIds = beyondHorizon
-                ? shifts.filter((s) => isTentativeShift(s, today)).map((s) => s.id)
+                ? shifts.filter((s) => isTentativeShift(s, today, horizonDays)).map((s) => s.id)
                 : [];
               const dayConfirmed =
                 beyondHorizon && shifts.length > 0 && tentativeShiftIds.length === 0;
@@ -1957,6 +1990,7 @@ export function ScheduleBoard() {
                                 busy={busy}
                                 shift={shift}
                                 run={run}
+                                firstTentative={firstTentative}
                               />
                             </div>
                           )}
@@ -2017,6 +2051,7 @@ function ShiftForm({
   busy,
   shift,
   run,
+  firstTentative,
 }: {
   form: ShiftFormState;
   setForm: (f: ShiftFormState) => void;
@@ -2026,6 +2061,8 @@ function ShiftForm({
   /** Present when editing an existing shift — enables cancel/delete actions. */
   shift?: BoardShift;
   run?: (action: () => Promise<{ error?: string }>) => Promise<unknown>;
+  /** First tentative date — past it an unconfirmed shift can be confirmed by hand. */
+  firstTentative?: string;
 }) {
   return (
     <div className="mb-2 space-y-2 rounded border border-white/10 bg-white/5 p-3">
@@ -2117,7 +2154,7 @@ function ShiftForm({
             >
               {shift.status === 'cancelled' ? 'Reinstate' : 'Cancel shift'}
             </button>
-            {(shift.confirmed_at || shift.shift_date >= firstTentativeDate(todayLocal())) && (
+            {(shift.confirmed_at || (firstTentative && shift.shift_date >= firstTentative)) && (
               <button
                 type="button"
                 className={buttonClass}
@@ -3349,6 +3386,59 @@ function MinutesSetting({
         }}
       />
       minutes — {label.toLowerCase()}
+    </label>
+  );
+}
+
+/**
+ * One day-count schedule setting: like MinutesSetting — saves on blur or
+ * Enter, snaps back if what's typed isn't a whole number of days in range.
+ */
+function DaysSetting({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onSave: (days: number) => Promise<string | null>;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = () => {
+    const days = Number(draft);
+    if (!Number.isInteger(days) || days < min || days > max) {
+      setDraft(String(value));
+      return;
+    }
+    if (days !== value) void onSave(days);
+  };
+
+  return (
+    <label className="flex flex-wrap items-center gap-2 font-mono text-xs text-white/70">
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={1}
+        inputMode="numeric"
+        className={`${inputClass} w-20`}
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+      />
+      days — {label.toLowerCase()}
     </label>
   );
 }

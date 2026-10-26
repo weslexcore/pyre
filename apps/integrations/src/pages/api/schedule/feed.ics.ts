@@ -6,7 +6,8 @@
 // scope=team is re-derived from that row's own permissions, never trusted from
 // the query string, so an employee's token can't read the whole team's feed.
 //
-// The window stops at the confirmed horizon: past the Monday-after-next the
+// The window stops at the confirmed horizon (the admin's
+// confirmed_horizon_days setting, counted from this Monday): past it the
 // schedule is still a working plan, and shifts that may still move don't
 // belong in someone's personal calendar. A shift an admin confirmed by hand
 // (shifts.confirmed_at) is the exception — it is set in stone however far
@@ -35,6 +36,7 @@ import {
 } from '@/lib/schedule/calendar-feed';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { getPaySchedule } from '@/lib/schedule/pay-schedule';
+import { getConfirmedHorizonDays } from '@/lib/schedule/settings';
 
 export const prerender = false;
 
@@ -88,7 +90,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
   const today = todayEastern();
   const start = addDays(today, -PAST_DAYS);
-  const end = lastConfirmedDate(today);
+  const end = lastConfirmedDate(today, await getConfirmedHorizonDays());
 
   const [shiftsRes, allStaffRes, dutyRes] = await Promise.all([
     db

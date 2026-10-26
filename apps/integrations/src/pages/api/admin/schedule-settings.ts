@@ -1,20 +1,29 @@
 // Admin schedule settings — the employee-facing action toggles (shift
 // requests, "unable to work") and when staff arrive before the first session
-// and leave after the last — the schedule_settings table behind
+// and leave after the last, and how many days from each Monday the schedule
+// is set in stone — the schedule_settings table behind
 // lib/schedule/settings.ts. Admin-only: these change what every employee can
 // do, so they sit above the schedule:manage capability.
 
-import { MAX_SHIFT_BUFFER_MIN } from '@pyre/schedule-core';
+import {
+  MAX_CONFIRMED_HORIZON_DAYS,
+  MAX_SHIFT_BUFFER_MIN,
+  MIN_CONFIRMED_HORIZON_DAYS,
+} from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { json } from '@/lib/http/route';
 import {
   getScheduleSettings,
+  parseSettingDays,
   parseSettingMinutes,
+  SCHEDULE_DAY_SETTING_KEYS,
   SCHEDULE_MINUTE_SETTING_KEYS,
   SCHEDULE_SETTING_KEYS,
+  type ScheduleDaySettingKey,
   type ScheduleMinuteSettingKey,
   type ScheduleSettingKey,
+  setScheduleDaySetting,
   setScheduleMinuteSetting,
   setScheduleSetting,
 } from '@/lib/schedule/settings';
@@ -64,8 +73,27 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ settings: await getScheduleSettings() });
   }
 
+  if (typeof key === 'string' && (SCHEDULE_DAY_SETTING_KEYS as readonly string[]).includes(key)) {
+    const days = parseSettingDays(body.days);
+    if (days === null) {
+      return json(
+        {
+          error: `days must be a whole number from ${MIN_CONFIRMED_HORIZON_DAYS} to ${MAX_CONFIRMED_HORIZON_DAYS}`,
+        },
+        400
+      );
+    }
+    const { error } = await setScheduleDaySetting(key as ScheduleDaySettingKey, days, updatedBy);
+    if (error) return json({ error }, 500);
+    return json({ settings: await getScheduleSettings() });
+  }
+
   if (typeof key !== 'string' || !(SCHEDULE_SETTING_KEYS as readonly string[]).includes(key)) {
-    const keys = [...SCHEDULE_SETTING_KEYS, ...SCHEDULE_MINUTE_SETTING_KEYS];
+    const keys = [
+      ...SCHEDULE_SETTING_KEYS,
+      ...SCHEDULE_MINUTE_SETTING_KEYS,
+      ...SCHEDULE_DAY_SETTING_KEYS,
+    ];
     return json({ error: `key must be one of: ${keys.join(', ')}` }, 400);
   }
   if (typeof body.enabled !== 'boolean') {

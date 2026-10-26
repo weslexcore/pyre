@@ -8,6 +8,7 @@ import {
   firstTentativeDate,
   isTentativeDate,
   isTentativeShift,
+  isValidConfirmedHorizonDays,
   lastConfirmedDate,
 } from '../src/horizon';
 import { addDays, weekStartOf } from '../src/hours';
@@ -67,5 +68,27 @@ describe('confirmed horizon', () => {
     // Fri 2026-12-25: week began Mon 12/21, locked through Sun 2027-01-03.
     expect(firstTentativeDate('2026-12-25')).toBe('2027-01-04');
     expect(lastConfirmedDate('2026-12-25')).toBe('2027-01-03');
+  });
+
+  it('takes a longer window from the admin setting', () => {
+    // 21 days from Mon 8/10: locked through Sun 8/30, tentative from Mon 8/31.
+    expect(lastConfirmedDate(today, 21)).toBe('2026-08-30');
+    expect(firstTentativeDate(today, 21)).toBe('2026-08-31');
+    expect(isTentativeDate('2026-08-28', today, 21)).toBe(false);
+    expect(isTentativeShift({ shift_date: '2026-08-28', confirmed_at: null }, today, 21)).toBe(
+      false
+    );
+    expect(isTentativeShift({ shift_date: '2026-08-31', confirmed_at: null }, today, 21)).toBe(
+      true
+    );
+  });
+
+  it('validates the setting', () => {
+    expect(isValidConfirmedHorizonDays(21)).toBe(true);
+    expect(isValidConfirmedHorizonDays(7)).toBe(true);
+    expect(isValidConfirmedHorizonDays(6)).toBe(false);
+    expect(isValidConfirmedHorizonDays(91)).toBe(false);
+    expect(isValidConfirmedHorizonDays(14.5)).toBe(false);
+    expect(isValidConfirmedHorizonDays('21')).toBe(false);
   });
 });
