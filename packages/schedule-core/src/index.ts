@@ -10,6 +10,7 @@ export * from "./leads";
 export * from "./on-call";
 export * from "./payday";
 export * from "./rest";
+export * from "./staffing";
 export * from "./standing-instructions";
 export * from "./stipends";
 export * from "./types";

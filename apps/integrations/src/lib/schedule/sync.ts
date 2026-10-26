@@ -9,6 +9,12 @@
 // or sync_locked only ever gets flagged for the admin — sessions get deleted
 // to be replaced, or weather-cancelled, and nobody should be silently
 // unassigned because of it.
+//
+// Head counts come from the admins' staffing rules (staffing-rules.ts):
+// every window gets the first matching rule's count, new shifts are created
+// with it, and tracked shifts are moved to it unless an admin set theirs by
+// hand. Rules can match on Momence tags, which only the public events feed
+// carries — if that feed or the rules can't be read, existing counts stay put.
 
 import {
   type CoverageEvent,
@@ -17,14 +23,17 @@ import {
   notesForTitles,
   planShiftSync,
   type SyncShiftInput,
+  staffNeededFor,
   syncRange,
   timeToMinutes,
   utcToEastern,
 } from '@pyre/schedule-core';
 import { getDb } from '@/lib/db';
 import { fetchAppointmentReservations, fetchHostSessions } from '@/lib/momence/host-api';
+import { fetchMomenceEvents } from '@/lib/momence-events';
 import { assigneesOf, notifyShiftChange } from '@/lib/notifications/schedule';
 import { type ChangeActor, logScheduleChange, SYNC_ACTOR } from '@/lib/schedule/change-log';
+import { loadStaffingRules } from '@/lib/schedule/staffing-rules';
 
 const DAY_MIN = 24 * 60;
 const DEFAULT_HORIZON_DAYS = 21;
@@ -42,6 +51,8 @@ export interface SyncShiftsSummary {
   cancelled: number;
   flagged: number;
   flagsCleared: number;
+  /** Tracked shifts whose head count the staffing rules changed. */
+  staffingUpdated: number;
 }
 
 /**
@@ -54,7 +65,8 @@ function toEvent(
   id: number,
   title: string,
   startsAt: string,
-  endsAt: string | null
+  endsAt: string | null,
+  tags: string[] = []
 ): CoverageEvent | null {
   if (!startsAt) return null;
   const start = utcToEastern(startsAt);
@@ -66,7 +78,7 @@ function toEvent(
     endMin = Math.min(start.minutes + APPOINTMENT_FALLBACK_MIN, DAY_MIN);
   }
   if (endMin <= start.minutes) return null;
-  return { kind, id, title, date: start.date, startMin: start.minutes, endMin };
+  return { kind, id, title, date: start.date, startMin: start.minutes, endMin, tags };
 }
 
 export async function syncShifts(
@@ -95,14 +107,38 @@ export async function syncShifts(
     lookbackDays,
   });
 
-  const [sessions, appointments] = await Promise.all([
+  const [sessions, appointments, tagFeed, staffingRules] = await Promise.all([
     fetchHostSessions({ startAfter, startBefore }),
     fetchAppointmentReservations({ startAfter, startBefore }),
+    // Tags for staffing rules. The host sessions endpoint doesn't carry them;
+    // the public feed does, keyed by the same session id. Unpublished
+    // sessions aren't in it and so match no tag rule.
+    fetchMomenceEvents().catch((error: unknown) => {
+      console.warn(
+        '[sync-shifts] events feed unavailable, staffing counts left as they are:',
+        error instanceof Error ? error.message : error
+      );
+      return null;
+    }),
+    loadStaffingRules(),
   ]);
+  const tagsById = new Map(
+    (tagFeed ?? []).map((e) => [
+      Number(e.id),
+      Array.isArray(e.tags) ? e.tags.filter((t): t is string => typeof t === 'string') : [],
+    ])
+  );
 
   const events: CoverageEvent[] = [];
   for (const s of sessions) {
-    const event = toEvent('session', s.id, s.name ?? 'Session', s.startsAt, s.endsAt);
+    const event = toEvent(
+      'session',
+      s.id,
+      s.name ?? 'Session',
+      s.startsAt,
+      s.endsAt,
+      tagsById.get(s.id) ?? []
+    );
     if (event) events.push(event);
   }
   for (const a of appointments) {
@@ -117,6 +153,15 @@ export async function syncShifts(
   }
 
   const windows = deriveCoverageWindows(events);
+  for (const w of windows) {
+    w.staffNeeded = staffNeededFor(staffingRules ?? [], {
+      date: w.date,
+      startMin: w.startMin,
+      label: w.label,
+      titles: w.titles,
+      tags: w.tags ?? [],
+    });
+  }
 
   // Existing non-draft shifts across the local-date horizon: momence shifts
   // for matching (all statuses, so a re-appearing session doesn't duplicate a
@@ -125,7 +170,7 @@ export async function syncShifts(
   const { data: shiftRows, error: shiftsError } = await db
     .from('shifts')
     .select(
-      'id, shift_date, label, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes, sessions_start_at, sessions_end_at'
+      'id, shift_date, label, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes, sessions_start_at, sessions_end_at, staff_needed, staff_needed_manual'
     )
     .eq('is_draft', false)
     .gte('shift_date', rangeStart)
@@ -152,7 +197,9 @@ export async function syncShifts(
   }));
   const notesById = new Map((shiftRows ?? []).map((s) => [s.id, s.notes as string | null]));
 
-  const plan = planShiftSync(windows, existing);
+  const plan = planShiftSync(windows, existing, {
+    applyStaffing: staffingRules !== null && tagFeed !== null,
+  });
 
   const summary: SyncShiftsSummary = {
     dryRun,
@@ -165,6 +212,7 @@ export async function syncShifts(
     cancelled: plan.cancel.length,
     flagged: plan.flag.length,
     flagsCleared: plan.clearFlag.length,
+    staffingUpdated: plan.staffing.length,
   };
   if (dryRun) return summary;
 
@@ -271,6 +319,16 @@ export async function syncShifts(
     if (error) throw new Error(error.message);
   }
 
+  // Head counts from the staffing rules: the coverage target only, so nobody
+  // on the shift is told — the board's 1/3 just reads differently.
+  for (const change of plan.staffing) {
+    const { error } = await db
+      .from('shifts')
+      .update({ staff_needed: change.staffNeeded })
+      .eq('id', change.shiftId);
+    if (error) throw new Error(error.message);
+  }
+
   if (plan.clearFlag.length > 0) {
     const { error } = await db.from('shifts').update({ sync_flag: null }).in('id', plan.clearFlag);
     if (error) throw new Error(error.message);
@@ -285,6 +343,7 @@ export async function syncShifts(
       ['cancelled', summary.cancelled],
       ['flagged', summary.flagged],
       ['flags cleared', summary.flagsCleared],
+      ['head counts changed', summary.staffingUpdated],
     ] as const
   ).filter(([, n]) => n > 0);
   if (parts.length > 0) {

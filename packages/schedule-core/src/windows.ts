@@ -16,6 +16,8 @@ export interface CoverageEvent {
   date: string;
   startMin: number;
   endMin: number;
+  /** Momence tags on the session (staffing rules can match on them). */
+  tags?: string[];
 }
 
 export interface WindowOptions {
@@ -75,6 +77,8 @@ export interface CoverageWindow {
    * six — the count lives in sessionRefs.
    */
   titles: string[];
+  /** Distinct Momence tags across the covered events, for staffing rules. */
+  tags?: string[];
 }
 
 const DAY_MIN = 24 * 60;
@@ -133,6 +137,9 @@ export function deriveCoverageWindows(
         current.sessionsEndMin = currentSessionsEnd;
         current.sessionRefs.push({ type: event.kind, id: event.id });
         if (!current.titles.includes(event.title)) current.titles.push(event.title);
+        for (const tag of event.tags ?? []) {
+          if (!current.tags?.includes(tag)) current.tags?.push(tag);
+        }
         eventsOf.get(current)?.push(event);
       } else {
         current = {
@@ -145,6 +152,7 @@ export function deriveCoverageWindows(
           sessionsStartMin: event.startMin,
           sessionsEndMin: event.endMin,
           titles: [event.title],
+          tags: [...new Set(event.tags ?? [])],
         };
         currentPaddedEnd = paddedEnd;
         currentSessionsEnd = event.endMin;
@@ -196,6 +204,7 @@ export function splitLongWindow(
     sessionRefs: own.map((e) => ({ type: e.kind, id: e.id })),
     ...edges,
     titles: [...new Set(own.map((e) => e.title))],
+    tags: [...new Set(own.flatMap((e) => e.tags ?? []))],
   });
   const first = events.filter((e) => e.startMin < splitMin);
   const second = events.filter((e) => e.startMin >= splitMin);
@@ -323,6 +332,10 @@ export interface SyncShiftInput {
   /** The session edges last recorded (CoverageWindow.sessionsStartMin/EndMin as times). */
   sessions_start_at: string | null;
   sessions_end_at: string | null;
+  /** Current head count, so the planner can re-apply the staffing rules. */
+  staff_needed?: number;
+  /** An admin set the head count by hand — staffing rules leave it alone. */
+  staff_needed_manual?: boolean;
 }
 
 export interface SyncPlan {
@@ -349,6 +362,12 @@ export interface SyncPlan {
   flag: Array<{ shiftId: string; flag: 'sessions_cancelled' | 'times_changed' }>;
   /** Previously-flagged shifts whose divergence resolved. */
   clearFlag: string[];
+  /**
+   * Matched shifts whose head count no longer matches what the staffing rules
+   * give their window (staffed and locked shifts included — it changes the
+   * coverage target, never anyone's hours). Skips shifts set by hand.
+   */
+  staffing: Array<{ shiftId: string; staffNeeded: number }>;
 }
 
 const refKey = (ref: { type: string; id: number }) => `${ref.type}:${ref.id}`;
@@ -368,8 +387,23 @@ const sameTime = (a: string | null, b: string | null) =>
  * — but an active manual shift that already covers a window (by session ref
  * or time overlap) suppresses creating a momence duplicate alongside it.
  */
-export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInput[]): SyncPlan {
-  const plan: SyncPlan = { create: [], update: [], cancel: [], flag: [], clearFlag: [], edges: [] };
+export function planShiftSync(
+  windows: CoverageWindow[],
+  existing: SyncShiftInput[],
+  // Off when the window's head counts can't be trusted this run (the tag feed
+  // was unreachable, so tag rules couldn't match) — creates still use them.
+  options: { applyStaffing?: boolean } = {}
+): SyncPlan {
+  const applyStaffing = options.applyStaffing ?? true;
+  const plan: SyncPlan = {
+    create: [],
+    update: [],
+    cancel: [],
+    flag: [],
+    clearFlag: [],
+    edges: [],
+    staffing: [],
+  };
   const candidates = existing.filter((s) => s.source === 'momence' && !s.is_draft);
   const manualCover = existing.filter(
     (s) => s.source === 'manual' && !s.is_draft && s.status === 'active'
@@ -401,6 +435,15 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
       continue;
     }
     matchedShiftIds.add(match.id);
+
+    if (
+      applyStaffing &&
+      match.staff_needed !== undefined &&
+      !match.staff_needed_manual &&
+      match.staff_needed !== window.staffNeeded
+    ) {
+      plan.staffing.push({ shiftId: match.id, staffNeeded: window.staffNeeded });
+    }
 
     const startsAt = minutesToTime(window.startMin);
     const endsAt = minutesToTime(window.endMin);

@@ -91,6 +91,11 @@ export interface ShiftRow {
 	starts_at: string;
 	ends_at: string;
 	staff_needed: number;
+	/**
+	 * staff_needed was set by hand; the sync's staffing rules leave it alone
+	 * (see staffing.ts). Optional until every reader selects it.
+	 */
+	staff_needed_manual?: boolean;
 	source: "momence" | "manual";
 	momence_session_ids: Array<{ type: string; id: number }>;
 	sync_locked: boolean;

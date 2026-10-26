@@ -81,6 +81,7 @@ import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { OffShiftDuties } from './OffShiftDuties';
 import { PayScheduleSettings } from './PayScheduleSettings';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
+import { StaffingRulesSettings } from './StaffingRulesSettings';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
 
@@ -1573,6 +1574,24 @@ export function ScheduleBoard() {
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                  People needed
+                </p>
+                <p className="font-mono text-xs text-white/50">
+                  How many people each shift needs, by rule. Rules are checked top to bottom and the
+                  first one that fits a shift sets its count; leave a condition empty to match
+                  anything. Applies to shifts synced from Momence, except ones whose count was set
+                  by hand on the shift.
+                </p>
+                <StaffingRulesSettings
+                  onSaved={() => {
+                    invalidateJson('/api/admin/schedule-board');
+                    void load();
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
                   Set in stone
                 </p>
                 <p className="font-mono text-xs text-white/50">
@@ -2213,6 +2232,30 @@ function ShiftForm({
           aria-label="Staff needed"
         />
       </div>
+      {shift?.source === 'momence' && run && (
+        <p className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-white/40">
+          {shift.staff_needed_manual ? (
+            <>
+              People needed was set by hand — the staffing rules leave it alone.
+              <button
+                type="button"
+                className="underline hover:text-white"
+                disabled={busy}
+                onClick={() => {
+                  onCancel();
+                  void run(() =>
+                    api('PATCH', '/api/admin/shifts', { id: shift.id, staffNeededManual: false })
+                  );
+                }}
+              >
+                Use the rules again
+              </button>
+            </>
+          ) : (
+            'People needed comes from the staffing rules; changing it here keeps your number.'
+          )}
+        </p>
+      )}
       <input
         className={inputClass}
         value={form.notes}

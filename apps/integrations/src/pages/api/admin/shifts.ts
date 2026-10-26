@@ -87,6 +87,15 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       return json({ error: 'confirmed must be a boolean' }, 400);
     fields.confirmed_at = body.confirmed ? new Date().toISOString() : null;
   }
+  // `staffNeededManual: false` hands the head count back to the staffing
+  // rules (the next sync recomputes it). Like confirming, it isn't an edit to
+  // the shift itself. Setting true happens below, when the count changes.
+  if (body.staffNeededManual !== undefined) {
+    if (body.staffNeededManual !== false) {
+      return json({ error: 'staffNeededManual can only be set to false' }, 400);
+    }
+    fields.staff_needed_manual = false;
+  }
   if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
 
   const { data: existing, error: fetchError } = await db
@@ -114,6 +123,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (existing.source === 'momence' && editsShift) {
     fields.sync_locked = true;
     fields.sync_flag = null;
+  }
+
+  // A head count changed by hand outranks the staffing rules from now on.
+  // The form sends every field on save, so only an actual change counts.
+  if (fields.staff_needed !== undefined && fields.staff_needed !== existing.staff_needed) {
+    fields.staff_needed_manual = true;
   }
 
   const { data, error } = await db.from('shifts').update(fields).eq('id', id).select('*').single();

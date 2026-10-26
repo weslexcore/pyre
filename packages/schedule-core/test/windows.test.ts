@@ -397,7 +397,29 @@ describe('planShiftSync', () => {
         shift({ id: 'gone', status: 'cancelled' }),
       ]
     );
-    expect(plan).toEqual({ create: [], update: [], cancel: [], flag: [], clearFlag: [], edges: [] });
+    expect(plan).toEqual({ create: [], update: [], cancel: [], flag: [], clearFlag: [], edges: [], staffing: [] });
+  });
+
+  it('re-applies the staffing head count unless it was set by hand', () => {
+    const w = window({ staffNeeded: 3 });
+    expect(planShiftSync([w], [shift({ staff_needed: 2 })]).staffing).toEqual([
+      { shiftId: 'shift-1', staffNeeded: 3 },
+    ]);
+    expect(
+      planShiftSync([w], [shift({ staff_needed: 2, staff_needed_manual: true })]).staffing
+    ).toEqual([]);
+    expect(planShiftSync([w], [shift({ staff_needed: 3 })]).staffing).toEqual([]);
+    expect(
+      planShiftSync([w], [shift({ staff_needed: 2 })], { applyStaffing: false }).staffing
+    ).toEqual([]);
+  });
+
+  it('carries session tags onto the window', () => {
+    const [win] = deriveCoverageWindows([
+      event({ id: 1, startMin: min('10:00'), endMin: min('11:00'), tags: ['guided'] }),
+      event({ id: 2, startMin: min('11:00'), endMin: min('12:00'), tags: ['guided', 'event'] }),
+    ]);
+    expect(win.tags).toEqual(['guided', 'event']);
   });
 });
 
