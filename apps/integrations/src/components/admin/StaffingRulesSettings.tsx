@@ -246,7 +246,7 @@ export function StaffingRulesSettings({ onSaved }: { onSaved: () => void }) {
               from
               <input
                 type="time"
-                className={`${compactInputClass} w-28`}
+                className={`${compactInputClass} w-auto min-w-[8.5rem]`}
                 value={rule.startsFrom ?? ''}
                 aria-label={`Rule ${index + 1} starts from`}
                 disabled={busy}
@@ -255,7 +255,7 @@ export function StaffingRulesSettings({ onSaved }: { onSaved: () => void }) {
               before
               <input
                 type="time"
-                className={`${compactInputClass} w-28`}
+                className={`${compactInputClass} w-auto min-w-[8.5rem]`}
                 value={rule.startsBefore ?? ''}
                 aria-label={`Rule ${index + 1} starts before`}
                 disabled={busy}
