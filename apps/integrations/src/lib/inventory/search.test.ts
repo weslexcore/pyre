@@ -1,126 +1,55 @@
 import { describe, expect, it } from 'vitest';
 import { searchInventory } from './search';
-import type { InventoryAreaRow, InventoryItemRow } from './types';
+import type { InventoryRow } from './types';
 
-const now = '2026-10-02T00:00:00Z';
-const item = (
-  id: string,
-  name: string,
-  over: Partial<InventoryItemRow> = {}
-): InventoryItemRow => ({
-  id,
-  name,
-  kind: 'operational',
-  category_id: null,
-  unit_id: 'each',
-  unit: 'each',
-  unit_plural: 'each',
-  lot_size: 1,
-  lot_unit_id: null,
-  lot_label: null,
-  lot_label_plural: null,
-  reorder_level: null,
-  reorder_target: null,
-  unit_cost_cents: null,
-  vendor: null,
-  vendor_url: null,
-  notes: null,
-  product_id: null,
-  variant: null,
-  variant_order: 0,
-  count_every_days: null,
-  active: true,
-  created_by: 'a@x',
-  created_at: now,
-  updated_at: now,
-  ...over,
-});
-const area = (id: string, name: string, sort_order: number, active = true): InventoryAreaRow => ({
-  id,
-  name,
-  description: null,
-  sort_order,
-  count_every_days: null,
-  active,
-  created_by: 'a@x',
-  created_at: now,
-  updated_at: now,
-});
+function row(name: string, overrides: Partial<InventoryRow> = {}): InventoryRow {
+  return {
+    id: name.toLowerCase(),
+    name,
+    unit_cost_cents: null,
+    vendor: null,
+    how_to_order: null,
+    count_every_days: null,
+    last_counted_at: null,
+    last_counted_by: null,
+    in_stock: 10,
+    reorder_at: null,
+    created_by: 'a@pyre.test',
+    created_at: '2026-10-01T12:00:00Z',
+    updated_at: '2026-10-01T12:00:00Z',
+    ...overrides,
+  };
+}
 
-const data = {
-  categories: [
-    {
-      id: 'c1',
-      name: 'Linens',
-      sort_order: 1,
-      active: true,
-      created_by: 'x',
-      created_at: now,
-      updated_at: now,
-    },
-  ],
-  areas: [
-    area('a1', 'Front desk', 2),
-    area('a2', 'Back closet', 1),
-    area('a3', 'Old shelf', 3, false),
-  ],
-  items: [
-    item('i1', 'Bath towels', {
-      category_id: 'c1',
-      unit: 'towel',
-      unit_plural: 'towels',
-      reorder_level: 10,
-    }),
-    item('i2', 'Hand towels', { category_id: 'c1', unit: 'towel', unit_plural: 'towels' }),
-    item('i3', 'Towel hooks'),
-    item('i4', 'Retired towels', { active: false }),
-    item('i5', 'Sheets', { category_id: 'c1', vendor: 'Uline' }),
-  ],
-  spots: [
-    { id: 's1', item_id: 'i1', area_id: 'a1', sort_order: 0, par_level: null, created_at: now },
-    { id: 's2', item_id: 'i1', area_id: 'a2', sort_order: 0, par_level: null, created_at: now },
-    { id: 's3', item_id: 'i1', area_id: 'a3', sort_order: 0, par_level: null, created_at: now },
-  ],
-  stock: [
-    { item_id: 'i1', area_id: 'a1', quantity: 4, updated_at: now },
-    { item_id: 'i1', area_id: 'a2', quantity: 3, updated_at: now },
-  ],
-};
+const NOW = new Date('2026-10-26T14:00:00Z');
 
 describe('searchInventory', () => {
-  it('ranks name-prefix matches, then name matches, then category/vendor/unit, skipping retired items', () => {
-    const hits = searchInventory(data, 'towel', { max: 10, editable: true });
-    expect(hits.map((h) => h.name)).toEqual(['Towel hooks', 'Bath towels', 'Hand towels']);
+  const items = [
+    row('Bath towels', { vendor: 'Uline' }),
+    row('Towel hooks'),
+    row('Test strips', { vendor: 'Towel Depot', in_stock: 2, reorder_at: 5, count_every_days: 7 }),
+    row('Propane'),
+  ];
+
+  it('ranks name prefix, then name, then vendor matches', () => {
+    const hits = searchInventory(items, 'towel', { max: 10, now: NOW });
+    expect(hits.map((h) => h.name)).toEqual(['Towel hooks', 'Bath towels', 'Test strips']);
   });
 
-  it('matches on category and vendor', () => {
-    expect(searchInventory(data, 'linens', { max: 10, editable: false }).map((h) => h.id)).toEqual([
-      'i1',
-      'i2',
-      'i5',
-    ]);
-    expect(searchInventory(data, 'uline', { max: 10, editable: false }).map((h) => h.id)).toEqual([
-      'i5',
-    ]);
-  });
-
-  it('reports total on hand, low stock, active areas in walk order, and who may edit', () => {
-    const [bath] = searchInventory(data, 'bath', { max: 10, editable: false });
-    expect(bath).toEqual({
-      id: 'i1',
-      name: 'Bath towels',
-      category: 'Linens',
-      unit: 'towel',
-      unit_plural: 'towels',
-      onHand: 7,
+  it('carries stock, low, and due', () => {
+    const [hit] = searchInventory(items, 'strips', { max: 10, now: NOW });
+    expect(hit).toEqual({
+      id: 'test strips',
+      name: 'Test strips',
+      vendor: 'Towel Depot',
+      inStock: 2,
       low: true,
-      areas: ['Back closet', 'Front desk'],
-      editable: false,
+      due: true,
     });
   });
 
-  it('caps the results and ignores blank terms', () => {
-    expect(searchInventory(data, 'towel', { max: 2, editable: true })).toHaveLength(2);
-    expect(searchInventory(data, '  ', { max: 10, editable: true })).toEqual([]);
+  it('caps the results and ignores a blank term', () => {
+    expect(searchInventory(items, 'towel', { max: 1, now: NOW })).toHaveLength(1);
+    expect(searchInventory(items, '  ', { max: 10, now: NOW })).toEqual([]);
   });
 });

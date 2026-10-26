@@ -8,7 +8,8 @@
 
 import type { SearchPage } from '@/components/admin/adminTools';
 import type { BoardRow } from '@/lib/db';
-import { formatUnits } from '@/lib/inventory/rules';
+import { formatQuantity } from '@/lib/inventory/rules';
+import { INVENTORY_HREF } from '@/lib/inventory/types';
 import { MIN_QUERY_LENGTH, matchesTerm, queryLength } from '@/lib/sops/search';
 
 export { MIN_QUERY_LENGTH, queryLength };
@@ -56,22 +57,17 @@ export interface TaskHit {
 }
 
 /** /api/admin/search's response. */
-/** One inventory item the server matched by name, category, vendor, or unit. */
+/** One inventory item the server matched by name or vendor. */
 export interface InventoryHit {
   id: string;
   name: string;
-  /** Category name; '' when uncategorised. */
-  category: string;
-  unit: string;
-  unit_plural: string;
-  /** Total on hand across every storage spot. */
-  onHand: number;
+  /** '' when none is set. */
+  vendor: string;
+  inStock: number;
   /** At or below its re-order level. */
   low: boolean;
-  /** The storage areas it is kept in, in walk order. */
-  areas: string[];
-  /** Whether the caller may edit it (admins) — decides where the row links. */
-  editable: boolean;
+  /** Due for a count. */
+  due: boolean;
 }
 
 export interface SearchResponse {
@@ -167,14 +163,9 @@ export function taskHref(boardSlug: string, cardId: string): string {
   return `/admin/boards/${boardSlug}#card-${cardId}`;
 }
 
-/**
- * Link to one inventory item: its edit form on the setup page for an admin,
- * its log sheet on the stock page for everyone else (the islands read
- * ?item=).
- */
-export function inventoryHref(itemId: string, editable: boolean): string {
-  const page = editable ? '/admin/inventory/setup' : '/admin/inventory';
-  return `${page}?${new URLSearchParams({ item: itemId })}`;
+/** Link to one inventory item: the list, scrolled to its row (the island reads ?item=). */
+export function inventoryHref(itemId: string): string {
+  return `${INVENTORY_HREF}?${new URLSearchParams({ item: itemId })}`;
 }
 
 /** Link to the Ask page that asks `term` on arrival (SopAsk reads ?q=). */
@@ -281,10 +272,12 @@ export function buildItems(
     items.push({
       key: `inventory:${item.id}`,
       group: 'inventory',
-      href: inventoryHref(item.id, item.editable),
+      href: inventoryHref(item.id),
       title: item.name,
-      hint: [item.category, item.areas.join(', ')].filter(Boolean).join(' · '),
-      meta: `${formatUnits(item.onHand, item)} on hand${item.low ? ' · low' : ''}`,
+      hint: item.vendor,
+      meta: [`${formatQuantity(item.inStock)} in stock`, item.low && 'low', item.due && 'count due']
+        .filter(Boolean)
+        .join(' · '),
     });
   }
   for (const sop of server.sops) {

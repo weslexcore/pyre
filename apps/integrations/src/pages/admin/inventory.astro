@@ -1,17 +1,15 @@
 ---
-import { InventoryStock } from '@/components/admin/InventoryStock';
-// Operational inventory: stock by storage area. Anyone granted
-// /admin/inventory can log what they use, receive, waste, or move; the
-// /api/admin/inventory* routes re-check the session on every request — the
+import { InventoryList } from '@/components/admin/InventoryList';
+// Inventory: one spreadsheet-style list of everything the studio stocks.
+// Anyone granted /admin/inventory can count (set In stock); admins edit the
+// rest. /api/admin/inventory re-checks the session on every request — the
 // AdminLayout gate is UX, the API gate is the security boundary.
-import InventoryTabs from '@/components/admin/InventoryTabs.astro';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
 <AdminLayout
   title="Inventory"
-  subtitle="Supplies by where they're kept. Tap an item to log what you used, received, wasted, or moved."
+  subtitle="Everything we stock, how many we have, and when to count and re-order."
 >
-  <InventoryTabs current="/admin/inventory" />
-  <InventoryStock client:load />
+  <InventoryList client:load />
 </AdminLayout>

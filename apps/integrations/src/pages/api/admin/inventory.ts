@@ -1,70 +1,136 @@
-// Inventory overview for /admin/inventory: every area, item, spot, and the
-// products their variants belong to, and the cached on-hand per spot — the whole stock screen in one read. The catalogue
-// is small (tens of items, a handful of areas), so the island groups and
-// filters client-side rather than paging.
+// The inventory list for /admin/inventory.
 //
-// Gated on the /admin/inventory page grant. Writes go through
-// inventory-movements (anyone with the page) and inventory-areas / -items /
-// -spots / -categories / -units / -products (admins only).
+//   GET                      → InventoryResponse (the whole list — it is small)
+//   POST                     → add an item (admins)
+//   PATCH ?id=<uuid>         → edit an item. Anyone with the page may set
+//                              in_stock or send { counted: true }; every other
+//                              field is admins only. Setting in_stock is a
+//                              count: it stamps last_counted_at / _by.
+//   DELETE ?id=<uuid>        → remove an item (admins)
+//
+// Gated on the /admin/inventory page grant; requireAdmin on top for setup.
 
 import type { APIRoute } from 'astro';
-import { beginRead, dbError, json } from '@/lib/http/route';
-import {
-  INVENTORY_HREF,
-  type InventoryAreaRow,
-  type InventoryCategoryRow,
-  type InventoryItemRow,
-  type InventoryOverview,
-  type InventoryProductRow,
-  type InventorySpotRow,
-  type InventoryStockRow,
-  type InventoryUnitRow,
-} from '@/lib/inventory/types';
+import { requireAdmin } from '@/lib/auth/admin';
+import { beginDelete, beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
+import { notifyIfLow } from '@/lib/inventory/alerts';
+import { normalizeFields } from '@/lib/inventory/rules';
+import { INVENTORY_HREF, type InventoryResponse, type InventoryRow } from '@/lib/inventory/types';
+import { getPeopleNames } from '@/lib/sops/people';
+
+const DUPLICATE = 'An item already has that name';
+
+// PostgREST returns `numeric` as strings when they don't fit a JS number
+// exactly; normalise so the island can do arithmetic.
+function numericRow(row: InventoryRow): InventoryRow {
+  return {
+    ...row,
+    in_stock: Number(row.in_stock),
+    reorder_at: row.reorder_at == null ? null : Number(row.reorder_at),
+  };
+}
 
 export const GET: APIRoute = async ({ cookies }) => {
   const ready = await beginRead(cookies, INVENTORY_HREF);
   if (ready instanceof Response) return ready;
   const { gate, db } = ready;
 
-  const [areas, categories, units, products, items, spots, stock] = await Promise.all([
-    db.from('inventory_areas').select('*').order('sort_order').order('name'),
-    db.from('inventory_categories').select('*').order('sort_order').order('name'),
-    db.from('inventory_units').select('*').order('sort_order').order('name'),
-    db.from('inventory_products').select('*').order('name'),
-    db.from('inventory_items').select('*').order('name'),
-    db.from('inventory_item_spots').select('*'),
-    db.from('inventory_stock').select('*'),
-  ]);
-  for (const result of [areas, categories, units, products, items, spots, stock]) {
-    if (result.error) return dbError(result.error);
-  }
-
-  const body: InventoryOverview = {
-    areas: (areas.data ?? []) as InventoryAreaRow[],
-    categories: (categories.data ?? []) as InventoryCategoryRow[],
-    units: (units.data ?? []) as InventoryUnitRow[],
-    products: (products.data ?? []) as InventoryProductRow[],
-    items: ((items.data ?? []) as InventoryItemRow[]).map(numericItem),
-    spots: ((spots.data ?? []) as InventorySpotRow[]).map((s) => ({
-      ...s,
-      par_level: s.par_level == null ? null : Number(s.par_level),
-    })),
-    stock: ((stock.data ?? []) as InventoryStockRow[]).map((s) => ({
-      ...s,
-      quantity: Number(s.quantity),
-    })),
-    isAdmin: gate.access.isAdmin,
-  };
+  const { data, error } = await db.from('inventory').select('*').order('name');
+  if (error) return dbError(error);
+  const items = ((data ?? []) as InventoryRow[]).map(numericRow);
+  const people = await getPeopleNames(
+    items.map((i) => i.last_counted_by).filter((e): e is string => !!e)
+  );
+  const body: InventoryResponse = { items, people, isAdmin: gate.access.isAdmin };
   return json(body);
 };
 
-// PostgREST returns `numeric` columns as strings when they don't fit a JS
-// number exactly; normalise so the island can do arithmetic.
-function numericItem(item: InventoryItemRow): InventoryItemRow {
-  return {
-    ...item,
-    lot_size: Number(item.lot_size),
-    reorder_level: item.reorder_level == null ? null : Number(item.reorder_level),
-    reorder_target: item.reorder_target == null ? null : Number(item.reorder_target),
-  };
-}
+export const POST: APIRoute = async ({ cookies, request }) => {
+  const ready = await beginMutation(cookies, request, requireAdmin);
+  if (ready instanceof Response) return ready;
+  const { db, email, body } = ready;
+
+  const normalized = normalizeFields(body);
+  if (!normalized.ok) return json({ error: normalized.error }, 400);
+  const { data, error } = await db
+    .from('inventory')
+    .insert({
+      ...normalized.value,
+      created_by: email,
+      // An item added with a number in stock has just been counted.
+      ...(normalized.value.in_stock
+        ? { last_counted_at: new Date().toISOString(), last_counted_by: email }
+        : {}),
+    })
+    .select('*')
+    .single();
+  if (error) return dbError(error, DUPLICATE);
+  return json({ item: numericRow(data as InventoryRow) }, 201);
+};
+
+export const PATCH: APIRoute = async ({ cookies, request, url }) => {
+  const ready = await beginMutation(cookies, request, INVENTORY_HREF);
+  if (ready instanceof Response) return ready;
+  const { gate, db, email, body } = ready;
+
+  const id = url.searchParams.get('id');
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
+
+  const { counted, ...fields } = body;
+  const normalized = normalizeFields(fields, { partial: true });
+  if (!normalized.ok) return json({ error: normalized.error }, 400);
+  const changes = normalized.value;
+  const isCount = 'in_stock' in changes || counted === true;
+  if (!isCount && Object.keys(changes).length === 0) {
+    return json({ error: 'Nothing to update' }, 400);
+  }
+  if (!gate.access.isAdmin && Object.keys(changes).some((key) => key !== 'in_stock')) {
+    return json({ error: 'Only admins can change item details' }, 403);
+  }
+
+  const { data: beforeData, error: beforeError } = await db
+    .from('inventory')
+    .select('in_stock')
+    .eq('id', id)
+    .maybeSingle();
+  if (beforeError) return dbError(beforeError);
+  if (!beforeData) return json({ error: 'Item not found' }, 404);
+
+  const { data, error } = await db
+    .from('inventory')
+    .update({
+      ...changes,
+      ...(isCount ? { last_counted_at: new Date().toISOString(), last_counted_by: email } : {}),
+    })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+  if (error) return dbError(error, DUPLICATE);
+  if (!data) return json({ error: 'Item not found' }, 404);
+  const item = numericRow(data as InventoryRow);
+
+  if ('in_stock' in changes || 'reorder_at' in changes) {
+    await notifyIfLow(
+      db,
+      item,
+      Number((beforeData as { in_stock: number }).in_stock),
+      item.in_stock,
+      email
+    );
+  }
+  const people = await getPeopleNames([email]);
+  return json({ item, people });
+};
+
+export const DELETE: APIRoute = async ({ cookies, request, url }) => {
+  const ready = await beginDelete(cookies, request, requireAdmin);
+  if (ready instanceof Response) return ready;
+  const { db } = ready;
+
+  const id = url.searchParams.get('id');
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
+  const { data, error } = await db.from('inventory').delete().eq('id', id).select('id');
+  if (error) return dbError(error);
+  if ((data ?? []).length === 0) return json({ error: 'Item not found' }, 404);
+  return json({ ok: true });
+};

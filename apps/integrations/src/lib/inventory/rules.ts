@@ -1,360 +1,244 @@
-// The inventory's pure rules: quantities, lots, low stock, and the stock
-// screen's grouping. Unit-tested, and shared by the routes and the islands
+// Inventory's pure rules: validating a row, when an item is due for a count
+// or needs re-ordering, and the list's filter and sort. Unit-tested; shared
+// by /api/admin/inventory and the /admin/inventory island
 // (client-bundle-safe).
 
-import type {
-  InventoryAreaRow,
-  InventoryCategoryRow,
-  InventoryItemRow,
-  InventoryProductRow,
-  InventorySpotRow,
-  InventoryStockRow,
-  MovementType,
-} from './types';
+import { easternDate } from '@pyre/schedule-core';
+import type { InventoryFields, InventoryRow } from './types';
 
-/** Biggest single movement the app accepts — a sanity bound, not a policy. */
 export const MAX_QUANTITY = 100_000;
+const MAX_NAME = 120;
+const MAX_VENDOR = 120;
+const MAX_HOW_TO_ORDER = 2000;
+const MAX_COST_CENTS = 10_000_000;
+const DAY_MS = 86_400_000;
 
-/**
- * A positive quantity from a request or a form field: finite, above zero, at
- * most two decimals (half a jug of chlorine is real; 0.333 towels is not).
- * Returns null for anything else.
- */
-export function parseQuantity(raw: unknown): number | null {
-  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  if (value <= 0 || value > MAX_QUANTITY) return null;
-  if (Math.round(value * 100) !== value * 100) return null;
-  return value;
+/** The count schedules the list offers, in studio days. */
+export const COUNT_SCHEDULES = [1, 7, 14, 30, 90] as const;
+
+/** 'Daily', 'Weekly', 'Every 2 weeks', 'Monthly', 'Quarterly', or 'Every 3 days'. */
+export function countEveryLabel(days: number): string {
+  if (days === 1) return 'Daily';
+  if (days === 7) return 'Weekly';
+  if (days === 14) return 'Every 2 weeks';
+  if (days === 30) return 'Monthly';
+  if (days === 90) return 'Quarterly';
+  return `Every ${days} days`;
 }
 
-/**
- * A signed correction amount: like parseQuantity but either sign, never
- * zero.
- */
-export function parseSignedQuantity(raw: unknown): number | null {
-  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
-  if (typeof value !== 'number' || value === 0) return null;
-  const magnitude = parseQuantity(Math.abs(value));
-  return magnitude === null ? null : Math.sign(value) * magnitude;
-}
-
-/**
- * The ledger quantity for a staff-entered amount: usage and waste take stock
- * out, receiving and opening balances put it in. Transfers and corrections
- * carry their own sign and never go through here.
- */
-export function signedQuantity(type: 'use' | 'waste' | 'receive' | 'initial', amount: number) {
-  return type === 'use' || type === 'waste' ? -amount : amount;
-}
-
-/** Units in `lots` whole lots of an item ("2 cases" of 12 = 24). */
-export function lotsToUnits(lots: number, lotSize: number): number {
-  return Math.round(lots * lotSize * 100) / 100;
-}
-
-/** '12', '2.5' — no trailing zeros, at most two decimals. */
+/** '12', '2.5' — no trailing zeros. */
 export function formatQuantity(n: number): string {
-  return String(Math.round(n * 100) / 100);
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
+}
+
+/** '$4.50', or '' for no cost. */
+export function formatCents(cents: number | null): string {
+  return cents == null ? '' : `$${(cents / 100).toFixed(2)}`;
+}
+
+/** A quantity a person typed: a number from 0 to MAX_QUANTITY, else null. */
+export function parseQuantity(raw: unknown): number | null {
+  if (typeof raw === 'string' && raw.trim() === '') return null;
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > MAX_QUANTITY) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/** '$4.50' / '4.5' / '4' → cents; null when it isn't a price. */
+export function parseDollars(raw: string): number | null {
+  const s = raw.trim().replace(/^\$/, '').replace(/,/g, '');
+  if (!/^\d+(\.\d{0,2})?$|^\.\d{1,2}$/.test(s)) return null;
+  const cents = Math.round(Number(s) * 100);
+  return cents <= MAX_COST_CENTS ? cents : null;
+}
+
+/** The URL to link when how_to_order is (or starts with) one. */
+export function orderLink(howToOrder: string | null): string | null {
+  const first = howToOrder?.trim().split(/\s+/)[0] ?? '';
+  return /^https?:\/\/\S+$/i.test(first) ? first : null;
+}
+
+/** Whole studio days from one YYYY-MM-DD to another. */
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / DAY_MS);
 }
 
 /**
- * A unit's two spellings. An item row fits as-is ({ unit, unit_plural }); so
- * does any view that carries an item's unit and plural.
+ * Whether an item is due for a count: it has a schedule and has never been
+ * counted, or that many studio calendar days have turned over since it was
+ * — so "daily" is due again each new day however late yesterday's count.
  */
-export interface UnitNames {
-  unit: string;
-  unit_plural?: string | null;
-}
-
-/**
- * A first guess at a plural, for suggesting one when a unit is added (the
- * admin can correct it) and for any unit that arrives without its plural.
- * Mirrors the guess 20261003162143_inventory_units.sql made for existing
- * units: a word already ending in a single "s" is left alone, as it was
- * usually typed as a plural.
- */
-export function suggestPlural(word: string): string {
-  const w = word.trim();
-  if (!w) return w;
-  if (/^(each|dozen)$/i.test(w)) return w;
-  if (/(ss|x|z|ch|sh)$/i.test(w)) return `${w}es`;
-  if (/s$/i.test(w)) return w;
-  if (/[^aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
-  return `${w}s`;
-}
-
-/** 'box' for 1, 'boxes' otherwise — the unit's own plural when known. */
-export function pluralUnit(n: number, unit: string | UnitNames): string {
-  const names = typeof unit === 'string' ? { unit } : unit;
-  if (Math.abs(n) === 1) return names.unit;
-  return names.unit_plural?.trim() || suggestPlural(names.unit);
-}
-
-/** '24 towels' / '1 box'. */
-export function formatUnits(n: number, unit: string | UnitNames): string {
-  return `${formatQuantity(n)} ${pluralUnit(n, unit)}`;
-}
-
-/** What an item is bought by, as a unit: its lot unit, or plain "lot". */
-export function lotUnit(item: Pick<InventoryItemRow, 'lot_label' | 'lot_label_plural'>): UnitNames {
-  return item.lot_label?.trim()
-    ? { unit: item.lot_label.trim(), unit_plural: item.lot_label_plural }
-    : { unit: 'lot', unit_plural: 'lots' };
-}
-
-/** 'case of 12', or '' when an item is bought one at a time. */
-export function lotDescription(item: Pick<InventoryItemRow, 'lot_size' | 'lot_label'>): string {
-  if (item.lot_size === 1 && !item.lot_label) return '';
-  return `${item.lot_label?.trim() || 'lot'} of ${formatQuantity(item.lot_size)}`;
-}
-
-/** '$12.50' / '-$5.00' from cents, or '' when there is no cost. */
-export function formatCents(cents: number | null | undefined): string {
-  if (cents == null) return '';
-  return `${cents < 0 ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2)}`;
-}
-
-/** Total on hand per item across every spot. */
-export function totalsByItem(stock: readonly InventoryStockRow[]): Map<string, number> {
-  const totals = new Map<string, number>();
-  for (const row of stock) {
-    totals.set(row.item_id, (totals.get(row.item_id) ?? 0) + Number(row.quantity));
-  }
-  return totals;
-}
-
-/** At or below its re-order level. Items with no level are never low. */
-export function isLowStock(item: Pick<InventoryItemRow, 'reorder_level'>, total: number): boolean {
-  return item.reorder_level != null && total <= Number(item.reorder_level);
-}
-
-/**
- * Whole lots to order to get back to the fill-to level (or the re-order
- * level when no target is set). A low item always suggests at least one lot;
- * null when the item has no re-order settings.
- */
-export function suggestedLots(
-  item: Pick<InventoryItemRow, 'reorder_level' | 'reorder_target' | 'lot_size'>,
-  total: number
-): number | null {
-  const target = item.reorder_target ?? item.reorder_level;
-  if (target == null) return null;
-  const need = Number(target) - total;
-  const lots = need > 0 ? Math.ceil(need / Number(item.lot_size)) : 0;
-  return isLowStock(item, total) ? Math.max(lots, 1) : lots;
-}
-
-/**
- * Whether a change just took an item to its re-order level: above it before,
- * at or below it after. Only that moment alerts — an item already low stays
- * quiet while it is used further, rather than alerting on every use.
- */
-export function crossedReorderLevel(
-  item: Pick<InventoryItemRow, 'reorder_level'>,
-  before: number,
-  after: number
+export function isDue(
+  item: Pick<InventoryRow, 'count_every_days' | 'last_counted_at'>,
+  now: Date
 ): boolean {
-  if (item.reorder_level == null) return false;
-  const level = Number(item.reorder_level);
-  return before > level && after <= level;
+  if (!item.count_every_days) return false;
+  if (!item.last_counted_at) return true;
+  const days = daysBetween(easternDate(new Date(item.last_counted_at)), easternDate(now));
+  return days >= item.count_every_days;
 }
 
-/** Usage vs loss for reports: which bucket a ledger row's quantity lands in. */
-export function movementBucket(
-  type: MovementType,
-  quantity: number
-): 'usage' | 'explained_loss' | 'unexplained_loss' | 'found' | 'inflow' | 'neutral' {
-  switch (type) {
-    case 'use':
-      return 'usage';
-    case 'waste':
-      return 'explained_loss';
-    case 'count_adjust':
-      return quantity < 0 ? 'unexplained_loss' : 'found';
-    case 'receive':
-      return 'inflow';
-    default:
-      return 'neutral';
-  }
+/** At or below its re-order level. */
+export function isLow(item: Pick<InventoryRow, 'reorder_at' | 'in_stock'>): boolean {
+  return item.reorder_at != null && item.in_stock <= item.reorder_at;
 }
 
-export interface StockLine {
-  item: InventoryItemRow;
-  spot: InventorySpotRow;
-  quantity: number;
-  /** The item's total across every spot, for the low-stock badge. */
-  total: number;
-  low: boolean;
+/** A stock change that takes an item from above its re-order level to at or below it. */
+export function crossedReorderLevel(reorderAt: number | null, before: number, after: number) {
+  return reorderAt != null && before > reorderAt && after <= reorderAt;
 }
 
-export interface StockArea {
-  area: InventoryAreaRow;
-  lines: StockLine[];
-}
+type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
 
-const byOrderThenName = <T extends { sort_order: number }>(
-  a: T,
-  b: T,
-  nameA: string,
-  nameB: string
-) => a.sort_order - b.sort_order || nameA.localeCompare(nameB);
-
-/**
- * Items by name, except that variants of one product keep their set order
- * (S, M, L, XL — not alphabetical). Their names share the product prefix, so
- * a product's variants still sit together among other items.
- */
-export function compareItems(
-  a: Pick<InventoryItemRow, 'name' | 'product_id' | 'variant_order'>,
-  b: Pick<InventoryItemRow, 'name' | 'product_id' | 'variant_order'>
-): number {
-  if (a.product_id && a.product_id === b.product_id) {
-    return a.variant_order - b.variant_order || a.name.localeCompare(b.name);
-  }
-  return a.name.localeCompare(b.name);
+function optionalText(raw: unknown, max: number, label: string): string | null | Error {
+  if (raw == null) return null;
+  if (typeof raw !== 'string') return new Error(`${label} must be text`);
+  const s = raw.trim();
+  if (s.length > max) return new Error(`${label} must be at most ${max} characters`);
+  return s || null;
 }
 
 /**
- * The stock screen: active areas in walk order, each with its active items
- * in shelf order. An area with no items still appears, so it can be found
- * and stocked.
+ * Checks the editable fields of a row from a request body. With `partial`,
+ * only the keys present are checked and returned (a PATCH); otherwise a name
+ * is required and absent fields default to empty (a POST).
  */
-export function groupStockByArea(data: {
-  areas: readonly InventoryAreaRow[];
-  items: readonly InventoryItemRow[];
-  spots: readonly InventorySpotRow[];
-  stock: readonly InventoryStockRow[];
-}): StockArea[] {
-  const items = new Map(data.items.filter((i) => i.active).map((i) => [i.id, i]));
-  const totals = totalsByItem(data.stock);
-  const onHand = new Map(data.stock.map((s) => [`${s.item_id}:${s.area_id}`, Number(s.quantity)]));
+export function normalizeFields(
+  body: Record<string, unknown>,
+  { partial = false }: { partial?: boolean } = {}
+): Validated<Partial<InventoryFields>> {
+  const out: Partial<InventoryFields> = {};
+  const has = (key: keyof InventoryFields) => !partial || key in body;
 
-  return data.areas
-    .filter((a) => a.active)
-    .sort((a, b) => byOrderThenName(a, b, a.name, b.name))
-    .map((area) => {
-      const lines: StockLine[] = [];
-      for (const spot of data.spots) {
-        const item = items.get(spot.item_id);
-        if (spot.area_id !== area.id || !item) continue;
-        const total = totals.get(item.id) ?? 0;
-        lines.push({
-          item,
-          spot,
-          quantity: onHand.get(`${item.id}:${area.id}`) ?? 0,
-          total,
-          low: isLowStock(item, total),
-        });
+  if (has('name')) {
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name) return { ok: false, error: 'Give the item a name' };
+    if (name.length > MAX_NAME) {
+      return { ok: false, error: `Names are at most ${MAX_NAME} characters` };
+    }
+    out.name = name;
+  }
+  if (has('vendor')) {
+    const vendor = optionalText(body.vendor, MAX_VENDOR, 'Vendor');
+    if (vendor instanceof Error) return { ok: false, error: vendor.message };
+    out.vendor = vendor;
+  }
+  if (has('how_to_order')) {
+    const how = optionalText(body.how_to_order, MAX_HOW_TO_ORDER, 'How to order');
+    if (how instanceof Error) return { ok: false, error: how.message };
+    out.how_to_order = how;
+  }
+  if (has('unit_cost_cents')) {
+    const cents = body.unit_cost_cents;
+    if (cents == null) out.unit_cost_cents = null;
+    else if (
+      !Number.isInteger(cents) ||
+      (cents as number) < 0 ||
+      (cents as number) > MAX_COST_CENTS
+    ) {
+      return { ok: false, error: 'Cost must be a price' };
+    } else out.unit_cost_cents = cents as number;
+  }
+  if (has('count_every_days')) {
+    const days = body.count_every_days;
+    if (days == null) out.count_every_days = null;
+    else if (!Number.isInteger(days) || (days as number) < 1 || (days as number) > 365) {
+      return { ok: false, error: 'Count schedule must be 1 to 365 days' };
+    } else out.count_every_days = days as number;
+  }
+  if (has('in_stock')) {
+    const n = body.in_stock == null && !partial ? 0 : parseQuantity(body.in_stock);
+    if (n == null)
+      return { ok: false, error: `In stock must be a number from 0 to ${MAX_QUANTITY}` };
+    out.in_stock = n;
+  }
+  if (has('reorder_at')) {
+    if (body.reorder_at == null || body.reorder_at === '') out.reorder_at = null;
+    else {
+      const n = parseQuantity(body.reorder_at);
+      if (n == null) {
+        return { ok: false, error: `Re-order at must be a number from 0 to ${MAX_QUANTITY}` };
       }
-      lines.sort((a, b) => a.spot.sort_order - b.spot.sort_order || compareItems(a.item, b.item));
-      return { area, lines };
-    });
+      out.reorder_at = n;
+    }
+  }
+  return { ok: true, value: out };
 }
 
-export interface StockItem {
-  item: InventoryItemRow;
-  /** Across every spot. */
-  total: number;
-  low: boolean;
-  /** One per spot the item lives in, in walk order. */
-  lines: StockLine[];
+// ---------------------------------------------------------------------------
+// The list: filter and sort
+// ---------------------------------------------------------------------------
+
+export type InventoryFilter = 'all' | 'due' | 'reorder';
+
+export type SortKey =
+  | 'name'
+  | 'in_stock'
+  | 'reorder_at'
+  | 'due'
+  | 'last_counted_at'
+  | 'count_every_days'
+  | 'unit_cost_cents'
+  | 'vendor';
+
+export interface ListQuery {
+  search: string;
+  filter: InventoryFilter;
+  /** '' = every vendor. */
+  vendor: string;
+  sort: SortKey;
+  desc: boolean;
 }
 
-/** A product's variants, together, in the by-category view. */
-export interface StockProduct {
-  product: InventoryProductRow;
-  /** Active variants in their set order. */
-  variants: StockItem[];
-  /** Across every variant and spot. */
-  total: number;
-  /** Whether any variant is low. */
-  low: boolean;
+/** Whether an item matches a search term (name, vendor, or how to order). */
+export function matchesSearch(item: InventoryRow, search: string): boolean {
+  const q = search.trim().toLowerCase();
+  if (!q) return true;
+  return [item.name, item.vendor, item.how_to_order].some((s) => s?.toLowerCase().includes(q));
 }
 
-export type StockEntry = ({ kind: 'item' } & StockItem) | ({ kind: 'product' } & StockProduct);
-
-export interface StockCategory {
-  /** null = items with no category. */
-  category: InventoryCategoryRow | null;
-  /** Standalone items and products, by name. */
-  entries: StockEntry[];
+function sortValue(item: InventoryRow, key: SortKey, now: Date): string | number | null {
+  switch (key) {
+    case 'name':
+      return item.name.toLowerCase();
+    case 'vendor':
+      return item.vendor?.toLowerCase() ?? null;
+    case 'due':
+      // due first, then scheduled-and-fine, then unscheduled
+      return isDue(item, now) ? 0 : item.count_every_days ? 1 : 2;
+    case 'last_counted_at':
+      return item.last_counted_at;
+    default:
+      return item[key];
+  }
 }
 
 /**
- * The stock screen by category: categories in display order (a retired one
- * still shows while items carry it), each with its active items by name and
- * where each one is stored. A product's variants are gathered under it, in
- * their set order. Uncategorised items come last. Categories with no active
- * items are left out — unlike an empty area, there's nothing to do with one
- * here.
+ * The rows the list shows, in order. Empty values sort last either way, and
+ * ties fall back to the name so the order never jumps between renders.
  */
-export function groupStockByCategory(data: {
-  areas: readonly InventoryAreaRow[];
-  categories: readonly InventoryCategoryRow[];
-  products: readonly InventoryProductRow[];
-  items: readonly InventoryItemRow[];
-  spots: readonly InventorySpotRow[];
-  stock: readonly InventoryStockRow[];
-}): StockCategory[] {
-  const totals = totalsByItem(data.stock);
-  const linesByItem = new Map<string, StockLine[]>();
-  for (const { lines } of groupStockByArea(data)) {
-    for (const line of lines) {
-      const list = linesByItem.get(line.item.id) ?? [];
-      list.push(line);
-      linesByItem.set(line.item.id, list);
+export function listItems(
+  items: readonly InventoryRow[],
+  query: ListQuery,
+  now: Date
+): InventoryRow[] {
+  const rows = items.filter(
+    (item) =>
+      matchesSearch(item, query.search) &&
+      (!query.vendor || (item.vendor ?? '') === query.vendor) &&
+      (query.filter === 'all' ||
+        (query.filter === 'due' && isDue(item, now)) ||
+        (query.filter === 'reorder' && isLow(item)))
+  );
+  const dir = query.desc ? -1 : 1;
+  return rows.sort((a, b) => {
+    const av = sortValue(a, query.sort, now);
+    const bv = sortValue(b, query.sort, now);
+    if (av !== bv) {
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return (av < bv ? -1 : 1) * dir;
     }
-  }
-  const products = new Map(data.products.map((p) => [p.id, p]));
-
-  const byCategory = new Map<string | null, StockEntry[]>();
-  const productEntries = new Map<string, { kind: 'product' } & StockProduct>();
-  const add = (categoryId: string | null, entry: StockEntry) => {
-    const known = categoryId && data.categories.some((c) => c.id === categoryId);
-    const key = known ? categoryId : null;
-    const list = byCategory.get(key) ?? [];
-    list.push(entry);
-    byCategory.set(key, list);
-  };
-
-  for (const item of data.items) {
-    if (!item.active) continue;
-    const total = totals.get(item.id) ?? 0;
-    const stockItem: StockItem = {
-      item,
-      total,
-      low: isLowStock(item, total),
-      lines: linesByItem.get(item.id) ?? [],
-    };
-    const product = item.product_id ? products.get(item.product_id) : undefined;
-    if (!product) {
-      add(item.category_id, { kind: 'item', ...stockItem });
-      continue;
-    }
-    let entry = productEntries.get(product.id);
-    if (!entry) {
-      entry = { kind: 'product', product, variants: [], total: 0, low: false };
-      productEntries.set(product.id, entry);
-      add(product.category_id, entry);
-    }
-    entry.variants.push(stockItem);
-    entry.total = Math.round((entry.total + total) * 100) / 100;
-    entry.low ||= stockItem.low;
-  }
-  for (const entry of productEntries.values()) {
-    entry.variants.sort((a, b) => compareItems(a.item, b.item));
-  }
-  const entryName = (e: StockEntry) => (e.kind === 'item' ? e.item.name : e.product.name);
-  for (const list of byCategory.values()) {
-    list.sort((a, b) => entryName(a).localeCompare(entryName(b)));
-  }
-
-  const grouped: StockCategory[] = [...data.categories]
-    .sort((a, b) => byOrderThenName(a, b, a.name, b.name))
-    .filter((c) => byCategory.has(c.id))
-    .map((category) => ({ category, entries: byCategory.get(category.id) ?? [] }));
-  const uncategorised = byCategory.get(null);
-  if (uncategorised) grouped.push({ category: null, entries: uncategorised });
-  return grouped;
+    return a.name.localeCompare(b.name);
+  });
 }

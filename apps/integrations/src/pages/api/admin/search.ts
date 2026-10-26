@@ -30,14 +30,7 @@ import { type BoardCardRow, getDb, type ShiftNoteRow, type SopRow } from '@/lib/
 import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { searchInventory } from '@/lib/inventory/search';
-import {
-  INVENTORY_HREF,
-  type InventoryAreaRow,
-  type InventoryCategoryRow,
-  type InventoryItemRow,
-  type InventorySpotRow,
-  type InventoryStockRow,
-} from '@/lib/inventory/types';
+import { INVENTORY_HREF, type InventoryRow } from '@/lib/inventory/types';
 import { canSeeNote, visibleNotesFilter } from '@/lib/shift-notes/access';
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { personName } from '@/lib/sops/names';
@@ -211,45 +204,24 @@ async function searchTasks(
 
 async function searchInventoryItems(
   db: Db,
-  q: string,
-  editable: boolean
+  q: string
 ): Promise<{ inventory: InventoryHit[]; error?: string }> {
-  // The catalogue is small (tens of items), so it is read whole and matched
-  // with the same matcher as everything else rather than in SQL.
-  const [items, categories, areas, spots, stock] = await Promise.all([
-    db.from('inventory_items').select('*').eq('active', true),
-    db.from('inventory_categories').select('*'),
-    db.from('inventory_areas').select('*'),
-    db.from('inventory_item_spots').select('*'),
-    db.from('inventory_stock').select('*'),
-  ]);
+  // The list is small (tens of items), so it is read whole and matched with
+  // the same matcher as everything else rather than in SQL.
+  const { data, error } = await db.from('inventory').select('*');
   // Inventory is one extra group, so a failed read drops only that group
   // (logged) rather than failing the whole search — e.g. while a deploy is
-  // live before the migration that adds a table it reads has run.
-  for (const result of [items, categories, areas, spots, stock]) {
-    if (result.error) {
-      console.error('[search] inventory read failed:', result.error.message);
-      return { inventory: [] };
-    }
+  // live before the migration that adds the table has run.
+  if (error) {
+    console.error('[search] inventory read failed:', error.message);
+    return { inventory: [] };
   }
-  const inventory = searchInventory(
-    {
-      items: ((items.data ?? []) as InventoryItemRow[]).map((i) => ({
-        ...i,
-        reorder_level: i.reorder_level == null ? null : Number(i.reorder_level),
-      })),
-      categories: (categories.data ?? []) as InventoryCategoryRow[],
-      areas: (areas.data ?? []) as InventoryAreaRow[],
-      spots: (spots.data ?? []) as InventorySpotRow[],
-      stock: ((stock.data ?? []) as InventoryStockRow[]).map((s) => ({
-        ...s,
-        quantity: Number(s.quantity),
-      })),
-    },
-    q,
-    { max: MAX_INVENTORY, editable }
-  );
-  return { inventory };
+  const items = ((data ?? []) as InventoryRow[]).map((i) => ({
+    ...i,
+    in_stock: Number(i.in_stock),
+    reorder_at: i.reorder_at == null ? null : Number(i.reorder_at),
+  }));
+  return { inventory: searchInventory(items, q, { max: MAX_INVENTORY, now: new Date() }) };
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -289,7 +261,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       : Promise.resolve(none),
     canTasks ? searchTasks(db, gate.access, q) : Promise.resolve(none),
     // Editing items is admin-only, so only admins' hits link to the edit form.
-    canInventory ? searchInventoryItems(db, q, gate.access.isAdmin) : Promise.resolve(none),
+    canInventory ? searchInventoryItems(db, q) : Promise.resolve(none),
   ]);
   if (sopResult.error) return json({ error: sopResult.error }, 500);
   if (noteResult.error) return json({ error: noteResult.error }, 500);

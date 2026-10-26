@@ -188,31 +188,25 @@ describe('buildItems', () => {
     });
   });
 
-  it('puts inventory items after tasks, linking admins to edit and staff to the stock sheet', () => {
+  it('puts inventory items after tasks, linking to their row on the list', () => {
     const withInventory: SearchResponse = {
       ...server,
       inventory: [
         {
           id: 'i1',
           name: 'Cold plunge test strips',
-          category: 'Water testing',
-          unit: 'strip',
-          unit_plural: 'strips',
-          onHand: 40,
+          vendor: 'Pool Supply Co',
+          inStock: 40,
           low: false,
-          areas: ['Back closet', 'Deck box'],
-          editable: true,
+          due: false,
         },
         {
           id: 'i2',
           name: 'Cold plunge filter',
-          category: '',
-          unit: 'filter',
-          unit_plural: 'filters',
-          onHand: 1,
+          vendor: '',
+          inStock: 1,
           low: true,
-          areas: [],
-          editable: false,
+          due: true,
         },
       ],
     };
@@ -226,15 +220,15 @@ describe('buildItems', () => {
       'sops',
     ]);
     expect(items[3]).toMatchObject({
-      href: '/admin/inventory/setup?item=i1',
+      href: '/admin/inventory?item=i1',
       title: 'Cold plunge test strips',
-      hint: 'Water testing · Back closet, Deck box',
-      meta: '40 strips on hand',
+      hint: 'Pool Supply Co',
+      meta: '40 in stock',
     });
     expect(items[4]).toMatchObject({
       href: '/admin/inventory?item=i2',
       hint: '',
-      meta: '1 filter on hand · low',
+      meta: '1 in stock · low · count due',
     });
   });
 
@@ -292,9 +286,8 @@ describe('hrefs', () => {
     expect(noteHref('abc', 'pH & chlorine')).toBe('/admin/shift-notes?q=pH+%26+chlorine#note-abc');
   });
 
-  it('opens an inventory item on the page the viewer may use', () => {
-    expect(inventoryHref('i1', true)).toBe('/admin/inventory/setup?item=i1');
-    expect(inventoryHref('i1', false)).toBe('/admin/inventory?item=i1');
+  it('opens an inventory item on its row of the list', () => {
+    expect(inventoryHref('i1')).toBe('/admin/inventory?item=i1');
   });
 
   it('opens a task through the board hash BoardView reads', () => {
