@@ -435,6 +435,11 @@ export function ScheduleBoard() {
   // The commitment horizon (admin setting, two weeks by default). Read from
   // the last payload, so the Set view's range follows a change on reload.
   const horizonDays = data?.settings?.confirmedHorizonDays ?? CONFIRMED_HORIZON_DAYS;
+  // The Set view's last day: the last set-in-stone date.
+  const setEnd = lastConfirmedDate(todayLocal(), horizonDays);
+  // The Monday week the Set view is scrolled to (the topmost day section on
+  // screen), so the hours panel follows the week the admin is looking at.
+  const [setViewWeek, setSetViewWeek] = useState(() => weekStartOf(todayLocal()));
 
   // What the API is asked for. The uncovered view starts its range on the
   // current week's Monday (not today) so this week's hours totals in the
@@ -444,11 +449,11 @@ export function ScheduleBoard() {
   const range = useMemo(() => {
     if (view === 'month')
       return { start: monthStart, end: addDays(monthStart, daysInMonth(monthStart) - 1) };
-    // The Set view starts on this week's Monday like Uncovered (complete
-    // hours totals in the picker); days before today are dropped below.
+    // The Set view fetches whole Monday weeks, this one through the one the
+    // locked window ends in, so the hours totals are complete; days before
+    // today and after setEnd are dropped below.
     if (view === 'set') {
-      const today = todayLocal();
-      return { start: weekStartOf(today), end: lastConfirmedDate(today, horizonDays) };
+      return { start: weekStartOf(todayLocal()), end: addDays(weekStartOf(setEnd), 6) };
     }
     if (view === 'uncovered') {
       const start = weekStartOf(todayLocal());
@@ -464,7 +469,7 @@ export function ScheduleBoard() {
       };
     }
     return { start: weekStart, end: addDays(weekStart, 6) };
-  }, [view, weekStart, monthStart, horizonDays]);
+  }, [view, weekStart, monthStart, setEnd]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -642,7 +647,7 @@ export function ScheduleBoard() {
     if (view === 'set') {
       const today = todayLocal();
       const out: string[] = [];
-      for (let d = today; d <= range.end; d = addDays(d, 1)) out.push(d);
+      for (let d = today; d <= setEnd; d = addDays(d, 1)) out.push(d);
       return out;
     }
     if (view === 'uncovered') {
@@ -652,16 +657,7 @@ export function ScheduleBoard() {
       return [...new Set(requestShifts.map((s) => s.shift_date))].sort();
     }
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [
-    view,
-    weekStart,
-    monthStart,
-    range.end,
-    uncoveredShifts,
-    requestShifts,
-    showPast,
-    monthIsPast,
-  ]);
+  }, [view, weekStart, monthStart, setEnd, uncoveredShifts, requestShifts, showPast, monthIsPast]);
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, BoardShift[]>();
@@ -819,16 +815,45 @@ export function ScheduleBoard() {
     return byWeek;
   }, [data]);
 
-  // The manage-side hours panel beside the week board: everyone's hours for
-  // the visible week, drafts kept apart from live. A separate rollup from
-  // weekHoursByWeek on purpose — the picker's "h wk" folds drafts in.
+  // The manage-side hours panel beside the week and set boards: everyone's
+  // hours for the visible week (in Set, the week scrolled to), drafts kept
+  // apart from live. A separate rollup from weekHoursByWeek on purpose — the
+  // picker's "h wk" folds drafts in.
+  const hoursWeek = view === 'set' ? setViewWeek : weekStart;
   const weekHours = useMemo(
     () =>
-      canManage && view === 'week'
-        ? weekHoursRows(data?.staff ?? [], data?.shifts ?? [], weekStart)
+      canManage && (view === 'week' || view === 'set')
+        ? weekHoursRows(data?.staff ?? [], data?.shifts ?? [], hoursWeek)
         : null,
-    [canManage, view, data, weekStart]
+    [canManage, view, data, hoursWeek]
   );
+
+  // Set view: watch the day sections and take the week of the topmost one
+  // inside a band near the top of the viewport. Re-attached whenever the
+  // list of days (or the filters that hide some) changes.
+  const dayListRef = useRef<HTMLDivElement | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: days, filters and data change which sections are rendered, so they re-attach the observer
+  useEffect(() => {
+    if (view !== 'set' || !canManage) return;
+    const list = dayListRef.current;
+    if (!list || typeof IntersectionObserver === 'undefined') return;
+    const sections = Array.from(list.querySelectorAll<HTMLElement>('[data-date]'));
+    if (sections.length === 0) return;
+    const onScreen = new Set<HTMLElement>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) onScreen.add(e.target as HTMLElement);
+          else onScreen.delete(e.target as HTMLElement);
+        }
+        const top = sections.find((el) => onScreen.has(el));
+        if (top?.dataset.date) setSetViewWeek(weekStartOf(top.dataset.date));
+      },
+      { rootMargin: '-15% 0px -70% 0px' }
+    );
+    for (const el of sections) observer.observe(el);
+    return () => observer.disconnect();
+  }, [view, canManage, days, mineOnly, staffFilter, data]);
 
   const toggleStaffFilter = useCallback((staffId: string) => {
     setStaffFilter((prev) => {
@@ -1067,6 +1092,7 @@ export function ScheduleBoard() {
   };
 
   const weekLabel = `${formatChipDate(weekStart)} – ${formatChipDate(addDays(weekStart, 6))}`;
+  const hoursWeekLabel = `${formatChipDate(hoursWeek)} – ${formatChipDate(addDays(hoursWeek, 6))}`;
 
   if (loading && !data) {
     return <p className="font-mono text-sm text-white/40">Loading schedule…</p>;
@@ -1266,7 +1292,7 @@ export function ScheduleBoard() {
             {view === 'week'
               ? weekLabel
               : view === 'set'
-                ? `Set through ${formatChipDate(range.end)}`
+                ? `Set through ${formatChipDate(setEnd)}`
                 : monthLabel(monthStart)}
           </p>
         )}
@@ -1309,7 +1335,7 @@ export function ScheduleBoard() {
 
       {weekHours && (
         <WeekHoursSheet
-          weekLabel={weekLabel}
+          weekLabel={hoursWeekLabel}
           rows={weekHours.rows}
           totals={weekHours.totals}
           selected={staffFilter}
@@ -1330,7 +1356,7 @@ export function ScheduleBoard() {
       >
         {weekHours && (
           <WeekHoursSidebar
-            weekLabel={weekLabel}
+            weekLabel={hoursWeekLabel}
             rows={weekHours.rows}
             totals={weekHours.totals}
             selected={staffFilter}
@@ -1340,7 +1366,7 @@ export function ScheduleBoard() {
         <div className="min-w-0 space-y-6">
           {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
-          {range.end >= firstTentative && (
+          {view !== 'set' && range.end >= firstTentative && (
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
               Set in stone through{' '}
               <span className="font-bold text-[var(--pyre-creme)]">
@@ -1637,7 +1663,7 @@ export function ScheduleBoard() {
             </p>
           )}
 
-          <div className="space-y-4">
+          <div ref={dayListRef} className="space-y-4">
             {days.map((date) => {
               const allShifts = shiftsByDate.get(date) ?? [];
               let shifts = allShifts;
@@ -1688,6 +1714,7 @@ export function ScheduleBoard() {
               return (
                 <section
                   key={date}
+                  data-date={date}
                   className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
