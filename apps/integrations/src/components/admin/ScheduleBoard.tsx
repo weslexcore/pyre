@@ -377,7 +377,11 @@ async function api(
 }
 
 export function ScheduleBoard() {
-  const [view, setView] = useState<BoardView>(initialLink.view ?? 'week');
+  // Opens on the Set view (the locked schedule); a link that names a date
+  // without a view lands on that date's week.
+  const [view, setView] = useState<BoardView>(
+    initialLink.view ?? (initialLink.date ? 'week' : 'set')
+  );
   const [weekStart, setWeekStart] = useState(() => weekStartOf(initialLink.date ?? todayLocal()));
   const [monthStart, setMonthStart] = useState(() =>
     monthStartOf(initialLink.date ?? todayLocal())
@@ -1081,6 +1085,15 @@ export function ScheduleBoard() {
           <span className="flex flex-wrap gap-1.5">
             <button
               type="button"
+              className={pillClass(view === 'set')}
+              aria-pressed={view === 'set'}
+              title="The schedule as it's set in stone: today through the last locked day"
+              onClick={() => setView('set')}
+            >
+              Set
+            </button>
+            <button
+              type="button"
               className={pillClass(view === 'week')}
               aria-pressed={view === 'week'}
               onClick={() => setView('week')}
@@ -1094,15 +1107,6 @@ export function ScheduleBoard() {
               onClick={() => setView('month')}
             >
               Month
-            </button>
-            <button
-              type="button"
-              className={pillClass(view === 'set')}
-              aria-pressed={view === 'set'}
-              title="The schedule as it's set in stone: today through the last locked day"
-              onClick={() => setView('set')}
-            >
-              Set
             </button>
             {canManage && (
               <button
