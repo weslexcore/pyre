@@ -35,6 +35,42 @@ describe('AdminMessage', () => {
     expect(html).not.toContain('## Steps');
     expect(html).not.toContain('- Fold');
   });
+
+  it('formats what the dashboard formats, not just blank-line-separated blocks', async () => {
+    const html = await renderHtml({
+      bodyMd: [
+        'Before you leave:',
+        '- Wipe the benches',
+        '- Lock up',
+        '',
+        '1. First',
+        '2. Second',
+        '',
+        '> Quoted note',
+        '',
+        'Use `code` here.',
+        '',
+        '---',
+        '',
+        '| Day | Shift |',
+        '| --- | --- |',
+        '| Mon | AM |',
+      ].join('\n'),
+    });
+    expect(html).toMatch(/<ul[^>]*>.*Wipe the benches/s);
+    expect(html).toMatch(/<ol[^>]*>.*First/s);
+    expect(html).toContain('Quoted note');
+    expect(html).not.toContain('&gt; Quoted');
+    expect(html).toMatch(/<code[^>]*>code<\/code>/);
+    expect(html).toContain('<hr');
+    expect(html).toMatch(/<td[^>]*>Mon<\/td>/);
+    expect(html).not.toMatch(/[-|] (Wipe|Mon)/);
+  });
+
+  it('never links to a script', async () => {
+    const html = await renderHtml({ bodyMd: '[click](javascript:alert(1))' });
+    expect(html).not.toContain('javascript:');
+  });
 });
 
 describe('absolutizeLinks', () => {
