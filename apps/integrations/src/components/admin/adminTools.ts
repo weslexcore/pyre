@@ -465,6 +465,17 @@ export function hasGuestsManage(access: PageAccess): boolean {
   return holdsManage(access, '/admin/guests', GUESTS_MANAGE);
 }
 
+// Same split for inventory. A plain '/admin/inventory' grant is the counting
+// level: browse the list and set how many are in stock, which records who
+// counted and when. This key (or admin) unlocks configuring the list: adding
+// and deleting items and editing everything else about them — category,
+// re-order level, count schedule, cost, vendor, and how to order.
+export const INVENTORY_MANAGE = 'inventory:manage';
+
+export function hasInventoryManage(access: PageAccess): boolean {
+  return holdsManage(access, '/admin/inventory', INVENTORY_MANAGE);
+}
+
 /** Capabilities that imply view access to the page they belong to. */
 export const CAPABILITIES_BY_PAGE: Record<string, string[]> = {
   '/admin/schedule': [SCHEDULE_MANAGE, SCHEDULE_TIMESHEET, SCHEDULE_INSIGHTS, SCHEDULE_CHANGES],
@@ -473,6 +484,7 @@ export const CAPABILITIES_BY_PAGE: Record<string, string[]> = {
   '/admin/incidents': [INCIDENTS_MANAGE],
   '/admin/lost-found': [LOST_FOUND_MANAGE],
   '/admin/guests': [GUESTS_MANAGE],
+  '/admin/inventory': [INVENTORY_MANAGE],
 };
 
 // Grants that used to be issued under a page this tool replaced. A staff row

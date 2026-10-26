@@ -9,6 +9,7 @@ import type { InventoryFields, InventoryRow } from './types';
 export const MAX_QUANTITY = 100_000;
 const MAX_NAME = 120;
 const MAX_VENDOR = 120;
+const MAX_CATEGORY = 60;
 const MAX_HOW_TO_ORDER = 2000;
 const MAX_COST_CENTS = 10_000_000;
 const DAY_MS = 86_400_000;
@@ -118,6 +119,11 @@ export function normalizeFields(
     }
     out.name = name;
   }
+  if (has('category')) {
+    const category = optionalText(body.category, MAX_CATEGORY, 'Category');
+    if (category instanceof Error) return { ok: false, error: category.message };
+    out.category = category;
+  }
   if (has('vendor')) {
     const vendor = optionalText(body.vendor, MAX_VENDOR, 'Vendor');
     if (vendor instanceof Error) return { ok: false, error: vendor.message };
@@ -173,6 +179,7 @@ export type InventoryFilter = 'all' | 'due' | 'reorder';
 
 export type SortKey =
   | 'name'
+  | 'category'
   | 'in_stock'
   | 'reorder_at'
   | 'due'
@@ -184,17 +191,32 @@ export type SortKey =
 export interface ListQuery {
   search: string;
   filter: InventoryFilter;
-  /** '' = every vendor. */
-  vendor: string;
+  /** '' = every category; UNCATEGORISED = items without one. */
+  category: string;
   sort: SortKey;
   desc: boolean;
 }
 
-/** Whether an item matches a search term (name, vendor, or how to order). */
+/** The category filter's value for items with no category. */
+export const UNCATEGORISED = '\u0000none';
+
+/** Whether an item matches a search term (name, category, vendor, or how to order). */
 export function matchesSearch(item: InventoryRow, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
-  return [item.name, item.vendor, item.how_to_order].some((s) => s?.toLowerCase().includes(q));
+  return [item.name, item.category, item.vendor, item.how_to_order].some((s) =>
+    s?.toLowerCase().includes(q)
+  );
+}
+
+/** The distinct non-empty values of a field, sorted for a drop-down. */
+export function distinctValues(
+  items: readonly InventoryRow[],
+  key: 'vendor' | 'category'
+): string[] {
+  const values = new Set<string>();
+  for (const item of items) if (item[key]) values.add(item[key] as string);
+  return [...values].sort((a, b) => a.localeCompare(b));
 }
 
 function sortValue(item: InventoryRow, key: SortKey, now: Date): string | number | null {
@@ -203,6 +225,8 @@ function sortValue(item: InventoryRow, key: SortKey, now: Date): string | number
       return item.name.toLowerCase();
     case 'vendor':
       return item.vendor?.toLowerCase() ?? null;
+    case 'category':
+      return item.category?.toLowerCase() ?? null;
     case 'due':
       // due first, then scheduled-and-fine, then unscheduled
       return isDue(item, now) ? 0 : item.count_every_days ? 1 : 2;
@@ -225,7 +249,8 @@ export function listItems(
   const rows = items.filter(
     (item) =>
       matchesSearch(item, query.search) &&
-      (!query.vendor || (item.vendor ?? '') === query.vendor) &&
+      (!query.category ||
+        (query.category === UNCATEGORISED ? !item.category : item.category === query.category)) &&
       (query.filter === 'all' ||
         (query.filter === 'due' && isDue(item, now)) ||
         (query.filter === 'reorder' && isLow(item)))

@@ -1,7 +1,7 @@
 // One inventory item's details dialog, opened from its row menu on
 // /admin/inventory: every column in one form (name, stock, re-order level,
 // count schedule, cost, vendor, how to order) plus who last counted it.
-// Admins edit and save; everyone else reads. Saving sends only what changed,
+// inventory:manage edits and saves; everyone else reads. Saving sends only what changed,
 // and any saved change updates Last counted.
 
 import { useId, useRef, useState } from 'react';
@@ -26,12 +26,14 @@ import {
 } from '@/lib/inventory/rules';
 import type { InventoryRow } from '@/lib/inventory/types';
 import { ErrorBanner } from './ErrorBanner';
+import { CategoryPicker } from './InventoryCategoryPicker';
 import { Modal, modalPanelClass } from './Modal';
 
 const CUSTOM = 'custom';
 
 interface Draft {
   name: string;
+  category: string | null;
   in_stock: string;
   reorder_at: string;
   /** '' = no schedule, a COUNT_SCHEDULES value, or CUSTOM. */
@@ -47,6 +49,7 @@ function draftOf(item: InventoryRow): Draft {
   const preset = days != null && (COUNT_SCHEDULES as readonly number[]).includes(days);
   return {
     name: item.name,
+    category: item.category,
     in_stock: formatQuantity(item.in_stock),
     reorder_at: item.reorder_at == null ? '' : formatQuantity(item.reorder_at),
     schedule: days == null ? '' : preset ? String(days) : CUSTOM,
@@ -63,6 +66,8 @@ function changesFrom(item: InventoryRow, d: Draft): Record<string, unknown> | st
   const name = d.name.trim();
   if (!name) return 'Give the item a name';
   if (name !== item.name) out.name = name;
+
+  if (d.category !== item.category) out.category = d.category;
 
   const stock = parseQuantity(d.in_stock);
   if (stock == null) return 'In stock must be a number';
@@ -94,8 +99,9 @@ function changesFrom(item: InventoryRow, d: Draft): Record<string, unknown> | st
 
 export function InventoryDetails({
   item,
-  isAdmin,
+  canManage,
   vendors,
+  categories,
   countedBy,
   now,
   onSave,
@@ -103,9 +109,11 @@ export function InventoryDetails({
   onClose,
 }: {
   item: InventoryRow;
-  isAdmin: boolean;
+  canManage: boolean;
   /** Vendors already in use, offered as suggestions. */
   vendors: readonly string[];
+  /** Categories already in use, offered in the drop-down. */
+  categories: readonly string[];
   countedBy: string | null;
   now: Date;
   /** Resolves to an error message, or null once saved. */
@@ -136,7 +144,7 @@ export function InventoryDetails({
 
   const field = (key: string) => `${id}-${key}`;
   const link = orderLink(item.how_to_order);
-  const readOnly = !isAdmin;
+  const readOnly = !canManage;
 
   return (
     <Modal
@@ -185,6 +193,34 @@ export function InventoryDetails({
               readOnly={readOnly}
               className={`${inputClass} w-full`}
             />
+          </div>
+
+          <div>
+            <label htmlFor={field('category')} className={labelClass}>
+              Category
+            </label>
+            {readOnly ? (
+              <input
+                id={field('category')}
+                value={draft.category ?? ''}
+                readOnly
+                placeholder="None"
+                className={`${inputClass} w-full`}
+              />
+            ) : (
+              <CategoryPicker
+                id={field('category')}
+                value={draft.category}
+                categories={categories}
+                onChange={(next) => {
+                  setDraft((d) => ({ ...d, category: next }));
+                  setError(null);
+                }}
+                label="Category"
+                selectClassName={`${selectClass} w-full`}
+                inputClassName={`${inputClass} w-full`}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -320,7 +356,7 @@ export function InventoryDetails({
 
         {error && <ErrorBanner>{error}</ErrorBanner>}
 
-        {isAdmin && (
+        {canManage && (
           <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-4">
             <button
               type="button"

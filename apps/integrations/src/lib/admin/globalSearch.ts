@@ -57,12 +57,14 @@ export interface TaskHit {
 }
 
 /** /api/admin/search's response. */
-/** One inventory item the server matched by name or vendor. */
+/** One inventory item the server matched by name, vendor, or category. */
 export interface InventoryHit {
   id: string;
   name: string;
   /** '' when none is set. */
   vendor: string;
+  /** '' when none is set. */
+  category: string;
   inStock: number;
   /** At or below its re-order level. */
   low: boolean;
@@ -274,7 +276,7 @@ export function buildItems(
       group: 'inventory',
       href: inventoryHref(item.id),
       title: item.name,
-      hint: item.vendor,
+      hint: [item.category, item.vendor].filter(Boolean).join(' · '),
       meta: [`${formatQuantity(item.inStock)} in stock`, item.low && 'low', item.due && 'count due']
         .filter(Boolean)
         .join(' · '),

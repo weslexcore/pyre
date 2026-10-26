@@ -196,6 +196,7 @@ describe('buildItems', () => {
           id: 'i1',
           name: 'Cold plunge test strips',
           vendor: 'Pool Supply Co',
+          category: 'Water testing',
           inStock: 40,
           low: false,
           due: false,
@@ -204,6 +205,7 @@ describe('buildItems', () => {
           id: 'i2',
           name: 'Cold plunge filter',
           vendor: '',
+          category: '',
           inStock: 1,
           low: true,
           due: true,
@@ -222,7 +224,7 @@ describe('buildItems', () => {
     expect(items[3]).toMatchObject({
       href: '/admin/inventory?item=i1',
       title: 'Cold plunge test strips',
-      hint: 'Pool Supply Co',
+      hint: 'Water testing · Pool Supply Co',
       meta: '40 in stock',
     });
     expect(items[4]).toMatchObject({

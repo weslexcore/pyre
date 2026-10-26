@@ -21,6 +21,7 @@ import {
   BOARDS_HREF,
   GUESTS_MANAGE,
   INCIDENTS_MANAGE,
+  INVENTORY_MANAGE,
   isBoardGrantKey,
   LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
@@ -141,6 +142,13 @@ const MANAGE_CAPABILITIES: Record<string, Capability[]> = {
       key: GUESTS_MANAGE,
       label: 'can manage',
       hint: 'Add, rename, re-order, and retire the questions on a guest profile. Without it: look guests up, edit their preferences and notes, and see who is booked into each session.',
+    },
+  ],
+  '/admin/inventory': [
+    {
+      key: INVENTORY_MANAGE,
+      label: 'can manage',
+      hint: 'Add and delete items and edit their category, re-order level, count schedule, cost, vendor, and how to order. Without it: browse the list and update how many are in stock.',
     },
   ],
   '/admin/lost-found': [

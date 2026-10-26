@@ -9,6 +9,7 @@ import {
   orderLink,
   parseDollars,
   parseQuantity,
+  UNCATEGORISED,
 } from './rules';
 import type { InventoryRow } from './types';
 
@@ -16,6 +17,7 @@ function row(overrides: Partial<InventoryRow> = {}): InventoryRow {
   return {
     id: overrides.name ?? 'id',
     name: 'Towels',
+    category: null,
     unit_cost_cents: null,
     vendor: null,
     how_to_order: null,
@@ -129,18 +131,42 @@ describe('listItems', () => {
   const items = [
     row({
       name: 'Towels',
+      category: 'Linens',
       vendor: 'Uline',
       in_stock: 40,
       reorder_at: 20,
       count_every_days: 7,
       last_counted_at: '2026-10-25T14:00:00Z',
     }),
-    row({ name: 'Propane', vendor: 'AmeriGas', in_stock: 1, reorder_at: 2, count_every_days: 1 }),
+    row({
+      name: 'Propane',
+      category: 'Fuel',
+      vendor: 'AmeriGas',
+      in_stock: 1,
+      reorder_at: 2,
+      count_every_days: 1,
+    }),
     row({ name: 'Hair ties', in_stock: 100, unit_cost_cents: 5 }),
   ];
-  const base: ListQuery = { search: '', filter: 'all', vendor: '', sort: 'name', desc: false };
+  const base: ListQuery = {
+    search: '',
+    filter: 'all',
+    category: '',
+    sort: 'name',
+    desc: false,
+  };
   const names = (q: Partial<ListQuery>) =>
     listItems(items, { ...base, ...q }, NOW).map((i) => i.name);
+
+  it('filters by category, or to the uncategorised', () => {
+    expect(names({ category: 'Linens' })).toEqual(['Towels']);
+    expect(names({ category: UNCATEGORISED })).toEqual(['Hair ties']);
+    expect(names({ search: 'fuel' })).toEqual(['Propane']);
+  });
+
+  it('sorts by category with the uncategorised last', () => {
+    expect(names({ sort: 'category' })).toEqual(['Propane', 'Towels', 'Hair ties']);
+  });
 
   it('sorts by name either way', () => {
     expect(names({})).toEqual(['Hair ties', 'Propane', 'Towels']);
@@ -156,10 +182,9 @@ describe('listItems', () => {
     expect(names({ sort: 'due' })).toEqual(['Propane', 'Towels', 'Hair ties']);
   });
 
-  it('filters by due, re-order, vendor, and search', () => {
+  it('filters by due, re-order, and search', () => {
     expect(names({ filter: 'due' })).toEqual(['Propane']);
     expect(names({ filter: 'reorder' })).toEqual(['Propane']);
-    expect(names({ vendor: 'Uline' })).toEqual(['Towels']);
     expect(names({ search: 'amerigas' })).toEqual(['Propane']);
     expect(names({ search: 'TIE' })).toEqual(['Hair ties']);
   });

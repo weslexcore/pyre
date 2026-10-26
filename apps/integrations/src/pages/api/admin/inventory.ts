@@ -1,17 +1,19 @@
 // The inventory list for /admin/inventory.
 //
 //   GET                      → InventoryResponse (the whole list — it is small)
-//   POST                     → add an item (admins)
+//   POST                     → add an item (inventory:manage)
 //   PATCH ?id=<uuid>         → edit an item. Anyone with the page may set
-//                              in_stock; every other field is admins only.
-//                              Any edit counts as a look at the item: it
-//                              stamps last_counted_at / _by.
-//   DELETE ?id=<uuid>        → remove an item (admins)
+//                              in_stock; every other field needs
+//                              inventory:manage. Any edit counts as a look at
+//                              the item: it stamps last_counted_at / _by.
+//   DELETE ?id=<uuid>        → remove an item (inventory:manage)
 //
-// Gated on the /admin/inventory page grant; requireAdmin on top for setup.
+// Gated on the /admin/inventory page grant (counting), with inventory:manage
+// — or being an admin who holds the page — on top for configuring the list
+// (adminTools.hasInventoryManage).
 
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { hasInventoryManage } from '@/components/admin/adminTools';
 import { beginDelete, beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
 import { notifyIfLow } from '@/lib/inventory/alerts';
 import { normalizeFields } from '@/lib/inventory/rules';
@@ -19,6 +21,7 @@ import { INVENTORY_HREF, type InventoryResponse, type InventoryRow } from '@/lib
 import { getPeopleNames } from '@/lib/sops/people';
 
 const DUPLICATE = 'An item already has that name';
+const NEEDS_MANAGE = 'Configuring inventory needs the inventory:manage permission';
 
 // PostgREST returns `numeric` as strings when they don't fit a JS number
 // exactly; normalise so the island can do arithmetic.
@@ -41,14 +44,15 @@ export const GET: APIRoute = async ({ cookies }) => {
   const people = await getPeopleNames(
     items.map((i) => i.last_counted_by).filter((e): e is string => !!e)
   );
-  const body: InventoryResponse = { items, people, isAdmin: gate.access.isAdmin };
+  const body: InventoryResponse = { items, people, canManage: hasInventoryManage(gate.access) };
   return json(body);
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const ready = await beginMutation(cookies, request, requireAdmin);
+  const ready = await beginMutation(cookies, request, INVENTORY_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email, body } = ready;
+  const { gate, db, email, body } = ready;
+  if (!hasInventoryManage(gate.access)) return json({ error: NEEDS_MANAGE }, 403);
 
   const normalized = normalizeFields(body);
   if (!normalized.ok) return json({ error: normalized.error }, 400);
@@ -82,8 +86,8 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
   if (Object.keys(changes).length === 0) {
     return json({ error: 'Nothing to update' }, 400);
   }
-  if (!gate.access.isAdmin && Object.keys(changes).some((key) => key !== 'in_stock')) {
-    return json({ error: 'Only admins can change item details' }, 403);
+  if (!hasInventoryManage(gate.access) && Object.keys(changes).some((key) => key !== 'in_stock')) {
+    return json({ error: NEEDS_MANAGE }, 403);
   }
 
   const { data: beforeData, error: beforeError } = await db
@@ -122,9 +126,10 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const ready = await beginDelete(cookies, request, requireAdmin);
+  const ready = await beginDelete(cookies, request, INVENTORY_HREF);
   if (ready instanceof Response) return ready;
-  const { db } = ready;
+  const { gate, db } = ready;
+  if (!hasInventoryManage(gate.access)) return json({ error: NEEDS_MANAGE }, 403);
 
   const id = url.searchParams.get('id');
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);

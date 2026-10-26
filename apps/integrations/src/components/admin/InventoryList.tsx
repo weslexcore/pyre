@@ -1,13 +1,16 @@
 // The inventory list (/admin/inventory): one spreadsheet-style table, a row
 // per item. Click a cell to edit it; Enter or clicking away saves, Escape
 // cancels. Headers sort, the toolbar searches and filters (due for a count,
-// needs re-ordering, by vendor).
+// needs re-ordering, by category). The setup columns (category,
+// re-order level, schedule, cost, vendor, how to order) stay hidden until
+// "Show all fields" is ticked, so the everyday view is just what to count.
 //
 // Anyone with the page can count: set the In stock number (Enter on an
 // unchanged number confirms it). Any edit to a row stamps Last counted with
-// who made it and when. Admins edit
-// every other column, add items, and delete them. /api/admin/inventory is
-// the security boundary; this island only offers what the viewer may do.
+// who made it and when. inventory:manage (or an admin holding the page)
+// edits every other column, adds items, and deletes them.
+// /api/admin/inventory is the security boundary; this island only offers
+// what the viewer may do.
 
 import {
   type ChangeEvent,
@@ -32,6 +35,7 @@ import { etStamp } from '@/lib/client/format';
 import {
   COUNT_SCHEDULES,
   countEveryLabel,
+  distinctValues,
   formatCents,
   formatQuantity,
   type InventoryFilter,
@@ -43,10 +47,12 @@ import {
   parseDollars,
   parseQuantity,
   type SortKey,
+  UNCATEGORISED,
 } from '@/lib/inventory/rules';
 import { INVENTORY_API, type InventoryResponse, type InventoryRow } from '@/lib/inventory/types';
 import { personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
+import { CategoryPicker } from './InventoryCategoryPicker';
 import { InventoryDetails } from './InventoryDetails';
 import { Chip } from './incidentUi';
 import { Modal, modalPanelClass } from './Modal';
@@ -96,19 +102,47 @@ interface Column {
   label: string;
   /** Starting width in px; the viewer can drag it wider or narrower. */
   width: number;
+  /** A setup column, shown only with "Show all fields". */
+  setup?: boolean;
   className?: string;
 }
 
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Item', width: 240 },
+  { key: 'category', label: 'Category', width: 160, setup: true },
   { key: 'in_stock', label: 'In stock', width: 96, className: 'text-right' },
-  { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right' },
+  { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right', setup: true },
   { key: 'last_counted_at', label: 'Last counted', width: 220 },
-  { key: 'count_every_days', label: 'Count every', width: 170 },
-  { key: 'unit_cost_cents', label: 'Cost / unit', width: 112, className: 'text-right' },
-  { key: 'vendor', label: 'Vendor', width: 160 },
-  { key: 'how_to_order', label: 'How to order', width: 300 },
+  { key: 'count_every_days', label: 'Count every', width: 170, setup: true },
+  {
+    key: 'unit_cost_cents',
+    label: 'Cost / unit',
+    width: 112,
+    className: 'text-right',
+    setup: true,
+  },
+  { key: 'vendor', label: 'Vendor', width: 160, setup: true },
+  { key: 'how_to_order', label: 'How to order', width: 300, setup: true },
 ];
+
+// Whether the viewer last had "Show all fields" ticked.
+const SHOW_ALL_KEY = 'pyre-inventory-show-all';
+
+function readShowAllPref(): boolean {
+  try {
+    return localStorage.getItem(SHOW_ALL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeShowAllPref(on: boolean): void {
+  try {
+    localStorage.setItem(SHOW_ALL_KEY, on ? '1' : '0');
+  } catch {
+    // Private mode etc. — the toggle still works for the session.
+  }
+}
 
 const ACTIONS_WIDTH = 72;
 const MIN_WIDTH = 60;
@@ -153,10 +187,11 @@ export function InventoryList() {
   const [query, setQuery] = useState<ListQuery>({
     search: '',
     filter: 'all',
-    vendor: '',
+    category: '',
     sort: 'name',
     desc: false,
   });
+  const [showAll, setShowAll] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   // The item whose details dialog is open.
@@ -185,6 +220,7 @@ export function InventoryList() {
   useEffect(() => {
     const saved = readSortPref();
     setWidths(readWidthsPref());
+    setShowAll(readShowAllPref());
     const link = takeLinkParams();
     setQuery((q) => ({ ...q, ...saved, ...(link.filter ? { filter: link.filter } : {}) }));
     if (link.item) setHighlight(link.item);
@@ -198,11 +234,15 @@ export function InventoryList() {
   }, [highlight, data]);
 
   const items = data?.items ?? [];
-  const rows = useMemo(() => listItems(items, query, now), [items, query, now]);
-  const vendors = useMemo(
-    () => [...new Set(items.map((i) => i.vendor).filter((v): v is string => !!v))].sort(),
-    [items]
-  );
+  const vendors = useMemo(() => distinctValues(items, 'vendor'), [items]);
+  const categories = useMemo(() => distinctValues(items, 'category'), [items]);
+  const columns = COLUMNS.filter((c) => showAll || !c.setup);
+  const shown = new Set(columns.map((c) => c.key));
+  // A sort on a column that's now hidden would order the list by something
+  // you can't see; fall back to the name.
+  const listQuery: ListQuery =
+    shown.has(query.sort) || query.sort === 'due' ? query : { ...query, sort: 'name', desc: false };
+  const rows = listItems(items, listQuery, now);
   const dueCount = items.filter((i) => isDue(i, now)).length;
   const lowCount = items.filter(isLow).length;
 
@@ -289,7 +329,7 @@ export function InventoryList() {
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (error && !data) return <ErrorBanner>Couldn't load inventory: {error}</ErrorBanner>;
   if (!data) return null;
-  const { isAdmin, people } = data;
+  const { canManage, people } = data;
   const detailsItem = detailsId ? items.find((i) => i.id === detailsId) : undefined;
   const orderItem = orderId ? items.find((i) => i.id === orderId) : undefined;
 
@@ -306,7 +346,7 @@ export function InventoryList() {
           type="search"
           value={query.search}
           onChange={(e) => setQuery((q) => ({ ...q, search: e.target.value }))}
-          placeholder="Search items, vendors"
+          placeholder="Search items, categories, vendors"
           aria-label="Search inventory"
           className={`${compactInputClass} w-full sm:w-64`}
         />
@@ -318,25 +358,38 @@ export function InventoryList() {
             onClick={() => setQuery((q) => ({ ...q, filter: f.key }))}
           />
         ))}
-        {vendors.length > 0 && (
+        {categories.length > 0 && (
           <select
-            value={query.vendor}
-            onChange={(e) => setQuery((q) => ({ ...q, vendor: e.target.value }))}
-            aria-label="Filter by vendor"
+            value={query.category}
+            onChange={(e) => setQuery((q) => ({ ...q, category: e.target.value }))}
+            aria-label="Filter by category"
             className={compactSelectClass}
           >
-            <option value="">All vendors</option>
-            {vendors.map((v) => (
-              <option key={v} value={v}>
-                {v}
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
+            <option value={UNCATEGORISED}>No category</option>
           </select>
         )}
-        {isAdmin && (
+        <label className="flex cursor-pointer items-center gap-2 font-mono text-xs uppercase tracking-wide text-white/60 sm:ml-auto">
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(e) => {
+              setShowAll(e.target.checked);
+              writeShowAllPref(e.target.checked);
+            }}
+            className="h-4 w-4 accent-[var(--pyre-gold)]"
+          />
+          Show all fields
+        </label>
+        {canManage && (
           <button
             type="button"
-            className={`${goldButtonClass} sm:ml-auto`}
+            className={goldButtonClass}
             onClick={() => setAdding(true)}
             disabled={adding}
           >
@@ -351,7 +404,7 @@ export function InventoryList() {
         <OrderInstructions
           item={orderItem}
           onEdit={
-            isAdmin
+            canManage
               ? () => {
                   setOrderId(null);
                   setDetailsId(orderItem.id);
@@ -366,8 +419,9 @@ export function InventoryList() {
         <InventoryDetails
           key={detailsItem.id}
           item={detailsItem}
-          isAdmin={isAdmin}
+          canManage={canManage}
           vendors={vendors}
+          categories={categories}
           countedBy={
             detailsItem.last_counted_by ? personName(detailsItem.last_counted_by, people) : null
           }
@@ -381,23 +435,27 @@ export function InventoryList() {
       <div className="overflow-x-auto rounded border border-white/10">
         <table
           className="table-fixed border-collapse text-sm text-[var(--pyre-creme)]"
-          style={{ width: COLUMNS.reduce((sum, c) => sum + widthOf(c), ACTIONS_WIDTH) }}
+          style={{ width: columns.reduce((sum, c) => sum + widthOf(c), ACTIONS_WIDTH) }}
         >
           <colgroup>
-            {COLUMNS.map((c) => (
+            {columns.map((c) => (
               <col key={c.key} style={{ width: widthOf(c) }} />
             ))}
             <col style={{ width: ACTIONS_WIDTH }} />
           </colgroup>
           <thead>
             <tr className="border-b border-white/10 bg-white/[0.03] text-left font-mono text-[10px] uppercase tracking-wide text-white/50">
-              {COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th
                   key={c.key}
                   scope="col"
                   className={`px-2 py-2 font-normal ${c.className ?? ''} ${c.key === 'name' ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : 'relative'}`}
                   aria-sort={
-                    query.sort === c.key ? (query.desc ? 'descending' : 'ascending') : undefined
+                    listQuery.sort === c.key
+                      ? listQuery.desc
+                        ? 'descending'
+                        : 'ascending'
+                      : undefined
                   }
                 >
                   {c.key === 'how_to_order' ? (
@@ -409,7 +467,7 @@ export function InventoryList() {
                       className="uppercase tracking-wide hover:text-white"
                     >
                       {c.label}
-                      {query.sort === c.key ? (query.desc ? ' ↓' : ' ↑') : ''}
+                      {listQuery.sort === c.key ? (listQuery.desc ? ' ↓' : ' ↑') : ''}
                     </button>
                   )}
                   <ResizeHandle
@@ -426,13 +484,17 @@ export function InventoryList() {
             </tr>
           </thead>
           <tbody>
-            {adding && <NewRow onAdd={add} onCancel={() => setAdding(false)} />}
+            {adding && (
+              <NewRow span={columns.length} onAdd={add} onCancel={() => setAdding(false)} />
+            )}
             {rows.map((item) => (
               <ItemRow
                 key={item.id}
                 item={item}
                 now={now}
-                isAdmin={isAdmin}
+                canManage={canManage}
+                shown={shown}
+                categories={categories}
                 countedBy={item.last_counted_by ? personName(item.last_counted_by, people) : null}
                 highlighted={highlight === item.id}
                 onSave={(patch) => save(item.id, patch)}
@@ -443,11 +505,11 @@ export function InventoryList() {
             ))}
             {rows.length === 0 && !adding && (
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="px-3 py-6 text-center text-white/50">
+                <td colSpan={columns.length + 1} className="px-3 py-6 text-center text-white/50">
                   {items.length === 0
-                    ? isAdmin
+                    ? canManage
                       ? 'No items yet. Add the first one.'
-                      : 'No items yet. An admin can add them.'
+                      : 'No items yet. Someone who manages inventory can add them.'
                     : 'Nothing matches.'}
                 </td>
               </tr>
@@ -458,16 +520,19 @@ export function InventoryList() {
       <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
         Click a cell to edit, or open an item's menu for all its details. Any edit updates Last
         counted. Shelf matches? Click In stock and press Enter.
-        {!isAdmin && ' Only admins can change other columns.'}
+        {!canManage && ' Changing other columns needs the inventory manage permission.'}
       </p>
     </div>
   );
 }
 
 function NewRow({
+  span,
   onAdd,
   onCancel,
 }: {
+  /** How many columns are showing; the row spans the rest after the name. */
+  span: number;
   onAdd: (name: string) => Promise<boolean>;
   onCancel: () => void;
 }) {
@@ -496,7 +561,7 @@ function NewRow({
           className={editClass}
         />
       </td>
-      <td colSpan={COLUMNS.length} className={`${cellClass} text-white/50`}>
+      <td colSpan={span} className={`${cellClass} text-white/50`}>
         <span className="mr-3 text-xs">Enter to add, then fill in the rest.</span>
         <button type="button" className={buttonClass} onClick={() => void submit()} disabled={busy}>
           Add
@@ -512,7 +577,9 @@ function NewRow({
 function ItemRow({
   item,
   now,
-  isAdmin,
+  canManage,
+  shown,
+  categories,
   countedBy,
   highlighted,
   onSave,
@@ -522,7 +589,10 @@ function ItemRow({
 }: {
   item: InventoryRow;
   now: Date;
-  isAdmin: boolean;
+  canManage: boolean;
+  /** The columns showing. */
+  shown: ReadonlySet<ColumnKey>;
+  categories: readonly string[];
   countedBy: string | null;
   highlighted: boolean;
   onSave: (patch: Patch) => Promise<boolean>;
@@ -541,7 +611,7 @@ function ItemRow({
         <TextCell
           value={item.name}
           label="Item name"
-          editable={isAdmin}
+          editable={canManage}
           onSave={(v) => (v ? onSave({ name: v }) : Promise.resolve(false))}
         />
         {(due || low) && (
@@ -564,6 +634,22 @@ function ItemRow({
           </div>
         )}
       </td>
+      {shown.has('category') && (
+        <td className={cellClass}>
+          {canManage ? (
+            <CategoryPicker
+              value={item.category}
+              categories={categories}
+              onChange={(next) => void onSave({ category: next })}
+              label={`Category for ${item.name}`}
+              selectClassName={`${compactSelectClass} w-full border-transparent bg-transparent hover:border-white/10`}
+              inputClassName={editClass}
+            />
+          ) : (
+            <span className="block truncate px-1.5 py-1 text-white/70">{item.category}</span>
+          )}
+        </td>
+      )}
       <td className={`${cellClass} text-right`}>
         <TextCell
           value={formatQuantity(item.in_stock)}
@@ -578,19 +664,21 @@ function ItemRow({
           }}
         />
       </td>
-      <td className={`${cellClass} text-right`}>
-        <TextCell
-          value={item.reorder_at == null ? '' : formatQuantity(item.reorder_at)}
-          label={`Re-order level for ${item.name}`}
-          editable={isAdmin}
-          numeric
-          onSave={(v) => {
-            if (!v) return onSave({ reorder_at: null });
-            const n = parseQuantity(v);
-            return n == null ? Promise.resolve(false) : onSave({ reorder_at: n });
-          }}
-        />
-      </td>
+      {shown.has('reorder_at') && (
+        <td className={`${cellClass} text-right`}>
+          <TextCell
+            value={item.reorder_at == null ? '' : formatQuantity(item.reorder_at)}
+            label={`Re-order level for ${item.name}`}
+            editable={canManage}
+            numeric
+            onSave={(v) => {
+              if (!v) return onSave({ reorder_at: null });
+              const n = parseQuantity(v);
+              return n == null ? Promise.resolve(false) : onSave({ reorder_at: n });
+            }}
+          />
+        </td>
+      )}
       <td className={`${cellClass} truncate whitespace-nowrap px-3.5 text-white/70`}>
         {item.last_counted_at ? (
           <>
@@ -601,70 +689,78 @@ function ItemRow({
           <span className="text-white/30">Never</span>
         )}
       </td>
-      <td className={cellClass}>
-        <ScheduleCell
-          value={item.count_every_days}
-          label={`Count schedule for ${item.name}`}
-          editable={isAdmin}
-          onSave={(days) => onSave({ count_every_days: days })}
-        />
-      </td>
-      <td className={`${cellClass} text-right`}>
-        <TextCell
-          value={formatCents(item.unit_cost_cents)}
-          label={`Cost per unit for ${item.name}`}
-          editable={isAdmin}
-          numeric
-          onSave={(v) => {
-            if (!v) return onSave({ unit_cost_cents: null });
-            const cents = parseDollars(v);
-            return cents == null ? Promise.resolve(false) : onSave({ unit_cost_cents: cents });
-          }}
-        />
-      </td>
-      <td className={cellClass}>
-        <TextCell
-          value={item.vendor ?? ''}
-          label={`Vendor for ${item.name}`}
-          editable={isAdmin}
-          onSave={(v) => onSave({ vendor: v || null })}
-        />
-      </td>
-      <td className={cellClass}>
-        <TextCell
-          value={item.how_to_order ?? ''}
-          label={`How to order ${item.name}`}
-          editable={isAdmin}
-          multiline
-          display={
-            link ? (
-              <span className="flex items-center gap-2">
-                <a
-                  href={link}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="truncate text-[var(--pyre-gold)] underline"
-                >
-                  {linkLabel(link)}
-                </a>
-                {item.how_to_order?.trim() !== link && (
-                  <span className="truncate text-white/50">
-                    {item.how_to_order?.trim().slice(link.length).trim()}
-                  </span>
-                )}
-              </span>
-            ) : undefined
-          }
-          onSave={(v) => onSave({ how_to_order: v || null })}
-        />
-      </td>
+      {shown.has('count_every_days') && (
+        <td className={cellClass}>
+          <ScheduleCell
+            value={item.count_every_days}
+            label={`Count schedule for ${item.name}`}
+            editable={canManage}
+            onSave={(days) => onSave({ count_every_days: days })}
+          />
+        </td>
+      )}
+      {shown.has('unit_cost_cents') && (
+        <td className={`${cellClass} text-right`}>
+          <TextCell
+            value={formatCents(item.unit_cost_cents)}
+            label={`Cost per unit for ${item.name}`}
+            editable={canManage}
+            numeric
+            onSave={(v) => {
+              if (!v) return onSave({ unit_cost_cents: null });
+              const cents = parseDollars(v);
+              return cents == null ? Promise.resolve(false) : onSave({ unit_cost_cents: cents });
+            }}
+          />
+        </td>
+      )}
+      {shown.has('vendor') && (
+        <td className={cellClass}>
+          <TextCell
+            value={item.vendor ?? ''}
+            label={`Vendor for ${item.name}`}
+            editable={canManage}
+            onSave={(v) => onSave({ vendor: v || null })}
+          />
+        </td>
+      )}
+      {shown.has('how_to_order') && (
+        <td className={cellClass}>
+          <TextCell
+            value={item.how_to_order ?? ''}
+            label={`How to order ${item.name}`}
+            editable={canManage}
+            multiline
+            display={
+              link ? (
+                <span className="flex items-center gap-2">
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="truncate text-[var(--pyre-gold)] underline"
+                  >
+                    {linkLabel(link)}
+                  </a>
+                  {item.how_to_order?.trim() !== link && (
+                    <span className="truncate text-white/50">
+                      {item.how_to_order?.trim().slice(link.length).trim()}
+                    </span>
+                  )}
+                </span>
+              ) : undefined
+            }
+            onSave={(v) => onSave({ how_to_order: v || null })}
+          />
+        </td>
+      )}
       <td className={`${cellClass} text-right`}>
         <RowMenu
           itemName={item.name}
           actions={[
-            { label: isAdmin ? 'Edit details' : 'View details', onSelect: onDetails },
-            ...(isAdmin ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
+            { label: canManage ? 'Edit details' : 'View details', onSelect: onDetails },
+            ...(canManage ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
           ]}
         />
       </td>

@@ -6,6 +6,7 @@ function row(name: string, overrides: Partial<InventoryRow> = {}): InventoryRow 
   return {
     id: name.toLowerCase(),
     name,
+    category: null,
     unit_cost_cents: null,
     vendor: null,
     how_to_order: null,
@@ -28,7 +29,7 @@ describe('searchInventory', () => {
     row('Bath towels', { vendor: 'Uline' }),
     row('Towel hooks'),
     row('Test strips', { vendor: 'Towel Depot', in_stock: 2, reorder_at: 5, count_every_days: 7 }),
-    row('Propane'),
+    row('Propane', { category: 'Fuel' }),
   ];
 
   it('ranks name prefix, then name, then vendor matches', () => {
@@ -42,10 +43,17 @@ describe('searchInventory', () => {
       id: 'test strips',
       name: 'Test strips',
       vendor: 'Towel Depot',
+      category: '',
       inStock: 2,
       low: true,
       due: true,
     });
+  });
+
+  it('matches a category', () => {
+    expect(searchInventory(items, 'fuel', { max: 10, now: NOW }).map((h) => h.name)).toEqual([
+      'Propane',
+    ]);
   });
 
   it('caps the results and ignores a blank term', () => {

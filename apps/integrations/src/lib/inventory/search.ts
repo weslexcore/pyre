@@ -1,5 +1,5 @@
 // The inventory half of the global search (cmd+K): which items match a
-// term, by name first and then by vendor. Pure, so the ranking is
+// term, by name first and then by vendor or category. Pure, so the ranking is
 // unit-tested; the /api/admin/search route supplies the rows and decides who
 // may see them.
 
@@ -26,7 +26,11 @@ export function searchInventory(
     let rank: number;
     if (item.name.toLowerCase().startsWith(lower)) rank = 0;
     else if (matchesTerm(item.name, q)) rank = 1;
-    else if (item.vendor && matchesTerm(item.vendor, q)) rank = 2;
+    else if (
+      (item.vendor && matchesTerm(item.vendor, q)) ||
+      (item.category && matchesTerm(item.category, q))
+    )
+      rank = 2;
     else continue;
     ranked.push({ item, rank });
   }
@@ -36,6 +40,7 @@ export function searchInventory(
     id: item.id,
     name: item.name,
     vendor: item.vendor ?? '',
+    category: item.category ?? '',
     inStock: item.in_stock,
     low: isLow(item),
     due: isDue(item, now),

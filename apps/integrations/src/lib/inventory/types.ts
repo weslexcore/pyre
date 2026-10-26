@@ -14,6 +14,8 @@ export const REORDER_HREF = `${INVENTORY_HREF}?filter=reorder`;
 export interface InventoryRow {
   id: string;
   name: string;
+  /** Free-text grouping ("Cleaning"); null = uncategorised. */
+  category: string | null;
   /** Cost of one unit, in cents. */
   unit_cost_cents: number | null;
   vendor: string | null;
@@ -32,10 +34,11 @@ export interface InventoryRow {
   updated_at: string;
 }
 
-/** The fields an admin edits; the route stamps the rest. */
+/** The fields inventory:manage edits (In stock: anyone); the route stamps the rest. */
 export type InventoryFields = Pick<
   InventoryRow,
   | 'name'
+  | 'category'
   | 'unit_cost_cents'
   | 'vendor'
   | 'how_to_order'
@@ -48,6 +51,9 @@ export interface InventoryResponse {
   items: InventoryRow[];
   /** Names for the last_counted_by emails. */
   people: PeopleNames;
-  /** Admins edit every column, add, and delete; everyone else counts. */
-  isAdmin: boolean;
+  /**
+   * inventory:manage (or an admin holding the page): edit every column, add,
+   * and delete. Without it the viewer counts — sets In stock — and reads.
+   */
+  canManage: boolean;
 }
