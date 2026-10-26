@@ -3,8 +3,9 @@
 // cancels. Headers sort, the toolbar searches and filters (due for a count,
 // needs re-ordering, by vendor).
 //
-// Anyone with the page can count: set the In stock number (or press Counted
-// when the shelf matches), which stamps who counted and when. Admins edit
+// Anyone with the page can count: set the In stock number (Enter on an
+// unchanged number confirms it). Any edit to a row stamps Last counted with
+// who made it and when. Admins edit
 // every other column, add items, and delete them. /api/admin/inventory is
 // the security boundary; this island only offers what the viewer may do.
 
@@ -14,6 +15,7 @@ import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -26,7 +28,7 @@ import {
 } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { fmtShortDate } from '@/lib/client/format';
+import { etStamp } from '@/lib/client/format';
 import {
   COUNT_SCHEDULES,
   countEveryLabel,
@@ -45,7 +47,9 @@ import {
 import { INVENTORY_API, type InventoryResponse, type InventoryRow } from '@/lib/inventory/types';
 import { personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
+import { InventoryDetails } from './InventoryDetails';
 import { Chip } from './incidentUi';
+import { Modal, modalPanelClass } from './Modal';
 
 // The viewer's last sort, so the list opens the way they left it.
 const SORT_KEY = 'pyre-inventory-sort';
@@ -83,7 +87,7 @@ function takeLinkParams(): { filter: InventoryFilter | null; item: string | null
   return { filter, item };
 }
 
-type Patch = Partial<Record<keyof InventoryRow, unknown>> & { counted?: true };
+type Patch = Partial<Record<keyof InventoryRow, unknown>>;
 
 type ColumnKey = SortKey | 'how_to_order';
 
@@ -99,7 +103,7 @@ const COLUMNS: Column[] = [
   { key: 'name', label: 'Item', width: 240 },
   { key: 'in_stock', label: 'In stock', width: 96, className: 'text-right' },
   { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right' },
-  { key: 'last_counted_at', label: 'Last counted', width: 180 },
+  { key: 'last_counted_at', label: 'Last counted', width: 220 },
   { key: 'count_every_days', label: 'Count every', width: 170 },
   { key: 'unit_cost_cents', label: 'Cost / unit', width: 112, className: 'text-right' },
   { key: 'vendor', label: 'Vendor', width: 160 },
@@ -155,6 +159,10 @@ export function InventoryList() {
   });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // The item whose details dialog is open.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // The item whose ordering instructions are open.
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [widths, setWidths] = useState<Widths>({});
   const widthOf = (c: Column) => widths[c.key] ?? c.width;
@@ -219,6 +227,21 @@ export function InventoryList() {
         : prev
     );
 
+  // The details dialog shows its own error instead of the banner above the list.
+  const saveDetails = async (id: string, patch: Patch): Promise<string | null> => {
+    try {
+      const res = await sendJson<{ item: InventoryRow; people: Record<string, string> }>(
+        `${INVENTORY_API}?id=${id}`,
+        'PATCH',
+        patch
+      );
+      replaceRow(res.item, res.people);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+
   const save = async (id: string, patch: Patch): Promise<boolean> => {
     setSaveError(null);
     try {
@@ -254,6 +277,7 @@ export function InventoryList() {
     setSaveError(null);
     try {
       await sendJson(`${INVENTORY_API}?id=${item.id}`, 'DELETE');
+      setDetailsId((open) => (open === item.id ? null : open));
       setData((prev) =>
         prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev
       );
@@ -266,6 +290,8 @@ export function InventoryList() {
   if (error && !data) return <ErrorBanner>Couldn't load inventory: {error}</ErrorBanner>;
   if (!data) return null;
   const { isAdmin, people } = data;
+  const detailsItem = detailsId ? items.find((i) => i.id === detailsId) : undefined;
+  const orderItem = orderId ? items.find((i) => i.id === orderId) : undefined;
 
   const filters: { key: InventoryFilter; label: string }[] = [
     { key: 'all', label: `All (${items.length})` },
@@ -320,6 +346,37 @@ export function InventoryList() {
       </div>
 
       {saveError && <ErrorBanner>{saveError}</ErrorBanner>}
+
+      {orderItem && (
+        <OrderInstructions
+          item={orderItem}
+          onEdit={
+            isAdmin
+              ? () => {
+                  setOrderId(null);
+                  setDetailsId(orderItem.id);
+                }
+              : undefined
+          }
+          onClose={() => setOrderId(null)}
+        />
+      )}
+
+      {detailsItem && (
+        <InventoryDetails
+          key={detailsItem.id}
+          item={detailsItem}
+          isAdmin={isAdmin}
+          vendors={vendors}
+          countedBy={
+            detailsItem.last_counted_by ? personName(detailsItem.last_counted_by, people) : null
+          }
+          now={now}
+          onSave={(patch) => saveDetails(detailsItem.id, patch)}
+          onDelete={() => void remove(detailsItem)}
+          onClose={() => setDetailsId(null)}
+        />
+      )}
 
       <div className="overflow-x-auto rounded border border-white/10">
         <table
@@ -379,6 +436,8 @@ export function InventoryList() {
                 countedBy={item.last_counted_by ? personName(item.last_counted_by, people) : null}
                 highlighted={highlight === item.id}
                 onSave={(patch) => save(item.id, patch)}
+                onDetails={() => setDetailsId(item.id)}
+                onShowOrder={() => setOrderId(item.id)}
                 onDelete={() => remove(item)}
               />
             ))}
@@ -397,7 +456,8 @@ export function InventoryList() {
         </table>
       </div>
       <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
-        Click a cell to edit. Setting In stock records a count.
+        Click a cell to edit, or open an item's menu for all its details. Any edit updates Last
+        counted. Shelf matches? Click In stock and press Enter.
         {!isAdmin && ' Only admins can change other columns.'}
       </p>
     </div>
@@ -456,6 +516,8 @@ function ItemRow({
   countedBy,
   highlighted,
   onSave,
+  onDetails,
+  onShowOrder,
   onDelete,
 }: {
   item: InventoryRow;
@@ -464,6 +526,8 @@ function ItemRow({
   countedBy: string | null;
   highlighted: boolean;
   onSave: (patch: Patch) => Promise<boolean>;
+  onDetails: () => void;
+  onShowOrder: () => void;
   onDelete: () => void;
 }) {
   const due = isDue(item, now);
@@ -483,28 +547,19 @@ function ItemRow({
         {(due || low) && (
           <div className="flex flex-wrap items-center gap-1.5 px-1.5 pb-1">
             {due && (
-              <>
-                <span
-                  className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`}
-                >
-                  Due
-                </span>
-                <button
-                  type="button"
-                  className={`${chipClass} border-white/15 bg-white/5 text-white/70 hover:border-white/30 hover:text-white`}
-                  onClick={() => void onSave({ counted: true })}
-                  title={`Confirm ${formatQuantity(item.in_stock)} on the shelf`}
-                >
-                  Counted
-                </button>
-              </>
+              <span
+                className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`}
+              >
+                Due
+              </span>
             )}
             {low && (
-              <span
-                className={`${chipClass} border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/15 text-[var(--pyre-red)]`}
-              >
-                Re-order
-              </span>
+              <ReorderChip
+                link={link}
+                hasInstructions={!!item.how_to_order?.trim()}
+                onShowOrder={onShowOrder}
+                onDetails={onDetails}
+              />
             )}
           </div>
         )}
@@ -515,6 +570,7 @@ function ItemRow({
           label={`In stock for ${item.name}`}
           editable
           numeric
+          confirmUnchanged
           tone={low ? 'text-[var(--pyre-red)]' : undefined}
           onSave={(v) => {
             const n = parseQuantity(v);
@@ -538,7 +594,7 @@ function ItemRow({
       <td className={`${cellClass} truncate whitespace-nowrap px-3.5 text-white/70`}>
         {item.last_counted_at ? (
           <>
-            {fmtShortDate(item.last_counted_at)}
+            {etStamp(item.last_counted_at)}
             {countedBy && <span className="text-white/40"> · {countedBy}</span>}
           </>
         ) : (
@@ -604,18 +660,220 @@ function ItemRow({
         />
       </td>
       <td className={`${cellClass} text-right`}>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="px-2 font-mono text-[10px] uppercase tracking-wide text-white/30 hover:text-[var(--pyre-red)]"
-            aria-label={`Delete ${item.name}`}
-          >
-            Delete
-          </button>
-        )}
+        <RowMenu
+          itemName={item.name}
+          actions={[
+            { label: isAdmin ? 'Edit details' : 'View details', onSelect: onDetails },
+            ...(isAdmin ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
+          ]}
+        />
       </td>
     </tr>
+  );
+}
+
+const reorderChipClass = `${chipClass} border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/15 text-[var(--pyre-red)]`;
+
+/**
+ * The Re-order chip, which takes you to how to re-order: the order link in a
+ * new tab, the written instructions in a dialog, or (with neither set) the
+ * item's details so they can be filled in.
+ */
+function ReorderChip({
+  link,
+  hasInstructions,
+  onShowOrder,
+  onDetails,
+}: {
+  link: string | null;
+  hasInstructions: boolean;
+  onShowOrder: () => void;
+  onDetails: () => void;
+}) {
+  const interactive = `${reorderChipClass} hover:border-[var(--pyre-red)] hover:bg-[var(--pyre-red)]/25`;
+  if (link) {
+    return (
+      <a
+        href={link}
+        target="_blank"
+        rel="noreferrer"
+        className={interactive}
+        title="Open the order link"
+      >
+        Re-order ↗
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={hasInstructions ? onShowOrder : onDetails}
+      className={interactive}
+      title={hasInstructions ? 'How to order' : 'No ordering info yet'}
+    >
+      Re-order
+    </button>
+  );
+}
+
+/** An item's how-to-order instructions, opened from its Re-order chip. */
+function OrderInstructions({
+  item,
+  onEdit,
+  onClose,
+}: {
+  item: InventoryRow;
+  /** Admins can jump to the details form from here. */
+  onEdit?: () => void;
+  onClose: () => void;
+}) {
+  const id = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  return (
+    <Modal
+      labelledBy={id}
+      onClose={onClose}
+      initialFocus={closeRef}
+      panelClassName={`${modalPanelClass} flex max-h-[90vh] max-w-lg flex-col overflow-y-auto p-5`}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id={id} className="truncate text-lg font-semibold text-[var(--pyre-creme)]">
+            How to order {item.name}
+          </h2>
+          <p className="mt-1 text-xs text-white/50">
+            {formatQuantity(item.in_stock)} in stock
+            {item.reorder_at != null && ` · re-order at ${formatQuantity(item.reorder_at)}`}
+            {item.vendor && ` · ${item.vendor}`}
+          </p>
+        </div>
+        <button ref={closeRef} type="button" className={buttonClass} onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <p className="whitespace-pre-wrap break-words text-sm text-[var(--pyre-creme)]">
+        {item.how_to_order}
+      </p>
+      {onEdit && (
+        <div className="mt-4 border-t border-white/10 pt-3">
+          <button type="button" className={buttonClass} onClick={onEdit}>
+            Edit details
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+interface MenuAction {
+  label: string;
+  onSelect: () => void;
+  danger?: boolean;
+}
+
+/**
+ * A row's actions menu. Positioned `fixed` from the button so the table's
+ * scroll container can't clip it; closes on a pick, a click elsewhere,
+ * Escape, or a scroll.
+ */
+function RowMenu({ itemName, actions }: { itemName: string; actions: MenuAction[] }) {
+  const id = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  const open = at !== null;
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    const close = () => setAt(null);
+    const onPointer = (e: globalThis.PointerEvent) => {
+      const target = e.target as Node;
+      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) close();
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        close();
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    if (open) return setAt(null);
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) setAt({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  };
+
+  // Arrow keys move between items, as in any menu.
+  const onMenuKey = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const entries = [
+      ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
+    ];
+    const index = entries.indexOf(document.activeElement as HTMLButtonElement);
+    const next = (index + (e.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length;
+    entries[next]?.focus();
+  };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        aria-label={`Options for ${itemName}`}
+        className="rounded px-2 py-1 text-white/40 hover:bg-white/5 hover:text-white"
+      >
+        <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+          <circle cx="8" cy="3" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="8" cy="13" r="1.5" />
+        </svg>
+      </button>
+      {at && (
+        <div
+          ref={menuRef}
+          id={id}
+          role="menu"
+          tabIndex={-1}
+          onKeyDown={onMenuKey}
+          style={{ top: at.top, right: at.right }}
+          className="fixed z-40 min-w-[10rem] rounded border border-white/15 bg-[var(--pyre-black)] py-1 text-left shadow-xl"
+        >
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setAt(null);
+                a.onSelect();
+              }}
+              className={`block w-full px-3 py-2 text-left text-sm hover:bg-white/5 focus:bg-white/5 focus:outline-none ${
+                a.danger ? 'text-[var(--pyre-red)]' : 'text-[var(--pyre-creme)]'
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -638,6 +896,7 @@ function TextCell({
   label,
   editable,
   numeric = false,
+  confirmUnchanged = false,
   multiline = false,
   tone,
   display,
@@ -647,6 +906,8 @@ function TextCell({
   label: string;
   editable: boolean;
   numeric?: boolean;
+  /** Enter on an unchanged value still saves (confirms a count). */
+  confirmUnchanged?: boolean;
   multiline?: boolean;
   tone?: string;
   display?: ReactNode;
@@ -688,9 +949,9 @@ function TextCell({
     );
   }
 
-  const commit = async () => {
+  const commit = async (confirm = false) => {
     const next = draft.trim();
-    if (next === value.trim()) {
+    if (next === value.trim() && !(confirm && confirmUnchanged)) {
       setDraft(null);
       return;
     }
@@ -723,7 +984,7 @@ function TextCell({
       }
       if (e.key === 'Enter' && !(multiline && e.shiftKey)) {
         e.preventDefault();
-        void commit();
+        void commit(true);
       }
     },
     className: `${editClass} ${align} ${invalid ? 'border-[var(--pyre-red)]' : ''}`,

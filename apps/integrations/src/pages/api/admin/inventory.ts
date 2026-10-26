@@ -3,9 +3,9 @@
 //   GET                      → InventoryResponse (the whole list — it is small)
 //   POST                     → add an item (admins)
 //   PATCH ?id=<uuid>         → edit an item. Anyone with the page may set
-//                              in_stock or send { counted: true }; every other
-//                              field is admins only. Setting in_stock is a
-//                              count: it stamps last_counted_at / _by.
+//                              in_stock; every other field is admins only.
+//                              Any edit counts as a look at the item: it
+//                              stamps last_counted_at / _by.
 //   DELETE ?id=<uuid>        → remove an item (admins)
 //
 // Gated on the /admin/inventory page grant; requireAdmin on top for setup.
@@ -76,12 +76,10 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  const { counted, ...fields } = body;
-  const normalized = normalizeFields(fields, { partial: true });
+  const normalized = normalizeFields(body, { partial: true });
   if (!normalized.ok) return json({ error: normalized.error }, 400);
   const changes = normalized.value;
-  const isCount = 'in_stock' in changes || counted === true;
-  if (!isCount && Object.keys(changes).length === 0) {
+  if (Object.keys(changes).length === 0) {
     return json({ error: 'Nothing to update' }, 400);
   }
   if (!gate.access.isAdmin && Object.keys(changes).some((key) => key !== 'in_stock')) {
@@ -100,7 +98,8 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .from('inventory')
     .update({
       ...changes,
-      ...(isCount ? { last_counted_at: new Date().toISOString(), last_counted_by: email } : {}),
+      last_counted_at: new Date().toISOString(),
+      last_counted_by: email,
     })
     .eq('id', id)
     .select('*')
