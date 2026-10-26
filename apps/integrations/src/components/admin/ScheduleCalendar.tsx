@@ -22,7 +22,7 @@ import {
   offShiftOccurrences,
   weekStartOf,
 } from '@pyre/schedule-core';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
@@ -132,7 +132,24 @@ const toneBlock: Record<CoverageTone, string> = {
 };
 
 export function ScheduleCalendar() {
-  const [monthStart, setMonthStart] = useState(() => monthStartOf(todayLocal()));
+  // The month in view lives in the URL (?month=YYYY-MM) so a refresh keeps it.
+  const [monthStart, setMonthStart] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const month = new URLSearchParams(window.location.search).get('month');
+      if (month && /^\d{4}-\d{2}$/.test(month)) return `${month}-01`;
+    }
+    return monthStartOf(todayLocal());
+  });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('month') === monthStart.slice(0, 7)) return;
+    params.set('month', monthStart.slice(0, 7));
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}?${params}${window.location.hash}`
+    );
+  }, [monthStart]);
   // "My shifts": only show shift blocks the viewer is assigned to.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
   // Days already behind us are noise on a forward-looking calendar, so their

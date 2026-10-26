@@ -332,22 +332,35 @@ const emptyShiftForm: ShiftFormState = {
   notes: '',
 };
 
+const BOARD_VIEWS: readonly BoardView[] = ['set', 'week', 'month', 'uncovered', 'requests'];
+
 /**
  * Deep-link params — /admin/schedule?view=month&date=2026-08-24&shift=<id>
  * — so the calendar's shift blocks land on the board with the right view and
- * range, scrolled to the shift. Module scope: read once per page load (SSR
+ * range, scrolled to the shift. The board also writes its own state back
+ * (view, date = the week's Monday, month = YYYY-MM, past=1) so a refresh
+ * returns to the same place. Module scope: read once per page load (SSR
  * sees no window and falls back to the defaults; the loading placeholder is
  * identical either way, so hydration stays clean).
  */
 const initialLink = (() => {
-  const none = { view: null as BoardView | null, date: null as string | null, shift: null };
+  const none = {
+    view: null as BoardView | null,
+    date: null as string | null,
+    month: null as string | null,
+    past: false,
+    shift: null as string | null,
+  };
   if (typeof window === 'undefined') return none;
   const params = new URLSearchParams(window.location.search);
   const view = params.get('view');
   const date = params.get('date');
+  const month = params.get('month');
   return {
-    view: view === 'week' || view === 'month' || view === 'set' ? (view as BoardView) : null,
+    view: BOARD_VIEWS.includes(view as BoardView) ? (view as BoardView) : null,
     date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+    month: month && /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : null,
+    past: params.get('past') === '1',
     shift: params.get('shift'),
   };
 })();
@@ -384,7 +397,7 @@ export function ScheduleBoard() {
   );
   const [weekStart, setWeekStart] = useState(() => weekStartOf(initialLink.date ?? todayLocal()));
   const [monthStart, setMonthStart] = useState(() =>
-    monthStartOf(initialLink.date ?? todayLocal())
+    monthStartOf(initialLink.month ?? initialLink.date ?? todayLocal())
   );
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -417,8 +430,25 @@ export function ScheduleBoard() {
   // Not persisted — every visit starts forward-looking. A deep link to a
   // past date flips it on so the linked shift is actually on the page.
   const [showPast, setShowPast] = useState(
-    () => !!initialLink.date && initialLink.date < todayLocal()
+    () => initialLink.past || (!!initialLink.date && initialLink.date < todayLocal())
   );
+
+  // Mirror the board's place into the URL (replaceState: no history entry
+  // per click) so a refresh lands back here. The one-shot shift param is
+  // dropped — it already did its job on load.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('view', view);
+    if (view === 'week') params.set('date', weekStart);
+    if (view === 'month') {
+      params.set('month', monthStart.slice(0, 7));
+      if (showPast) params.set('past', '1');
+    }
+    const next = `${window.location.pathname}?${params}${window.location.hash}`;
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState(window.history.state, '', next);
+    }
+  }, [view, weekStart, monthStart, showPast]);
   // Manage-side people filter: whose shifts to show (empty = everyone).
   const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
   // Admin-only panel with the employee-action toggles and the drafting
