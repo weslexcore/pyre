@@ -7,7 +7,7 @@ const groupBooking: GroupBookingContent = {
     'Private bookings include exclusive access to our sauna and cold plunge facilities, with options for guided sessions and customized experiences tailored to your group.',
   ],
   capacity: {
-    max: 25,
+    max: 30,
     label: 'Up to 30 guests',
   },
   occasions: [

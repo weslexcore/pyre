@@ -8,9 +8,12 @@
 // Hours slot, and a legacy high-capacity social that bypasses the pool.
 
 import { buildPooledBookingModel } from '../src/lib/booking-model';
+import { MAX_OCCUPANCY } from '../src/lib/capacity';
 import type { EventItem } from '../src/lib/types';
 
 const LOCATION = '1000 Westover Hills Blvd';
+// Spot counts below are offsets from the live cap, so the checks follow it.
+const MAX = MAX_OCCUPANCY;
 
 function makeEvent(partial: Partial<EventItem> & { id: string }): EventItem {
   return {
@@ -31,8 +34,8 @@ const events: EventItem[] = [
     tags: ['Social'],
     isoDate: '2026-08-01T22:00:00.000Z',
     durationMinutes: 180,
-    totalSpots: 30,
-    spotsRemaining: 20,
+    totalSpots: MAX,
+    spotsRemaining: MAX - 10,
     priceUsd: 75,
   }),
   makeEvent({
@@ -40,8 +43,8 @@ const events: EventItem[] = [
     tags: ['Social'],
     isoDate: '2026-08-01T22:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 30,
-    spotsRemaining: 30,
+    totalSpots: MAX,
+    spotsRemaining: MAX,
     priceUsd: 25,
   }),
   makeEvent({
@@ -49,8 +52,8 @@ const events: EventItem[] = [
     tags: ['Social'],
     isoDate: '2026-08-01T23:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 30,
-    spotsRemaining: 28,
+    totalSpots: MAX,
+    spotsRemaining: MAX - 2,
     priceUsd: 25,
   }),
   makeEvent({
@@ -58,8 +61,8 @@ const events: EventItem[] = [
     tags: ['Social'],
     isoDate: '2026-08-02T00:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 30,
-    spotsRemaining: 30,
+    totalSpots: MAX,
+    spotsRemaining: MAX,
     priceUsd: 25,
   }),
   // Open Hours pair at 10am: 1hr (5 booked) + 2hr partner (2 booked).
@@ -68,8 +71,8 @@ const events: EventItem[] = [
     tags: ['Open Hours'],
     isoDate: '2026-08-01T14:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 20,
-    spotsRemaining: 15,
+    totalSpots: MAX - 10,
+    spotsRemaining: MAX - 15,
     priceUsd: 25,
   }),
   makeEvent({
@@ -97,8 +100,8 @@ const events: EventItem[] = [
     tags: ['Open Hours'],
     isoDate: '2026-08-01T18:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 20,
-    spotsRemaining: 20,
+    totalSpots: MAX - 10,
+    spotsRemaining: MAX - 10,
     priceUsd: 25,
   }),
   makeEvent({
@@ -125,8 +128,8 @@ const events: EventItem[] = [
     tags: ['Open Hours'],
     isoDate: '2026-08-01T16:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: 20,
-    spotsRemaining: 20,
+    totalSpots: MAX - 10,
+    spotsRemaining: MAX - 10,
     priceUsd: 25,
   }),
   // Legacy high-capacity social — bypasses the pool, renders standalone.
@@ -135,8 +138,8 @@ const events: EventItem[] = [
     tags: ['Social'],
     isoDate: '2026-08-08T22:00:00.000Z',
     durationMinutes: 180,
-    totalSpots: 60,
-    spotsRemaining: 45,
+    totalSpots: MAX * 2,
+    spotsRemaining: MAX * 2 - 15,
     priceUsd: 40,
   }),
   // Non-pooled event — should get no options at all.
@@ -173,17 +176,17 @@ check('6pm entry offers two durations', opts('social-1hr-6pm')?.map((o) => o.min
 check('3hr option label', opts('social-1hr-6pm')?.[1].label, 'Book 3 hours');
 check('3hr option credits (from $75)', opts('social-1hr-6pm')?.[1].credits, 3);
 // 3hr session has 10 booked, spanning 6/7/8pm; 7pm entry adds 2 more that hour.
-check('6pm entry pool-gated to 20', opts('social-1hr-6pm')?.[0].spotsLeft, 20);
-check('3hr option gated by busiest hour (7pm: 12 booked)', opts('social-1hr-6pm')?.[1].spotsLeft, 18);
+check('6pm entry pool-gated (10 booked that hour)', opts('social-1hr-6pm')?.[0].spotsLeft, MAX - 10);
+check('3hr option gated by busiest hour (7pm: 12 booked)', opts('social-1hr-6pm')?.[1].spotsLeft, MAX - 12);
 check('7pm entry is single-option (no wrong fallback)', opts('social-1hr-7pm')?.length, 1);
-check('7pm entry spots (12 booked that hour)', opts('social-1hr-7pm')?.[0].spotsLeft, 18);
+check('7pm entry spots (12 booked that hour)', opts('social-1hr-7pm')?.[0].spotsLeft, MAX - 12);
 check('8pm entry is single-option', opts('social-1hr-8pm')?.length, 1);
-check('8pm entry spots (10 booked that hour)', opts('social-1hr-8pm')?.[0].spotsLeft, 20);
+check('8pm entry spots (10 booked that hour)', opts('social-1hr-8pm')?.[0].spotsLeft, MAX - 10);
 
 console.log('Open Hours 1hr/2hr pair (unchanged behavior)');
 check('2hr partner is hidden', model.hiddenIds.has('oh-2hr-10am'), true);
 check('10am slot offers two durations', opts('oh-1hr-10am')?.map((o) => o.minutes), [60, 120]);
-check('10am 1hr capped by own Momence spots', opts('oh-1hr-10am')?.[0].spotsLeft, 15);
+check('10am 1hr capped by own Momence spots', opts('oh-1hr-10am')?.[0].spotsLeft, MAX - 15);
 check('10am 2hr capped by own Momence spots', opts('oh-1hr-10am')?.[1].spotsLeft, 8);
 
 console.log('Open Hours 1/2/3/4 hour slot surfaces every duration');
@@ -206,7 +209,7 @@ check(
   ['oh-1hr-2pm', 'oh-2hr-2pm', 'oh-3hr-2pm', 'oh-4hr-2pm']
 );
 // 2hr has 1 booked (2–4pm), 4hr has 4 booked (2–6pm): 2pm/3pm hours carry 5.
-check('1hr capped by own Momence spots (pool would allow 25)', twoPm?.[0].spotsLeft, 20);
+check('1hr capped by own Momence spots (pool would allow MAX - 5)', twoPm?.[0].spotsLeft, MAX - 10);
 check('2hr capped by own Momence spots', twoPm?.[1].spotsLeft, 9);
 check('3hr capped by own Momence spots', twoPm?.[2].spotsLeft, 10);
 check('4hr capped by own Momence spots', twoPm?.[3].spotsLeft, 6);
@@ -220,7 +223,7 @@ check('fallback minutes/credits', [noonFallback?.minutes, noonFallback?.credits]
 
 console.log('Bypass + non-pooled events');
 check('high-capacity social not hidden', model.hiddenIds.has('social-bypass'), false);
-check('high-capacity social sells own capacity', opts('social-bypass')?.[0].spotsLeft, 45);
+check('high-capacity social sells own capacity', opts('social-bypass')?.[0].spotsLeft, MAX * 2 - 15);
 check('guided session gets no options', opts('guided-7pm'), undefined);
 
 if (failures > 0) {
