@@ -238,6 +238,9 @@ export function InventoryList() {
   const categories = useMemo(() => distinctValues(items, 'category'), [items]);
   const columns = COLUMNS.filter((c) => showAll || !c.setup);
   const shown = new Set(columns.map((c) => c.key));
+  // The column that grows to fill a wide screen: the long free text when it's
+  // showing, the item name otherwise.
+  const stretchKey: ColumnKey = shown.has('how_to_order') ? 'how_to_order' : 'name';
   // A sort on a column that's now hidden would order the list by something
   // you can't see; fall back to the name.
   const listQuery: ListQuery =
@@ -434,12 +437,15 @@ export function InventoryList() {
 
       <div className="overflow-x-auto rounded border border-white/10">
         <table
-          className="table-fixed border-collapse text-sm text-[var(--pyre-creme)]"
-          style={{ width: columns.reduce((sum, c) => sum + widthOf(c), ACTIONS_WIDTH) }}
+          className="w-full table-fixed border-collapse text-sm text-[var(--pyre-creme)]"
+          // Fills the space it's given; past that, the columns' widths win and
+          // the table scrolls sideways.
+          style={{ minWidth: columns.reduce((sum, c) => sum + widthOf(c), ACTIONS_WIDTH) }}
         >
           <colgroup>
             {columns.map((c) => (
-              <col key={c.key} style={{ width: widthOf(c) }} />
+              // The stretch column takes whatever room the others leave.
+              <col key={c.key} style={c.key === stretchKey ? undefined : { width: widthOf(c) }} />
             ))}
             <col style={{ width: ACTIONS_WIDTH }} />
           </colgroup>
