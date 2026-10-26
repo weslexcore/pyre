@@ -238,9 +238,10 @@ export function InventoryList() {
   const categories = useMemo(() => distinctValues(items, 'category'), [items]);
   const columns = COLUMNS.filter((c) => showAll || !c.setup);
   const shown = new Set(columns.map((c) => c.key));
-  // The column that grows to fill a wide screen: the long free text when it's
-  // showing, the item name otherwise.
-  const stretchKey: ColumnKey = shown.has('how_to_order') ? 'how_to_order' : 'name';
+  // The column that grows to fill a wide screen: the last one showing, so
+  // every column before it (the item name included) keeps the width it was
+  // dragged to.
+  const stretchKey: ColumnKey = columns[columns.length - 1].key;
   // A sort on a column that's now hidden would order the list by something
   // you can't see; fall back to the name.
   const listQuery: ListQuery =
