@@ -37,6 +37,7 @@ import {
   isShiftDuty,
   isTentativeShift,
   isTrainedFor,
+  lastConfirmedDate,
   MAX_CONFIRMED_HORIZON_DAYS,
   MAX_SHIFT_BUFFER_MIN,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
@@ -231,7 +232,8 @@ const hhmm = (t: string) => t.slice(0, 5);
 // The board's ways of slicing the same data: one week (the default), a whole
 // calendar month as the same day list, or — manage side only — every
 // under-staffed shift coming up, or every shift with an outstanding request.
-type BoardView = 'week' | 'month' | 'uncovered' | 'requests';
+// 'set' is the locked schedule: today through the last set-in-stone date.
+type BoardView = 'week' | 'month' | 'set' | 'uncovered' | 'requests';
 
 /** How far ahead the uncovered and requests views look. Momence sync only
  * creates shifts ~3 weeks out, but manual and drafted shifts can sit further
@@ -344,7 +346,7 @@ const initialLink = (() => {
   const view = params.get('view');
   const date = params.get('date');
   return {
-    view: view === 'week' || view === 'month' ? (view as BoardView) : null,
+    view: view === 'week' || view === 'month' || view === 'set' ? (view as BoardView) : null,
     date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
     shift: params.get('shift'),
   };
@@ -426,6 +428,10 @@ export function ScheduleBoard() {
   const [standingDraft, setStandingDraft] = useState('');
   const [standingBusy, setStandingBusy] = useState(false);
 
+  // The commitment horizon (admin setting, two weeks by default). Read from
+  // the last payload, so the Set view's range follows a change on reload.
+  const horizonDays = data?.settings?.confirmedHorizonDays ?? CONFIRMED_HORIZON_DAYS;
+
   // What the API is asked for. The uncovered view starts its range on the
   // current week's Monday (not today) so this week's hours totals in the
   // assignment picker stay complete; days before today are filtered out of
@@ -434,6 +440,12 @@ export function ScheduleBoard() {
   const range = useMemo(() => {
     if (view === 'month')
       return { start: monthStart, end: addDays(monthStart, daysInMonth(monthStart) - 1) };
+    // The Set view starts on this week's Monday like Uncovered (complete
+    // hours totals in the picker); days before today are dropped below.
+    if (view === 'set') {
+      const today = todayLocal();
+      return { start: weekStartOf(today), end: lastConfirmedDate(today, horizonDays) };
+    }
     if (view === 'uncovered') {
       const start = weekStartOf(todayLocal());
       return { start, end: addDays(start, UNCOVERED_HORIZON_DAYS) };
@@ -448,7 +460,7 @@ export function ScheduleBoard() {
       };
     }
     return { start: weekStart, end: addDays(weekStart, 6) };
-  }, [view, weekStart, monthStart]);
+  }, [view, weekStart, monthStart, horizonDays]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -563,9 +575,10 @@ export function ScheduleBoard() {
       setStandingBusy(false);
     }
   };
-  // Week and month lay days out as a calendar; the uncovered and requests
-  // views are filtered work lists, so the calendar-only controls hide there.
-  const calendarView = view === 'week' || view === 'month';
+  // Week, month and set lay days out as a calendar; the uncovered and
+  // requests views are filtered work lists, so the calendar-only controls
+  // hide there. Set fetches live shifts only, so the draft tools stay off it.
+  const calendarView = view === 'week' || view === 'month' || view === 'set';
 
   const toggleMineOnly = () => {
     setMineOnly((v) => {
@@ -578,7 +591,6 @@ export function ScheduleBoard() {
   // confirmed-horizon setting worth of days (two weeks by default). Dates
   // from here on get the "≈ tentative" treatment, and a banner explains it
   // whenever the visible range reaches past the boundary.
-  const horizonDays = settings.confirmedHorizonDays;
   const firstTentative = firstTentativeDate(todayLocal(), horizonDays);
 
   // Uncovered shifts from today forward (the fetched range reaches back to
@@ -623,6 +635,12 @@ export function ScheduleBoard() {
       const today = todayLocal();
       return all.filter((d) => d >= today);
     }
+    if (view === 'set') {
+      const today = todayLocal();
+      const out: string[] = [];
+      for (let d = today; d <= range.end; d = addDays(d, 1)) out.push(d);
+      return out;
+    }
     if (view === 'uncovered') {
       return [...new Set(uncoveredShifts.map((s) => s.shift_date))].sort();
     }
@@ -630,7 +648,16 @@ export function ScheduleBoard() {
       return [...new Set(requestShifts.map((s) => s.shift_date))].sort();
     }
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [view, weekStart, monthStart, uncoveredShifts, requestShifts, showPast, monthIsPast]);
+  }, [
+    view,
+    weekStart,
+    monthStart,
+    range.end,
+    uncoveredShifts,
+    requestShifts,
+    showPast,
+    monthIsPast,
+  ]);
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, BoardShift[]>();
@@ -1068,6 +1095,15 @@ export function ScheduleBoard() {
             >
               Month
             </button>
+            <button
+              type="button"
+              className={pillClass(view === 'set')}
+              aria-pressed={view === 'set'}
+              title="The schedule as it's set in stone: today through the last locked day"
+              onClick={() => setView('set')}
+            >
+              Set
+            </button>
             {canManage && (
               <button
                 type="button"
@@ -1223,7 +1259,11 @@ export function ScheduleBoard() {
             buttons — on a phone it no longer wraps mid-row. */}
         {calendarView && (
           <p className="pt-3 font-mono text-2xl font-bold text-white/80">
-            {view === 'week' ? weekLabel : monthLabel(monthStart)}
+            {view === 'week'
+              ? weekLabel
+              : view === 'set'
+                ? `Set through ${formatChipDate(range.end)}`
+                : monthLabel(monthStart)}
           </p>
         )}
 
