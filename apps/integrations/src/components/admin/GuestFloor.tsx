@@ -12,12 +12,13 @@
 // every few seconds in between.
 
 import { easternToUtc, todayEastern, utcToEastern } from '@pyre/schedule-core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { buttonClass, cardClass, compactSelectClass, goldButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { etTime } from '@/lib/client/format';
 import { timeAgo } from '@/lib/client/relativeTime';
+import { useDebounced } from '@/lib/client/useDebounced';
 import {
   type Checkpoint,
   type CheckpointTiming,
@@ -46,6 +47,8 @@ interface FloorResponse {
 const FLOOR_URL = '/api/admin/guest-floor';
 const REFETCH_MS = 30_000;
 const TICK_MS = 5_000;
+/** A typed check-in time saves once it has sat this long (or on blur). */
+const TIME_AUTOSAVE_MS = 800;
 
 const BAR_COLORS: Record<FloorStatus, string> = {
   waiting: 'bg-white/20',
@@ -111,7 +114,11 @@ export function GuestFloor() {
     );
   const dueNow = inside.filter(({ timing }) => timing.status === 'due');
 
-  async function act(guest: FloorGuest, run: () => Promise<{ momenceSynced?: boolean }>) {
+  /** Run one change for a guest; resolves true when it saved. */
+  async function act(
+    guest: FloorGuest,
+    run: () => Promise<{ momenceSynced?: boolean }>
+  ): Promise<boolean> {
     setBusy(guest.bookingId);
     setNotice(null);
     try {
@@ -123,8 +130,10 @@ export function GuestFloor() {
         });
       }
       await reload();
+      return true;
     } catch (e) {
       setNotice({ tone: 'error', text: e instanceof Error ? e.message : String(e) });
+      return false;
     } finally {
       setBusy(null);
     }
@@ -299,7 +308,7 @@ export function GuestFloor() {
                   guest={guest}
                   session={sessions.get(guest.sessionId)}
                   busy={busy === guest.bookingId}
-                  onPatch={(changes) => void patch(guest, changes)}
+                  onPatch={(changes) => patch(guest, changes)}
                   onUndo={() => undo(guest)}
                 />
               )}
@@ -403,15 +412,47 @@ function AdjustGuest({
   guest: FloorGuest;
   session: FloorSession | undefined;
   busy: boolean;
-  onPatch: (changes: Record<string, unknown>) => void;
+  onPatch: (changes: Record<string, unknown>) => Promise<boolean>;
   onUndo: () => void;
 }) {
-  const [time, setTime] = useState(() => (guest.checkedInAt ? wallClock(guest.checkedInAt) : ''));
+  const saved = guest.checkedInAt ? wallClock(guest.checkedInAt) : '';
+  const [time, setTime] = useState(saved);
+  const [timeState, setTimeState] = useState<'idle' | 'saving' | 'saved' | 'future'>('idle');
+  // The last value sent, so the debounce and a blur don't save it twice.
+  const sent = useRef(saved);
+  const debounced = useDebounced(time, TIME_AUTOSAVE_MS);
+
+  // A save (or someone else's) moves the recorded time: show it.
+  useEffect(() => {
+    setTime(saved);
+    sent.current = saved;
+  }, [saved]);
+
+  const saveTime = (value: string) => {
+    if (!/^\d{2}:\d{2}$/.test(value) || value === sent.current) return;
+    const at = easternToUtc(todayEastern(), value);
+    if (Date.parse(at) > Date.now()) {
+      setTimeState('future');
+      return;
+    }
+    sent.current = value;
+    setTimeState('saving');
+    void onPatch({ checkedInAt: at }).then((ok) => {
+      if (ok) setTimeState('saved');
+      else {
+        sent.current = saved;
+        setTimeState('idle');
+      }
+    });
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: saves only when the settled value changes
+  useEffect(() => saveTime(debounced), [debounced]);
+
   const defaultMinutes = session?.minutes ?? guest.minutes;
   const lengths = [...new Set([defaultMinutes, guest.minutes, ...SESSION_LENGTH_CHOICES])].sort(
     (a, b) => a - b
   );
-  const timeChanged = !!guest.checkedInAt && time !== wallClock(guest.checkedInAt);
 
   return (
     <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-white/5 pt-3">
@@ -424,16 +465,32 @@ function AdjustGuest({
             type="time"
             className={`${compactSelectClass} w-32`}
             value={time}
-            onChange={(e) => setTime(e.target.value)}
+            onChange={(e) => {
+              setTime(e.target.value);
+              setTimeState('idle');
+            }}
+            onBlur={() => saveTime(time)}
           />
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={busy || !time || (!timeChanged && !guest.estimated)}
-            onClick={() => onPatch({ checkedInAt: easternToUtc(todayEastern(), time) })}
-          >
-            {guest.estimated && !timeChanged ? 'Confirm' : 'Save'}
-          </button>
+          {guest.estimated && time === saved && (
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy || !guest.checkedInAt}
+              title="Record the estimated time as their check-in time"
+              onClick={() => void onPatch({ checkedInAt: guest.checkedInAt })}
+            >
+              Confirm
+            </button>
+          )}
+        </span>
+        <span className="mt-1 block h-3 font-mono text-[10px] text-white/40" aria-live="polite">
+          {timeState === 'saving'
+            ? 'Saving…'
+            : timeState === 'saved'
+              ? 'Saved'
+              : timeState === 'future'
+                ? "Can't be later than now"
+                : ''}
         </span>
       </label>
       <label className="block">
@@ -446,7 +503,7 @@ function AdjustGuest({
           disabled={busy}
           onChange={(e) => {
             const minutes = Number(e.target.value);
-            onPatch({ minutes: minutes === defaultMinutes ? null : minutes });
+            void onPatch({ minutes: minutes === defaultMinutes ? null : minutes });
           }}
         >
           {lengths.map((m) => (
