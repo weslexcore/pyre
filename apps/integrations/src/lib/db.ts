@@ -976,6 +976,9 @@ export interface GuestFloorCheckinRow {
   session_minutes: number | null;
   /** Check-ins marked done, keyed by the floor.checkpoints id. */
   checkpoints_done: Record<string, { at: string; by: string }>;
+  /** The cancelled booking this guest moved from, when this row carries a move. */
+  moved_from_booking_id: string | null;
+  moved_from_session_id: string | null;
   updated_by: string;
   created_at: string;
   updated_at: string;

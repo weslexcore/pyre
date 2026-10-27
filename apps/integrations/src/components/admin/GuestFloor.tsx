@@ -6,7 +6,9 @@
 // top-up, ...) — sorted so guests with a check-in due are at the top. Tapping
 // a due check-in marks it done. Below, whoever is booked
 // into a current or upcoming session and not here yet, with a Check in button
-// that checks them in on Momence and starts their clock.
+// that checks them in on Momence and starts their clock. A guest rebooked
+// into a longer or shorter session keeps the arrival time from the booking
+// they moved from (lib/guests/floor.ts findMoves).
 //
 // The list refetches every half minute; the bars re-run the timing locally
 // every few seconds in between.
@@ -24,6 +26,7 @@ import {
   type CheckpointTiming,
   compareFloor,
   type FloorGuest,
+  type FloorMove,
   type FloorSession,
   type FloorStatus,
   type FloorTiming,
@@ -60,6 +63,12 @@ const BAR_COLORS: Record<FloorStatus, string> = {
 function remainingLabel(timing: FloorTiming): string {
   const minutes = Math.ceil(Math.abs(timing.remainingMs) / MINUTE_MS);
   return timing.status === 'over' ? `Over by ${minutes} min` : `${minutes} min left`;
+}
+
+/** "Moved from Open Hours (120 min)". */
+function movedLabel(from: FloorMove): string {
+  if (!from.sessionName) return 'Moved from another session';
+  return `Moved from ${from.sessionName}${from.sessionMinutes ? ` (${from.sessionMinutes} min)` : ''}`;
 }
 
 /** "18:05" on the studio clock, for a time input. */
@@ -238,6 +247,11 @@ export function GuestFloor() {
                     {' · '}
                     {sessions.get(guest.sessionId)?.name ?? 'Session'}
                   </p>
+                  {guest.movedFrom && (
+                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-white/35">
+                      {movedLabel(guest.movedFrom)}, arrival time kept
+                    </p>
+                  )}
                 </div>
                 <div className="shrink-0 text-right">
                   <span
@@ -342,6 +356,12 @@ export function GuestFloor() {
                     {session ? `${session.name} · ${etTime(session.startsAt)}` : 'Session'} ·{' '}
                     {guest.minutes} min
                   </span>
+                  {guest.movedFrom && (
+                    <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                      {movedLabel(guest.movedFrom)} · check in to keep their{' '}
+                      {etTime(guest.movedFrom.arrivedAt)} arrival
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"

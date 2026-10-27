@@ -110,6 +110,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         checked_in_at: new Date(now).toISOString(),
         session_minutes: null,
         checkpoints_done: {},
+        // A fresh check-in; if it is a move, the next read carries it over.
+        moved_from_booking_id: null,
+        moved_from_session_id: null,
         updated_by: email,
         updated_at: new Date(now).toISOString(),
       },

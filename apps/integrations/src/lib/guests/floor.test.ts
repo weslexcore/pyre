@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { GuestFloorCheckinRow } from '@/lib/db';
 import type { HostSession, SessionBooking } from '@/lib/momence/host-api';
-import { estimateCheckIn, floorGuests, floorSessions, MOMENCE_ACTOR } from './floor';
+import {
+  estimateCheckIn,
+  type FloorSeat,
+  findMoves,
+  floorGuests,
+  floorSessions,
+  MOMENCE_ACTOR,
+  MOVE_ACTOR,
+  movedRow,
+} from './floor';
 import {
   type Checkpoint,
   compareFloor,
@@ -45,6 +54,8 @@ function row(overrides: Partial<GuestFloorCheckinRow> = {}): GuestFloorCheckinRo
     checked_in_at: at(-20),
     session_minutes: null,
     checkpoints_done: {},
+    moved_from_booking_id: null,
+    moved_from_session_id: null,
     updated_by: 'staff@pyresauna.com',
     created_at: at(-20),
     updated_at: at(-20),
@@ -231,5 +242,130 @@ describe('parseCheckpoints', () => {
     expect(parseCheckpoints([{ ...ok, minutes: 2.5 }]).ok).toBe(false);
     expect(parseCheckpoints([{ ...ok, from: 'whenever' }]).ok).toBe(false);
     expect(parseCheckpoints('water').ok).toBe(false);
+  });
+});
+
+describe('moves between sessions', () => {
+  // Arrived at -50 for a two-hour session; at -10, cancelled and rebooked
+  // into a one-hour one.
+  const [long, short] = floorSessions(
+    [
+      { ...session(20, -50, 120), id: 20, name: 'Two hours' },
+      { ...session(21, -50, 60), id: 21, name: 'One hour' },
+    ],
+    NOW
+  );
+  const done = { 'warning-15': { at: at(-12), by: 'staff@pyresauna.com' } };
+  const oldBooking = booking({
+    id: 100,
+    checkedIn: true,
+    cancelledAt: at(-10),
+    createdAt: at(-60),
+  });
+  const newBooking = booking({ id: 101, checkedIn: true, createdAt: at(-9) });
+  const oldRow = row({
+    booking_id: '100',
+    session_id: '20',
+    checked_in_at: at(-50),
+    checkpoints_done: done,
+  });
+  const seats: FloorSeat[] = [
+    { session: long, booking: oldBooking },
+    { session: short, booking: newBooking },
+  ];
+
+  it('carries the arrival time and done check-ins to the new booking', () => {
+    const moves = findMoves(seats, new Map([['100', oldRow]]));
+    expect(moves.get('101')).toEqual({
+      fromBookingId: '100',
+      fromSessionId: '20',
+      arrivedAt: at(-50),
+      checkpointsDone: done,
+    });
+  });
+
+  it('uses the estimate when the old booking was checked in without a recorded time', () => {
+    const moves = findMoves(seats, new Map());
+    expect(moves.get('101')?.arrivedAt).toBe(long.startsAt);
+  });
+
+  it('ignores a rebooking long after the cancellation', () => {
+    const late = booking({ id: 101, checkedIn: true, createdAt: at(30) });
+    const moves = findMoves(
+      [seats[0], { session: short, booking: late }],
+      new Map([['100', oldRow]])
+    );
+    expect(moves.size).toBe(0);
+  });
+
+  it('ignores a cancelled booking they never arrived for', () => {
+    const neverCame = booking({ id: 100, checkedIn: false, cancelledAt: at(-10) });
+    expect(findMoves([{ session: long, booking: neverCame }, seats[1]], new Map()).size).toBe(0);
+  });
+
+  it('ignores a different guest', () => {
+    const other = booking({
+      id: 101,
+      checkedIn: true,
+      createdAt: at(-9),
+      member: { id: 8, firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com' },
+    });
+    expect(
+      findMoves([seats[0], { session: short, booking: other }], new Map([['100', oldRow]])).size
+    ).toBe(0);
+  });
+
+  it('does not carry a move twice', () => {
+    const carried = movedRow(
+      seats[1],
+      findMoves(seats, new Map([['100', oldRow]])).get('101')!,
+      null,
+      at(0)
+    );
+    expect(
+      findMoves(
+        seats,
+        new Map([
+          ['100', oldRow],
+          ['101', carried],
+        ])
+      ).size
+    ).toBe(0);
+  });
+
+  it('shows the moved guest with their original time on the new session length', () => {
+    const move = findMoves(seats, new Map([['100', oldRow]])).get('101')!;
+    const carried = movedRow(seats[1], move, null, at(0));
+    expect(carried).toMatchObject({ updated_by: MOVE_ACTOR, moved_from_booking_id: '100' });
+    const sessions = new Map([
+      [long.id, long],
+      [short.id, short],
+    ]);
+    const [guest] = floorGuests(
+      short,
+      [newBooking],
+      new Map([['101', carried]]),
+      new Map(),
+      sessions
+    );
+    expect(guest).toMatchObject({
+      checkedInAt: at(-50),
+      minutes: 60,
+      checkpointsDone: done,
+      movedFrom: { sessionId: '20', sessionName: 'Two hours', sessionMinutes: 120 },
+    });
+  });
+
+  it('says a rebooked guest not yet checked in is a move', () => {
+    const waiting = booking({ id: 101, checkedIn: false, createdAt: at(-9) });
+    const moves = findMoves(
+      [seats[0], { session: short, booking: waiting }],
+      new Map([['100', oldRow]])
+    );
+    const [guest] = floorGuests(short, [waiting], new Map(), moves, new Map([[long.id, long]]));
+    expect(guest).toMatchObject({
+      checkedIn: false,
+      movedFrom: { sessionName: 'Two hours', arrivedAt: at(-50) },
+    });
   });
 });

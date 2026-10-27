@@ -127,6 +127,21 @@ export interface FloorGuest {
   customMinutes: boolean;
   /** Check-ins marked done, by checkpoint id. */
   checkpointsDone: Record<string, CheckpointDone>;
+  /**
+   * Set when the guest was moved here from another session (booking
+   * cancelled, rebooked into a longer or shorter one). Once they're checked
+   * into this booking, their arrival time and done check-ins come with them;
+   * before that, `arrivedAt` is what checking in will keep.
+   */
+  movedFrom: FloorMove | null;
+}
+
+export interface FloorMove {
+  sessionId: string;
+  /** Null when that session has left the floor's window. */
+  sessionName: string | null;
+  sessionMinutes: number | null;
+  arrivedAt: string;
 }
 
 export interface Floor {

@@ -8,6 +8,11 @@
 // since a walk-in is booked as they arrive — flagged so the page can say so
 // and staff can correct it.
 //
+// A guest changing length mid-visit is cancelled out of their booking in
+// Momence and rebooked into the longer or shorter session, so they pay the
+// right price. findMoves spots that and carries their arrival time and done
+// check-ins over to the new booking, so their clock doesn't restart.
+//
 // The types and the timing math live in floor-timing.ts, which the island
 // imports too. Server-only.
 
@@ -21,8 +26,10 @@ import {
   type SessionBooking,
 } from '@/lib/momence/host-api';
 import {
+  type CheckpointDone,
   type Floor,
   type FloorGuest,
+  type FloorMove,
   type FloorSession,
   LOOKAHEAD_MINUTES,
   LOOKBACK_MINUTES,
@@ -33,6 +40,14 @@ export type { Floor, FloorGuest, FloorSession } from './floor-timing';
 
 /** Who a check-in recorded from Momence's webhook is attributed to. */
 export const MOMENCE_ACTOR = 'momence';
+/** Who a check-in carried over from a cancelled booking is attributed to. */
+export const MOVE_ACTOR = 'floor-move';
+/**
+ * A cancelled booking and a new one for the same guest are a move when one
+ * was made within this long of the other — staff do both at the desk, in
+ * either order.
+ */
+export const MOVE_WINDOW_MINUTES = 30;
 
 function sessionMinutes(session: Pick<HostSession, 'startsAt' | 'endsAt'>): number {
   const ms = Date.parse(session.endsAt) - Date.parse(session.startsAt);
@@ -68,28 +83,157 @@ export function estimateCheckIn(sessionStart: string, bookedAt: string | undefin
   return new Date(Number.isFinite(booked) && booked > start ? booked : start).toISOString();
 }
 
+/** One booking on one of the window's sessions, cancelled or not. */
+export interface FloorSeat {
+  session: FloorSession;
+  booking: SessionBooking;
+}
+
+/** A move findMoves spotted: what the new booking should carry over. */
+export interface Move {
+  fromBookingId: string;
+  fromSessionId: string;
+  arrivedAt: string;
+  checkpointsDone: Record<string, CheckpointDone>;
+}
+
+/** The same guest across bookings: their member id, else their email. */
+function guestKey(booking: SessionBooking): string | null {
+  const person = bookingMember(booking);
+  if (!person) return null;
+  return person.memberId ? `m:${person.memberId}` : `e:${person.email}`;
+}
+
+/** When a seat's guest arrived, as far as we know: recorded, else Momence's flag. */
+function arrivalOf(
+  seat: FloorSeat,
+  rows: Map<string, GuestFloorCheckinRow>
+): { at: string; done: Record<string, CheckpointDone> } | null {
+  const row = rows.get(String(seat.booking.id));
+  if (row) return { at: row.checked_in_at, done: row.checkpoints_done ?? {} };
+  if (seat.booking.checkedIn) {
+    return { at: estimateCheckIn(seat.session.startsAt, seat.booking.createdAt), done: {} };
+  }
+  return null;
+}
+
+/**
+ * Live bookings that are a guest moved from another session, keyed by the
+ * new booking's id: the same guest had a booking they had arrived for, and it
+ * was cancelled within MOVE_WINDOW_MINUTES of this one being made. When more
+ * than one fits, the most recently cancelled wins — moved twice, the second
+ * move's old booking already carries the first arrival time. A booking whose
+ * row already records a move is left alone.
+ */
+export function findMoves(
+  seats: FloorSeat[],
+  rows: Map<string, GuestFloorCheckinRow>
+): Map<string, Move> {
+  const left = seats.flatMap((seat) => {
+    const cancelledAt = Date.parse(seat.booking.cancelledAt ?? '');
+    const key = guestKey(seat.booking);
+    const arrival = arrivalOf(seat, rows);
+    return Number.isFinite(cancelledAt) && key && arrival
+      ? [{ seat, key, cancelledAt, arrival }]
+      : [];
+  });
+
+  const moves = new Map<string, Move>();
+  if (left.length === 0) return moves;
+  const window = MOVE_WINDOW_MINUTES * MINUTE_MS;
+
+  for (const seat of seats) {
+    if (seat.booking.cancelledAt) continue;
+    const bookingId = String(seat.booking.id);
+    if (rows.get(bookingId)?.moved_from_booking_id) continue;
+    const key = guestKey(seat.booking);
+    const createdAt = Date.parse(seat.booking.createdAt ?? '');
+    if (!key || !Number.isFinite(createdAt)) continue;
+
+    const from = left
+      .filter((l) => l.key === key && Math.abs(createdAt - l.cancelledAt) <= window)
+      .sort((x, y) => y.cancelledAt - x.cancelledAt)[0];
+    if (!from) continue;
+    moves.set(bookingId, {
+      fromBookingId: String(from.seat.booking.id),
+      fromSessionId: from.seat.session.id,
+      arrivedAt: from.arrival.at,
+      checkpointsDone: from.arrival.done,
+    });
+  }
+  return moves;
+}
+
+/**
+ * The row a checked-in move writes: the new booking, with the arrival time
+ * and done check-ins from the old one (and any marked on this one already).
+ */
+export function movedRow(
+  seat: FloorSeat,
+  move: Move,
+  existing: GuestFloorCheckinRow | null,
+  nowIso: string
+): GuestFloorCheckinRow {
+  return {
+    booking_id: String(seat.booking.id),
+    session_id: seat.session.id,
+    member_id: bookingMember(seat.booking)?.memberId || null,
+    checked_in_at: move.arrivedAt,
+    session_minutes: null,
+    checkpoints_done: { ...move.checkpointsDone, ...(existing?.checkpoints_done ?? {}) },
+    moved_from_booking_id: move.fromBookingId,
+    moved_from_session_id: move.fromSessionId,
+    updated_by: MOVE_ACTOR,
+    created_at: existing?.created_at ?? nowIso,
+    updated_at: nowIso,
+  };
+}
+
 /** One session's live bookings joined with our recorded check-ins. */
 export function floorGuests(
   session: FloorSession,
   bookings: SessionBooking[],
-  rows: Map<string, GuestFloorCheckinRow>
+  rows: Map<string, GuestFloorCheckinRow>,
+  moves: Map<string, Move> = new Map(),
+  sessions: Map<string, FloorSession> = new Map()
 ): FloorGuest[] {
+  const moveInfo = (sessionId: string, arrivedAt: string): FloorMove => {
+    const from = sessions.get(sessionId);
+    return {
+      sessionId,
+      sessionName: from?.name ?? null,
+      sessionMinutes: from?.minutes ?? null,
+      arrivedAt,
+    };
+  };
+
   const guests: FloorGuest[] = [];
   for (const booking of bookings) {
     if (booking.cancelledAt) continue;
     const bookingId = String(booking.id);
     const person = bookingMember(booking);
-    // A time Momence sent us stands only while Momence still has them
-    // checked in, so un-checking someone there takes them off the floor. One
-    // recorded or corrected here stands on its own.
+    // A time Momence sent us, or one carried over from a move, stands only
+    // while Momence still has them checked in, so un-checking someone there
+    // takes them off the floor. One recorded or corrected here stands on its
+    // own.
     const stored = rows.get(bookingId) ?? null;
     const row =
-      stored && (stored.updated_by !== MOMENCE_ACTOR || booking.checkedIn) ? stored : null;
+      stored &&
+      ((stored.updated_by !== MOMENCE_ACTOR && stored.updated_by !== MOVE_ACTOR) ||
+        booking.checkedIn)
+        ? stored
+        : null;
     const checkedIn = booking.checkedIn || row !== null;
     const checkedInAt = row
       ? row.checked_in_at
       : booking.checkedIn
         ? estimateCheckIn(session.startsAt, booking.createdAt)
+        : null;
+    const move = moves.get(bookingId);
+    const movedFrom = row?.moved_from_session_id
+      ? moveInfo(row.moved_from_session_id, row.checked_in_at)
+      : move && !checkedIn
+        ? moveInfo(move.fromSessionId, move.arrivedAt)
         : null;
     guests.push({
       bookingId,
@@ -103,6 +247,7 @@ export function floorGuests(
       minutes: row?.session_minutes ?? session.minutes,
       customMinutes: row?.session_minutes != null,
       checkpointsDone: row?.checkpoints_done ?? {},
+      movedFrom,
     });
   }
   return guests;
@@ -122,29 +267,22 @@ export async function loadFloorSessions(nowMs: number): Promise<FloorSession[]> 
   return floorSessions(sessions, nowMs);
 }
 
-/** Everyone booked into the window's sessions, with their check-in times. */
+/**
+ * Everyone booked into the window's sessions, with their check-in times.
+ * A move into a booking that is now checked in is written through here, the
+ * first time the floor sees it, so its carried time is an ordinary row from
+ * then on (edits, the webhook, undo all treat it like any other).
+ */
 export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floor> {
   const sessions = await loadFloorSessions(nowMs);
   if (sessions.length === 0) return { sessions, guests: [], complete: true };
 
-  const [bookingResults, rowsResult] = await Promise.all([
-    Promise.allSettled(sessions.map((s) => fetchSessionBookings(Number(s.id)))),
-    db
-      .from('guest_floor_checkins')
-      .select('*')
-      .in(
-        'session_id',
-        sessions.map((s) => s.id)
-      ),
-  ]);
-  if (rowsResult.error) throw new Error(rowsResult.error.message);
-
-  const rows = new Map(
-    ((rowsResult.data ?? []) as GuestFloorCheckinRow[]).map((r) => [r.booking_id, r])
+  const bookingResults = await Promise.allSettled(
+    sessions.map((s) => fetchSessionBookings(Number(s.id)))
   );
 
   let complete = true;
-  const guests: FloorGuest[] = [];
+  const bySession: { session: FloorSession; bookings: SessionBooking[] }[] = [];
   bookingResults.forEach((result, i) => {
     if (result.status === 'rejected') {
       complete = false;
@@ -154,9 +292,45 @@ export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floo
       );
       return;
     }
-    guests.push(...floorGuests(sessions[i], result.value, rows));
+    bySession.push({ session: sessions[i], bookings: result.value });
   });
+  const seats: FloorSeat[] = bySession.flatMap(({ session, bookings }) =>
+    bookings.map((booking) => ({ session, booking }))
+  );
+  if (seats.length === 0) return { sessions, guests: [], complete };
 
+  // By booking, not session: a booking's time stays with it whatever
+  // session it is on.
+  const rowsResult = await db
+    .from('guest_floor_checkins')
+    .select('*')
+    .in(
+      'booking_id',
+      seats.map((s) => String(s.booking.id))
+    );
+  if (rowsResult.error) throw new Error(rowsResult.error.message);
+  const rows = new Map(
+    ((rowsResult.data ?? []) as GuestFloorCheckinRow[]).map((r) => [r.booking_id, r])
+  );
+
+  const moves = findMoves(seats, rows);
+  const nowIso = new Date(nowMs).toISOString();
+  for (const seat of seats) {
+    const bookingId = String(seat.booking.id);
+    const move = moves.get(bookingId);
+    if (!move || !seat.booking.checkedIn) continue;
+    const row = movedRow(seat, move, rows.get(bookingId) ?? null, nowIso);
+    rows.set(bookingId, row);
+    const { error } = await db
+      .from('guest_floor_checkins')
+      .upsert(row, { onConflict: 'booking_id' });
+    if (error) console.error(`[guests/floor] carrying move to ${bookingId} failed:`, error.message);
+  }
+
+  const byId = new Map(sessions.map((s) => [s.id, s]));
+  const guests = bySession.flatMap(({ session, bookings }) =>
+    floorGuests(session, bookings, rows, moves, byId)
+  );
   return { sessions, guests, complete };
 }
 
