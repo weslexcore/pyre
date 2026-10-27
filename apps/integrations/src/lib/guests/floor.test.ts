@@ -18,6 +18,7 @@ import {
   floorTiming,
   onFloor,
   parseCheckpoints,
+  parseSessionLengths,
 } from './floor-timing';
 
 const NOW = Date.parse('2026-10-27T22:30:00.000Z');
@@ -56,6 +57,8 @@ function row(overrides: Partial<GuestFloorCheckinRow> = {}): GuestFloorCheckinRo
     checkpoints_done: {},
     moved_from_booking_id: null,
     moved_from_session_id: null,
+    checked_out_at: null,
+    checked_out_by: null,
     updated_by: 'staff@pyresauna.com',
     created_at: at(-20),
     updated_at: at(-20),
@@ -136,6 +139,14 @@ describe('floorGuests', () => {
   it('keeps a time recorded here even if Momence lost the check-in', () => {
     const [guest] = floorGuests(s, [booking({ checkedIn: false })], new Map([['1', row()]]));
     expect(guest).toMatchObject({ checkedIn: true, checkedInAt: at(-20) });
+  });
+
+  it('carries a check-out', () => {
+    const rows = new Map([
+      ['1', row({ checked_out_at: at(-5), checked_out_by: 'staff@pyresauna.com' })],
+    ]);
+    const [guest] = floorGuests(s, [booking({ checkedIn: true })], rows);
+    expect(guest).toMatchObject({ checkedIn: true, checkedOutAt: at(-5) });
   });
 
   it('drops cancelled bookings', () => {
@@ -409,5 +420,43 @@ describe('moves between sessions', () => {
       checkedIn: false,
       movedFrom: { sessionName: 'Two hours', arrivedAt: at(-50) },
     });
+  });
+});
+
+describe('check-outs and moves', () => {
+  const [long, short] = floorSessions(
+    [
+      { ...session(20, -50, 120), id: 20 },
+      { ...session(21, -50, 60), id: 21 },
+    ],
+    NOW
+  );
+  it('treats a booking after a check-out as a new visit', () => {
+    const left = booking({ id: 100, checkedIn: true, cancelledAt: at(-10), createdAt: at(-60) });
+    const rows = new Map([
+      ['100', row({ booking_id: '100', checked_in_at: at(-50), checked_out_at: at(-20) })],
+    ]);
+    const found = findMoves(
+      [
+        { session: long, booking: left },
+        { session: short, booking: booking({ id: 101, checkedIn: true, createdAt: at(-9) }) },
+      ],
+      rows
+    );
+    expect(found.moves.size).toBe(0);
+  });
+});
+
+describe('parseSessionLengths', () => {
+  it('sorts and de-duplicates whole minutes', () => {
+    expect(parseSessionLengths([120, 60, 60, 90])).toEqual({ ok: true, value: [60, 90, 120] });
+  });
+
+  it('rejects an empty list, fractions, and out-of-range minutes', () => {
+    expect(parseSessionLengths([]).ok).toBe(false);
+    expect(parseSessionLengths([62.5]).ok).toBe(false);
+    expect(parseSessionLengths([2]).ok).toBe(false);
+    expect(parseSessionLengths([601]).ok).toBe(false);
+    expect(parseSessionLengths('60').ok).toBe(false);
   });
 });

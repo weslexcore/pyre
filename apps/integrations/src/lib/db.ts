@@ -964,9 +964,9 @@ export interface GuestProfileNoteRow {
   updated_at: string;
 }
 
-// When a guest checked in, which Momence doesn't keep (see the
-// guest_floor_checkins migration and lib/guests/floor.ts). One row per
-// Momence booking.
+// When a guest checked in (and out), which Momence doesn't keep (see the
+// guest_floor_checkins migrations and lib/guests/floor.ts, behind
+// /admin/guests/check-ins). One row per Momence booking.
 export interface GuestFloorCheckinRow {
   booking_id: string;
   session_id: string;
@@ -979,6 +979,9 @@ export interface GuestFloorCheckinRow {
   /** The cancelled booking this guest moved from, when this row carries a move. */
   moved_from_booking_id: string | null;
   moved_from_session_id: string | null;
+  /** When staff checked them out; null = still in. Momence keeps no check-out. */
+  checked_out_at: string | null;
+  checked_out_by: string | null;
   updated_by: string;
   created_at: string;
   updated_at: string;

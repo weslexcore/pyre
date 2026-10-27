@@ -10,8 +10,38 @@ export const LOOKBACK_MINUTES = 4 * 60;
 export const LOOKAHEAD_MINUTES = 60;
 /** A guest stays on the list this long after their time and last check-in. */
 export const OVERTIME_GRACE_MINUTES = 30;
-/** Session lengths offered when a guest's differs from the schedule's. */
-export const SESSION_LENGTH_CHOICES = [30, 45, 60, 75, 90, 120] as const;
+// --- Session lengths: offered under Adjust, set on /admin/settings ---
+
+export const DEFAULT_SESSION_LENGTHS: number[] = [30, 45, 60, 75, 90, 120];
+export const MIN_SESSION_LENGTH = 5;
+export const MAX_SESSION_LENGTH = 600;
+export const MAX_SESSION_LENGTHS = 20;
+
+/** A list of session lengths, checked: whole minutes, sorted, without repeats. */
+export function parseSessionLengths(
+  raw: unknown
+): { ok: true; value: number[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: 'Session lengths must be a list of minutes' };
+  const bad = raw.find(
+    (m) =>
+      typeof m !== 'number' ||
+      !Number.isInteger(m) ||
+      m < MIN_SESSION_LENGTH ||
+      m > MAX_SESSION_LENGTH
+  );
+  if (bad !== undefined) {
+    return {
+      ok: false,
+      error: `Session lengths are whole minutes from ${MIN_SESSION_LENGTH} to ${MAX_SESSION_LENGTH}`,
+    };
+  }
+  const value = [...new Set(raw as number[])].sort((a, b) => a - b);
+  if (value.length === 0) return { ok: false, error: 'Keep at least one session length' };
+  if (value.length > MAX_SESSION_LENGTHS) {
+    return { ok: false, error: `At most ${MAX_SESSION_LENGTHS} session lengths` };
+  }
+  return { ok: true, value };
+}
 
 export const MINUTE_MS = 60_000;
 
@@ -127,6 +157,8 @@ export interface FloorGuest {
   customMinutes: boolean;
   /** Check-ins marked done, by checkpoint id. */
   checkpointsDone: Record<string, CheckpointDone>;
+  /** When staff checked them out; null = still in. */
+  checkedOutAt: string | null;
   /**
    * Set when the guest was moved here from another session (booking
    * cancelled, rebooked into a longer or shorter one). Once they're checked

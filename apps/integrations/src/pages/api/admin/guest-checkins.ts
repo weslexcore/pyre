@@ -1,17 +1,20 @@
-// On the floor — check-in times behind /admin/guests/floor.
+// Check Ins — check-in times behind /admin/guests/check-ins.
 //   GET                                          — today's sessions in the
 //                                                  window, everyone booked
 //                                                  into them with check-in
 //                                                  times (lib/guests/floor.ts),
-//                                                  and the configured
-//                                                  check-ins (floor.checkpoints)
+//                                                  the configured check-ins
+//                                                  (floor.checkpoints) and
+//                                                  session lengths
+//                                                  (floor.sessionLengths)
 //   POST   { sessionId, bookingId }              — check in now: Momence's
 //                                                  check-in, plus the time
 //   PATCH  { sessionId, bookingId, checkedInAt?,
-//            minutes?, checkpoint?: { id, done } }
-//                                                — correct the time, set a
+//            minutes?, checkpoint?: { id, done },
+//            checkedOut? }                       — correct the time, set a
 //                                                  different length, mark a
-//                                                  check-in done or not
+//                                                  check-in done or not,
+//                                                  check out (or undo it)
 //   DELETE ?sessionId=&bookingId=                — undo a check-in, in
 //                                                  Momence and here
 //
@@ -57,16 +60,26 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const now = Date.now();
-  const checkpoints = await getSetting('floor.checkpoints');
+  const [checkpoints, sessionLengths] = await Promise.all([
+    getSetting('floor.checkpoints'),
+    getSetting('floor.sessionLengths'),
+  ]);
   try {
     const floor = await loadFloor(db, now);
-    return json({ available: true, now: new Date(now).toISOString(), checkpoints, ...floor });
+    return json({
+      available: true,
+      now: new Date(now).toISOString(),
+      checkpoints,
+      sessionLengths,
+      ...floor,
+    });
   } catch (e) {
     console.error('[guests/floor] load failed:', e instanceof Error ? e.message : e);
     return json({
       available: false,
       now: new Date(now).toISOString(),
       checkpoints,
+      sessionLengths,
       sessions: [],
       guests: [],
       complete: false,
@@ -113,6 +126,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         // A fresh check-in; if it is a move, the next read carries it over.
         moved_from_booking_id: null,
         moved_from_session_id: null,
+        checked_out_at: null,
+        checked_out_by: null,
         updated_by: email,
         updated_at: new Date(now).toISOString(),
       },
@@ -167,6 +182,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     }
     checkpoint = { id: raw.id, done: raw.done };
   }
+  if (body.checkedOut !== undefined) {
+    if (typeof body.checkedOut !== 'boolean') {
+      return json({ error: 'checkedOut must be true or false' }, 400);
+    }
+    changes.checked_out_at = body.checkedOut ? new Date(now).toISOString() : null;
+    changes.checked_out_by = body.checkedOut ? email : null;
+  }
   if (Object.keys(changes).length === 0 && !checkpoint) {
     return json({ error: 'Nothing to change' }, 400);
   }
@@ -195,6 +217,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const current = existing as GuestFloorCheckinRow | null;
+  const checkedInAt = changes.checked_in_at ?? current?.checked_in_at;
+  const checkedOutAt =
+    changes.checked_out_at !== undefined ? changes.checked_out_at : current?.checked_out_at;
+  if (checkedInAt && checkedOutAt && Date.parse(checkedOutAt) < Date.parse(checkedInAt)) {
+    return json({ error: "Check-in time can't be after they checked out" }, 400);
+  }
   if (checkpoint) {
     const done = { ...(current?.checkpoints_done ?? {}) };
     if (checkpoint.done) done[checkpoint.id] = { at: new Date(now).toISOString(), by: email };

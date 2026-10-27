@@ -2,7 +2,7 @@
 // Sub-nav shared by the /admin/guests pages. The fields page is the managed
 // half (guests:manage), so it is only linked for people who can use it; the
 // page itself bounces anyone else. With guest profiles switched off on
-// /admin/settings only On the floor is left, so there is no sub-nav at all.
+// /admin/settings only Check Ins is left, so there is no sub-nav at all.
 import { hasGuestsManage } from '@/components/admin/adminTools';
 import { getSetting } from '@/lib/settings/store';
 import SubNav from './SubNav.astro';
@@ -21,10 +21,10 @@ const tabs = profiles
   ? [
       { href: '/admin/guests', label: 'Guests' },
       { href: '/admin/guests/sessions', label: "Who's coming" },
-      { href: '/admin/guests/floor', label: 'On the floor' },
+      { href: '/admin/guests/check-ins', label: 'Check Ins' },
       ...(canManage ? [{ href: '/admin/guests/fields', label: 'Fields' }] : []),
     ]
-  : [{ href: '/admin/guests/floor', label: 'On the floor' }];
+  : [{ href: '/admin/guests/check-ins', label: 'Check Ins' }];
 ---
 
 {tabs.length > 1 && <SubNav tabs={tabs} current={current} />}

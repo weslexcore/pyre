@@ -1,0 +1,17 @@
+---
+// Check Ins: check guests in and out, see when they came in, how much of
+// their session is left, and which of the check-ins set on /admin/settings
+// are due. Check-ins made here go through to Momence; check-outs are ours
+// alone, since Momence has none.
+import { GuestCheckIns } from '@/components/admin/GuestCheckIns';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Check Ins"
+  subtitle="Who's checked in, how much of their session is left, and who's due a check-in"
+>
+  <GuestTabs current="/admin/guests/check-ins" />
+  <GuestCheckIns client:load />
+</AdminLayout>

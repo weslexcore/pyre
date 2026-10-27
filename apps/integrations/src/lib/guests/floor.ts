@@ -1,7 +1,7 @@
-// "Who needs checking on?" — the data behind /admin/guests/floor.
+// "Who needs checking on?" — the data behind Check Ins (/admin/guests/check-ins).
 //
 // Momence knows who is booked and whether they were checked in, but not when.
-// The floor page checks guests in through Momence and keeps the time in
+// The Check Ins page checks guests in through Momence and keeps the time in
 // guest_floor_checkins; this module joins the two. A booking Momence says is
 // checked in but we have no time for (checked in at the desk in Momence) gets
 // an estimate — the later of the session start and when the booking was made,
@@ -104,6 +104,8 @@ function arrivalOf(
   rows: Map<string, GuestFloorCheckinRow>
 ): { at: string; done: Record<string, CheckpointDone> } | null {
   const row = rows.get(String(seat.booking.id));
+  // Checked out means they left; a booking after that is a new visit.
+  if (row?.checked_out_at) return null;
   if (row) return { at: row.checked_in_at, done: row.checkpoints_done ?? {} };
   if (seat.booking.checkedIn) {
     return { at: estimateCheckIn(seat.session.startsAt, seat.booking.createdAt), done: {} };
@@ -211,6 +213,8 @@ export function movedRow(
     checkpoints_done: { ...move.checkpointsDone, ...(existing?.checkpoints_done ?? {}) },
     moved_from_booking_id: move.fromBookingId,
     moved_from_session_id: move.fromSessionId,
+    checked_out_at: null,
+    checked_out_by: null,
     updated_by: MOVE_ACTOR,
     created_at: existing?.created_at ?? nowIso,
     updated_at: nowIso,
@@ -275,6 +279,7 @@ export function floorGuests(
       minutes: row?.session_minutes ?? session.minutes,
       customMinutes: row?.session_minutes != null,
       checkpointsDone: row?.checkpoints_done ?? {},
+      checkedOutAt: row?.checked_out_at ?? null,
       movedFrom,
     });
   }
@@ -388,7 +393,7 @@ export async function findFloorBooking(
  * Momence sends nothing when a guest is un-checked, so a time it sent earlier
  * can be left over from a check-in that was undone. A later check-in of the
  * same booking replaces it and clears the check-ins marked done against the
- * old one. A retried or out-of-order delivery (same or earlier time) changes
+ * old one, and any check-out. A retried or out-of-order delivery (same or earlier time) changes
  * nothing. Returns whether a row was written.
  */
 export async function recordMomenceCheckIn(
@@ -400,6 +405,8 @@ export async function recordMomenceCheckIn(
     member_id: checkIn.memberId || null,
     checked_in_at: checkIn.checkedInAt,
     checkpoints_done: {},
+    checked_out_at: null,
+    checked_out_by: null,
     updated_by: MOMENCE_ACTOR,
   };
 

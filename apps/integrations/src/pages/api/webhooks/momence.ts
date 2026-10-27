@@ -253,7 +253,7 @@ const ID_RE = /^\d{1,20}$/;
 
 /**
  * A guest checked in. Momence keeps only the flag on the booking, so this is
- * the one chance to keep the time: /admin/guests/floor reads it as the
+ * the one chance to keep the time: /admin/guests/check-ins reads it as the
  * guest's check-in time (lib/guests/floor.ts). A failure throws so Momence's
  * retry gets another go; the write is idempotent.
  */

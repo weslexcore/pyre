@@ -16,6 +16,9 @@ import {
   MAX_CHECKPOINT_LABEL,
   MAX_CHECKPOINT_MINUTES,
   MAX_CHECKPOINTS,
+  MAX_SESSION_LENGTH,
+  MAX_SESSION_LENGTHS,
+  MIN_SESSION_LENGTH,
 } from '@/lib/guests/floor-timing';
 import {
   type AnySettingValue,
@@ -56,6 +59,7 @@ function describeValue(def: SettingDefinition, value: AnySettingValue): string {
   if (def.type === 'boolean') return value ? 'on' : 'off';
   if (def.type === 'due_days') return 'the default days';
   if (def.type === 'checkpoints') return 'the default check-ins';
+  if (def.type === 'minutes_list') return (value as number[]).map((m) => `${m} min`).join(', ');
   const labels = def.options
     .filter((o) => (value as string[]).includes(o.value))
     .map((o) => o.label);
@@ -271,7 +275,7 @@ function CheckpointsEditor({
   return (
     <div className="space-y-2">
       {value.length === 0 ? (
-        <p className="text-xs text-white/50">No check-ins: On the floor shows time left only.</p>
+        <p className="text-xs text-white/50">No check-ins: Check Ins shows time left only.</p>
       ) : (
         <ul className="space-y-2">
           {value.map((checkpoint, i) => (
@@ -292,6 +296,75 @@ function CheckpointsEditor({
         className="rounded border border-white/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
       >
         Add check-in
+      </button>
+    </div>
+  );
+}
+
+/** Whole-minute values as removable chips, plus a box to add one. */
+function MinutesList({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number[];
+  disabled: boolean;
+  onChange: (next: number[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const next = Number(draft.trim());
+  const valid =
+    draft.trim() !== '' &&
+    Number.isInteger(next) &&
+    next >= MIN_SESSION_LENGTH &&
+    next <= MAX_SESSION_LENGTH &&
+    !value.includes(next);
+  const add = () => {
+    if (!valid) return;
+    onChange([...value, next].sort((a, b) => a - b));
+    setDraft('');
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {value.map((m) => (
+        <span
+          key={m}
+          className="inline-flex items-center gap-1.5 rounded border border-white/15 px-2 py-1 font-mono text-xs text-[var(--pyre-creme)]"
+        >
+          {m} min
+          <button
+            type="button"
+            aria-label={`Remove ${m} minutes`}
+            disabled={disabled || value.length <= 1}
+            onClick={() => onChange(value.filter((v) => v !== m))}
+            className="text-white/40 hover:text-white disabled:opacity-30"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="number"
+        inputMode="numeric"
+        min={MIN_SESSION_LENGTH}
+        max={MAX_SESSION_LENGTH}
+        aria-label="Add a session length in minutes"
+        placeholder="min"
+        disabled={disabled || value.length >= MAX_SESSION_LENGTHS}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') add();
+        }}
+        className={`${checkpointFieldClass} w-20 text-right font-mono`}
+      />
+      <button
+        type="button"
+        disabled={disabled || !valid}
+        onClick={add}
+        className="rounded border border-white/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+      >
+        Add length
       </button>
     </div>
   );
@@ -383,6 +456,13 @@ function SettingRow({
       {def.type === 'due_days' && (
         <DueDaysGrid
           value={view.value as DueDays}
+          disabled={busy}
+          onChange={(next) => onSave(view.key, next)}
+        />
+      )}
+      {def.type === 'minutes_list' && (
+        <MinutesList
+          value={view.value as number[]}
           disabled={busy}
           onChange={(next) => onSave(view.key, next)}
         />

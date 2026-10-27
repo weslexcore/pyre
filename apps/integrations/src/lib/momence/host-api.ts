@@ -639,7 +639,7 @@ export async function fetchSessionBookings(sessionId: number): Promise<SessionBo
 
 /**
  * Mark one booking checked in, or (`checkedIn: false`) not checked in.
- * Momence keeps only the flag, not the time — /admin/guests/floor records
+ * Momence keeps only the flag, not the time — /admin/guests/check-ins records
  * that itself (lib/guests/floor.ts).
  */
 export async function setSessionBookingCheckIn(

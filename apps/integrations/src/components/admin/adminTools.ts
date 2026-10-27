@@ -241,7 +241,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
       'plunge',
     ],
     description:
-      'Who is checked in right now, how much of their session is left, and which check-ins are due. Guest profiles (preferences, notes, who is booked) live here too when switched on in Settings.',
+      'Check guests in and out, see how much of their session is left, and which check-ins are due. Guest profiles (preferences, notes, who is booked) live here too when switched on in Settings.',
     section: 'operations',
   },
   {
@@ -662,8 +662,8 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     keywords: ['roster', 'today', 'sessions', 'attendees', 'booked', 'check in'],
   },
   {
-    href: '/admin/guests/floor',
-    title: 'On the Floor',
+    href: '/admin/guests/check-ins',
+    title: 'Check Ins',
     parent: '/admin/guests',
     keywords: ['check in', 'checked in', 'timer', '15 minute warning', 'time left', 'progress'],
   },

@@ -1,4 +1,4 @@
-// On the floor (/admin/guests/floor).
+// Check Ins (/admin/guests/check-ins).
 //
 // Everyone checked in right now, with when they came in, how long their
 // session runs, a bar of how much of it is behind them, and the check-ins
@@ -8,7 +8,9 @@
 // into a current or upcoming session and not here yet, with a Check in button
 // that checks them in on Momence and starts their clock. A guest rebooked
 // into a longer or shorter session keeps the arrival time from the booking
-// they moved from (lib/guests/floor.ts findMoves).
+// they moved from (lib/guests/floor.ts findMoves). Check out takes a guest
+// off the list (Momence has no check-out; it's ours alone) and into Checked
+// out at the bottom, with an undo.
 //
 // The list refetches every half minute; the bars re-run the timing locally
 // every few seconds in between.
@@ -33,7 +35,6 @@ import {
   floorTiming,
   MINUTE_MS,
   onFloor,
-  SESSION_LENGTH_CHOICES,
 } from '@/lib/guests/floor-timing';
 import { QuietBadge } from './guestUi';
 
@@ -41,13 +42,14 @@ interface FloorResponse {
   available: boolean;
   now: string;
   checkpoints: Checkpoint[];
+  sessionLengths: number[];
   sessions: FloorSession[];
   guests: FloorGuest[];
   complete: boolean;
   error?: string;
 }
 
-const FLOOR_URL = '/api/admin/guest-floor';
+const FLOOR_URL = '/api/admin/guest-checkins';
 const REFETCH_MS = 30_000;
 const TICK_MS = 5_000;
 /** A typed check-in time saves once it has sat this long (or on blur). */
@@ -86,7 +88,7 @@ function useNow(): number {
   return now;
 }
 
-export function GuestFloor() {
+export function GuestCheckIns() {
   const floor = useCachedJson<FloorResponse>(FLOOR_URL, { maxAgeMs: 60_000 });
   const now = useNow();
   const [busy, setBusy] = useState<string | null>(null);
@@ -108,8 +110,9 @@ export function GuestFloor() {
 
   const guests = floor.data?.guests ?? [];
   const checkpoints = floor.data?.checkpoints ?? [];
+  const sessionLengths = floor.data?.sessionLengths ?? [];
   const inside = guests
-    .filter((g) => g.checkedIn)
+    .filter((g) => g.checkedIn && !g.checkedOutAt)
     .map((guest) => ({ guest, timing: floorTiming(guest, checkpoints, now) }))
     .filter(({ timing }) => onFloor(timing, now))
     .sort((a, b) => compareFloor(a.timing, b.timing));
@@ -121,6 +124,9 @@ export function GuestFloor() {
           sessions.get(b.sessionId)?.startsAt ?? ''
         ) || a.name.localeCompare(b.name)
     );
+  const checkedOut = guests
+    .filter((g) => g.checkedOutAt)
+    .sort((a, b) => (b.checkedOutAt ?? '').localeCompare(a.checkedOutAt ?? ''));
   const dueNow = inside.filter(({ timing }) => timing.status === 'due');
 
   /** Run one change for a guest; resolves true when it saved. */
@@ -315,12 +321,24 @@ export function GuestFloor() {
                 >
                   {editing === guest.bookingId ? 'Done' : 'Adjust'}
                 </button>
+                <button
+                  type="button"
+                  className={`${buttonClass} ml-auto`}
+                  disabled={busy === guest.bookingId}
+                  onClick={() => {
+                    setEditing(null);
+                    void patch(guest, { checkedOut: true });
+                  }}
+                >
+                  {busy === guest.bookingId ? 'Checking out…' : 'Check out'}
+                </button>
               </div>
 
               {editing === guest.bookingId && (
                 <AdjustGuest
                   guest={guest}
                   session={sessions.get(guest.sessionId)}
+                  sessionLengths={sessionLengths}
                   busy={busy === guest.bookingId}
                   onPatch={(changes) => patch(guest, changes)}
                   onUndo={() => undo(guest)}
@@ -376,6 +394,49 @@ export function GuestFloor() {
           })}
         </ul>
       </section>
+
+      {checkedOut.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-mono text-xs uppercase tracking-wide text-white/50">
+            Checked out · {checkedOut.length}
+          </h2>
+          <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+            {checkedOut.map((guest) => {
+              const stayed =
+                guest.checkedInAt && guest.checkedOutAt
+                  ? Math.round(
+                      (Date.parse(guest.checkedOutAt) - Date.parse(guest.checkedInAt)) / MINUTE_MS
+                    )
+                  : null;
+              return (
+                <li key={guest.bookingId} className="flex items-center justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-white/70">{guest.name}</span>
+                      {guest.seats > 1 && <QuietBadge>×{guest.seats}</QuietBadge>}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-xs text-white/40">
+                      {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'} –{' '}
+                      {guest.checkedOutAt ? etTime(guest.checkedOutAt) : '—'}
+                      {stayed !== null ? ` · ${stayed} of ${guest.minutes} min` : ''}
+                      {' · '}
+                      {sessions.get(guest.sessionId)?.name ?? 'Session'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy === guest.bookingId}
+                    onClick={() => void patch(guest, { checkedOut: false })}
+                  >
+                    Undo check-out
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
@@ -425,12 +486,14 @@ function CheckpointChip({
 function AdjustGuest({
   guest,
   session,
+  sessionLengths,
   busy,
   onPatch,
   onUndo,
 }: {
   guest: FloorGuest;
   session: FloorSession | undefined;
+  sessionLengths: number[];
   busy: boolean;
   onPatch: (changes: Record<string, unknown>) => Promise<boolean>;
   onUndo: () => void;
@@ -470,7 +533,7 @@ function AdjustGuest({
   useEffect(() => saveTime(debounced), [debounced]);
 
   const defaultMinutes = session?.minutes ?? guest.minutes;
-  const lengths = [...new Set([defaultMinutes, guest.minutes, ...SESSION_LENGTH_CHOICES])].sort(
+  const lengths = [...new Set([defaultMinutes, guest.minutes, ...sessionLengths])].sort(
     (a, b) => a - b
   );
 
@@ -540,4 +603,4 @@ function AdjustGuest({
   );
 }
 
-export default GuestFloor;
+export default GuestCheckIns;

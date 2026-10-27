@@ -41,7 +41,7 @@ export interface MomenceReportRunPayload {
 
 /**
  * `session-booking-checked-in`: a guest checked in, anywhere — the Momence
- * app at the desk, or /admin/guests/floor through the API. The only place
+ * app at the desk, or /admin/guests/check-ins through the API. The only place
  * Momence gives the check-in time.
  */
 export interface MomenceCheckInPayload {

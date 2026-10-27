@@ -11,7 +11,13 @@
 // saved value.
 
 import { HIDEABLE_TOOLS } from '@/components/admin/adminTools';
-import { type Checkpoint, DEFAULT_CHECKPOINTS, parseCheckpoints } from '@/lib/guests/floor-timing';
+import {
+  type Checkpoint,
+  DEFAULT_CHECKPOINTS,
+  DEFAULT_SESSION_LENGTHS,
+  parseCheckpoints,
+  parseSessionLengths,
+} from '@/lib/guests/floor-timing';
 import { DEFAULT_DUE_DAYS, type DueDays, parseDueDays } from '@/lib/suggestions/priority';
 
 export type SettingSection = 'suggestions' | 'sops' | 'navigation' | 'guests';
@@ -27,7 +33,7 @@ export const SETTING_SECTIONS: { key: SettingSection; label: string; description
     key: 'guests',
     label: 'Guests',
     description:
-      'The Guests pages: who is on the floor, and the check-ins staff make with each guest during their session.',
+      'The Guests pages: Check Ins, the check-ins staff make with each guest during their session, and the session lengths staff can pick.',
   },
   {
     key: 'suggestions',
@@ -76,14 +82,21 @@ export interface CheckpointsSetting extends Base {
   default: readonly Checkpoint[];
 }
 
+/** A list of whole minutes, such as the session lengths staff can pick. */
+export interface MinutesListSetting extends Base {
+  type: 'minutes_list';
+  default: readonly number[];
+}
+
 export type SettingDefinition =
   | BooleanSetting
   | MultiChoiceSetting
   | DueDaysSetting
-  | CheckpointsSetting;
+  | CheckpointsSetting
+  | MinutesListSetting;
 
 /** Any setting's value, untyped by key. */
-export type AnySettingValue = boolean | string[] | DueDays | Checkpoint[];
+export type AnySettingValue = boolean | string[] | DueDays | Checkpoint[] | number[];
 
 export const SETTINGS = {
   'navigation.hiddenTools': {
@@ -100,7 +113,7 @@ export const SETTINGS = {
     section: 'guests',
     label: 'Guest profiles',
     description:
-      'The guest list, Who’s coming, profile fields, and each guest’s profile page. Off, those pages open On the floor instead and their tabs are hidden; profiles already saved are kept.',
+      'The guest list, Who’s coming, profile fields, and each guest’s profile page. Off, those pages open Check Ins instead and their tabs are hidden; profiles already saved are kept.',
     default: false,
   },
   'floor.checkpoints': {
@@ -108,8 +121,16 @@ export const SETTINGS = {
     section: 'guests',
     label: 'Check-ins during a session',
     description:
-      'The moments staff check on each guest. On the floor highlights a guest when one comes due, until someone marks it done. Add as many as you like, timed from when the guest arrives or from when their session ends.',
+      'The moments staff check on each guest. Check Ins highlights a guest when one comes due, until someone marks it done. Add as many as you like, timed from when the guest arrives or from when their session ends.',
     default: DEFAULT_CHECKPOINTS,
+  },
+  'floor.sessionLengths': {
+    type: 'minutes_list',
+    section: 'guests',
+    label: 'Session lengths',
+    description:
+      'The lengths staff can give a guest under Adjust on Check Ins. A guest starts on their Momence session’s own length, which is always offered too.',
+    default: DEFAULT_SESSION_LENGTHS,
   },
   'suggestions.enabled': {
     type: 'boolean',
@@ -171,7 +192,9 @@ export type SettingValue<K extends SettingKey> = (typeof SETTINGS)[K] extends { 
     ? DueDays
     : (typeof SETTINGS)[K] extends { type: 'checkpoints' }
       ? Checkpoint[]
-      : string[];
+      : (typeof SETTINGS)[K] extends { type: 'minutes_list' }
+        ? number[]
+        : string[];
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
@@ -196,6 +219,7 @@ export function parseSettingValue(
   }
   if (def.type === 'due_days') return parseDueDays(raw);
   if (def.type === 'checkpoints') return parseCheckpoints(raw);
+  if (def.type === 'minutes_list') return parseSessionLengths(raw);
   if (!Array.isArray(raw) || !raw.every((v) => typeof v === 'string')) {
     return { ok: false, error: `${def.label} must be a list of choices` };
   }
@@ -218,7 +242,9 @@ export function parseEnvValue(
   if (raw === undefined || raw.trim() === '') return undefined;
   const def = settingDefinition(key);
   // A grid or a list has no environment-variable spelling.
-  if (def.type === 'due_days' || def.type === 'checkpoints') return undefined;
+  if (def.type === 'due_days' || def.type === 'checkpoints' || def.type === 'minutes_list') {
+    return undefined;
+  }
   const text = raw.trim().toLowerCase();
   if (def.type === 'boolean') {
     if (['on', 'true', '1', 'yes'].includes(text)) return true;
