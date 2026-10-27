@@ -72,18 +72,20 @@ function daysBetween(from: string, to: string): number {
  * — so "daily" is due again each new day however late yesterday's count.
  */
 export function isDue(
-  item: Pick<InventoryRow, 'count_every_days' | 'last_counted_at'>,
+  item: Pick<InventoryRow, 'count_every_days' | 'last_counted_at'> & { active?: boolean },
   now: Date
 ): boolean {
-  if (!item.count_every_days) return false;
+  if (item.active === false || !item.count_every_days) return false;
   if (!item.last_counted_at) return true;
   const days = daysBetween(easternDate(new Date(item.last_counted_at)), easternDate(now));
   return days >= item.count_every_days;
 }
 
-/** At or below its re-order level. */
-export function isLow(item: Pick<InventoryRow, 'reorder_at' | 'in_stock'>): boolean {
-  return item.reorder_at != null && item.in_stock <= item.reorder_at;
+/** At or below its re-order level (never, while inactive). */
+export function isLow(
+  item: Pick<InventoryRow, 'reorder_at' | 'in_stock'> & { active?: boolean }
+): boolean {
+  return item.active !== false && item.reorder_at != null && item.in_stock <= item.reorder_at;
 }
 
 /** A stock change that takes an item from above its re-order level to at or below it. */
@@ -180,6 +182,12 @@ export function normalizeFields(
       out.reorder_at = n;
     }
   }
+  if (has('active')) {
+    if (body.active == null && !partial) out.active = true;
+    else if (typeof body.active !== 'boolean')
+      return { ok: false, error: 'Active must be true or false' };
+    else out.active = body.active;
+  }
   return { ok: true, value: out };
 }
 
@@ -263,7 +271,8 @@ export function formatDaysLeft(days: number): string {
 // The list: filter and sort
 // ---------------------------------------------------------------------------
 
-export type InventoryFilter = 'all' | 'due' | 'reorder';
+/** 'all' is every active item; 'inactive' is the ones set aside. */
+export type InventoryFilter = 'all' | 'due' | 'reorder' | 'inactive';
 
 export type SortKey =
   | 'name'
@@ -348,7 +357,9 @@ export function listItems(
       matchesSearch(item, query.search) &&
       (!query.category ||
         (query.category === UNCATEGORISED ? !item.category : item.category === query.category)) &&
+      (query.filter === 'inactive' ? !item.active : item.active) &&
       (query.filter === 'all' ||
+        query.filter === 'inactive' ||
         (query.filter === 'due' && isDue(item, now)) ||
         (query.filter === 'reorder' && isLow(item)))
   );

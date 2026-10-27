@@ -49,6 +49,8 @@ describe('formatting', () => {
     expect(formatFieldValue('count_every_days', 7)).toBe('Weekly');
     expect(formatFieldValue('in_stock', 2.5)).toBe('2.5');
     expect(formatFieldValue('vendor', null)).toBeNull();
+    expect(formatFieldValue('active', false)).toBe('Inactive');
+    expect(formatFieldValue('active', true)).toBe('Active');
     expect(formatFieldValue('how_to_order', `https://x.test/${'a'.repeat(100)}`)).toHaveLength(80);
   });
 

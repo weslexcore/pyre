@@ -124,6 +124,7 @@ export function InventoryDetails({
   initialTab = 'details',
   onSave,
   onDelete,
+  onToggleActive,
   onClose,
 }: {
   item: InventoryRow;
@@ -140,6 +141,8 @@ export function InventoryDetails({
   /** Resolves to an error message, or null once saved. */
   onSave: (patch: Record<string, unknown>) => Promise<string | null>;
   onDelete: () => void;
+  /** Sets the item aside, or brings it back; resolves to an error message or null. */
+  onToggleActive: () => Promise<string | null>;
   onClose: () => void;
 }) {
   const id = useId();
@@ -251,6 +254,7 @@ export function InventoryDetails({
             {item.last_counted_at
               ? `Last counted ${etStamp(item.last_counted_at)}${countedBy ? ` by ${countedBy}` : ''}`
               : 'Never counted'}
+            {!item.active && ' · inactive'}
             {isDue(item, now) && ' · due for a count'}
             {isLow(item) && ' · needs re-order'}
           </p>
@@ -487,13 +491,27 @@ export function InventoryDetails({
 
           {canManage && (
             <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-4">
-              <button
-                type="button"
-                onClick={onDelete}
-                className="font-mono text-xs uppercase tracking-wide text-white/40 hover:text-[var(--pyre-red)]"
-              >
-                Delete item
-              </button>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void commit()
+                      .then(onToggleActive)
+                      .then((failure) => failure && setStatus({ kind: 'error', message: failure }))
+                  }
+                  className="font-mono text-xs uppercase tracking-wide text-white/40 hover:text-white"
+                  title={item.active ? 'Hide it from the list, e.g. out of season' : undefined}
+                >
+                  {item.active ? 'Mark inactive' : 'Mark active'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="font-mono text-xs uppercase tracking-wide text-white/40 hover:text-[var(--pyre-red)]"
+                >
+                  Delete item
+                </button>
+              </div>
               <p
                 className="font-mono text-[10px] uppercase tracking-wide text-white/40"
                 aria-live="polite"

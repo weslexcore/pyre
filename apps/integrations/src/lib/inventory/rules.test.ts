@@ -32,6 +32,7 @@ function row(overrides: Partial<InventoryRow> = {}): InventoryRow {
     last_counted_by: null,
     in_stock: 0,
     reorder_at: null,
+    active: true,
     created_by: 'a@pyre.test',
     created_at: '2026-10-01T12:00:00Z',
     updated_at: '2026-10-01T12:00:00Z',
@@ -155,6 +156,25 @@ describe('normalizeFields', () => {
   });
 });
 
+describe('inactive items', () => {
+  it('are never due or low', () => {
+    const item = row({ count_every_days: 1, in_stock: 0, reorder_at: 5, active: false });
+    expect(isDue(item, NOW)).toBe(false);
+    expect(isLow(item)).toBe(false);
+    expect(isDue({ ...item, active: true }, NOW)).toBe(true);
+    expect(isLow({ ...item, active: true })).toBe(true);
+  });
+
+  it('validates the flag, defaulting new items to active', () => {
+    expect(normalizeFields({ name: 'Soap' })).toMatchObject({ ok: true, value: { active: true } });
+    expect(normalizeFields({ active: false }, { partial: true })).toEqual({
+      ok: true,
+      value: { active: false },
+    });
+    expect(normalizeFields({ active: 'no' }, { partial: true }).ok).toBe(false);
+  });
+});
+
 describe('usageOf', () => {
   const at = (day: number) => new Date(Date.UTC(2026, 9, day, 14)).toISOString();
 
@@ -243,6 +263,13 @@ describe('listItems', () => {
       count_every_days: 1,
     }),
     row({ name: 'Hair ties', in_stock: 100, unit_cost_cents: 5 }),
+    row({
+      name: 'Snow melt',
+      in_stock: 0,
+      reorder_at: 5,
+      count_every_days: 7,
+      active: false,
+    }),
   ];
   const base: ListQuery = {
     search: '',
@@ -253,6 +280,13 @@ describe('listItems', () => {
   };
   const names = (q: Partial<ListQuery>) =>
     listItems(items, { ...base, ...q }, NOW).map((i) => i.name);
+
+  it('keeps inactive items off every list but Inactive', () => {
+    expect(names({})).not.toContain('Snow melt');
+    expect(names({ filter: 'due' })).not.toContain('Snow melt');
+    expect(names({ filter: 'reorder' })).not.toContain('Snow melt');
+    expect(names({ filter: 'inactive' })).toEqual(['Snow melt']);
+  });
 
   it('filters by category, or to the uncategorised', () => {
     expect(names({ category: 'Linens' })).toEqual(['Towels']);

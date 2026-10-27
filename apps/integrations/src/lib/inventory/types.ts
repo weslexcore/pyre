@@ -34,6 +34,8 @@ export interface InventoryRow {
   in_stock: number;
   /** Flag for re-order at or below this; null = never. */
   reorder_at: number | null;
+  /** false = set aside (seasonal, say): off the everyday list, never due or low. */
+  active: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -58,6 +60,7 @@ export type InventoryFields = Pick<
   | 'count_every_days'
   | 'in_stock'
   | 'reorder_at'
+  | 'active'
 >;
 
 export interface InventoryResponse {

@@ -17,6 +17,7 @@ function row(name: string, overrides: Partial<InventoryRow> = {}): InventoryRow 
     last_counted_by: null,
     in_stock: 10,
     reorder_at: null,
+    active: true,
     created_by: 'a@pyre.test',
     created_at: '2026-10-01T12:00:00Z',
     updated_at: '2026-10-01T12:00:00Z',

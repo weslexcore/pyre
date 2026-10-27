@@ -5,7 +5,8 @@
 //   PATCH ?id=<uuid>         → edit an item. Anyone with the page may set
 //                              in_stock; every other field needs
 //                              inventory:manage. Any edit counts as a look at
-//                              the item: it stamps last_counted_at / _by.
+//                              the item: it stamps last_counted_at / _by
+//                              (except only marking it active or inactive).
 //
 // Adds and edits are written to inventory_history (who changed what, and the
 // stock after); rows come back with usage_per_day worked out from it.
@@ -112,8 +113,10 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .from('inventory')
     .update({
       ...changes,
-      last_counted_at: new Date().toISOString(),
-      last_counted_by: email,
+      // Setting an item aside (or bringing it back) isn't a look at the shelf.
+      ...(Object.keys(changes).every((key) => key === 'active')
+        ? {}
+        : { last_counted_at: new Date().toISOString(), last_counted_by: email }),
     })
     .eq('id', id)
     .select('*')

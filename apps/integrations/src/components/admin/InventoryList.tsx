@@ -10,7 +10,9 @@
 // Anyone with the page can count: set the In stock number (Enter on an
 // unchanged number confirms it). Any edit to a row stamps Last counted with
 // who made it and when. inventory:manage (or an admin holding the page)
-// edits every other column, adds items, and deletes them.
+// edits every other column, adds items, sets them aside as inactive
+// (seasonal ones, say: off the list, never due or low, under the Inactive
+// filter until they're back), and deletes them.
 // /api/admin/inventory is the security boundary; this island only offers
 // what the viewer may do.
 
@@ -89,7 +91,7 @@ function takeLinkParams(): { filter: InventoryFilter | null; item: string | null
   if (typeof window === 'undefined') return { filter: null, item: null };
   const url = new URL(window.location.href);
   const raw = url.searchParams.get('filter');
-  const filter = raw === 'due' || raw === 'reorder' ? raw : null;
+  const filter = raw === 'due' || raw === 'reorder' || raw === 'inactive' ? raw : null;
   const item = url.searchParams.get('item');
   if (!raw && !item) return { filter, item };
   url.searchParams.delete('filter');
@@ -241,6 +243,10 @@ export function InventoryList() {
 
   useEffect(() => {
     if (!highlight || !data) return;
+    // A link to an inactive item (from global search) opens the Inactive list.
+    if (data.items.find((i) => i.id === highlight)?.active === false) {
+      setQuery((q) => (q.filter === 'inactive' ? q : { ...q, filter: 'inactive' }));
+    }
     document.getElementById(`item-${highlight}`)?.scrollIntoView({ block: 'center' });
     const timer = setTimeout(() => setHighlight(null), 4000);
     return () => clearTimeout(timer);
@@ -263,6 +269,7 @@ export function InventoryList() {
   const rows = listItems(items, listQuery, now);
   const dueCount = items.filter((i) => isDue(i, now)).length;
   const lowCount = items.filter(isLow).length;
+  const activeCount = items.filter((i) => i.active).length;
 
   const sortBy = (key: SortKey) => {
     setQuery((q) => {
@@ -322,6 +329,7 @@ export function InventoryList() {
       const res = await sendJson<{ item: InventoryRow }>(INVENTORY_API, 'POST', { name });
       replaceRow(res.item);
       setAdding(false);
+      setQuery((q) => (q.filter === 'inactive' ? { ...q, filter: 'all' } : q));
       setHighlight(res.item.id);
       return true;
     } catch (e) {
@@ -331,7 +339,10 @@ export function InventoryList() {
   };
 
   const remove = async (item: InventoryRow) => {
-    if (!window.confirm(`Delete ${item.name}? This can't be undone.`)) return;
+    const ask = item.active
+      ? `Delete ${item.name} and its history? This can't be undone. To set it aside for now (a seasonal item, say), mark it inactive instead.`
+      : `Delete ${item.name} and its history? This can't be undone.`;
+    if (!window.confirm(ask)) return;
     setSaveError(null);
     try {
       await sendJson(`${INVENTORY_API}?id=${item.id}`, 'DELETE');
@@ -353,9 +364,13 @@ export function InventoryList() {
   const countItem = countId ? items.find((i) => i.id === countId) : undefined;
 
   const filters: { key: InventoryFilter; label: string }[] = [
-    { key: 'all', label: `All (${items.length})` },
+    { key: 'all', label: `All (${activeCount})` },
     { key: 'due', label: `Due for a count (${dueCount})` },
     { key: 'reorder', label: `Needs re-order (${lowCount})` },
+    // Only once something has been set aside (or while it's the filter).
+    ...(activeCount < items.length || query.filter === 'inactive'
+      ? [{ key: 'inactive' as const, label: `Inactive (${items.length - activeCount})` }]
+      : []),
   ];
 
   return (
@@ -458,6 +473,7 @@ export function InventoryList() {
           now={now}
           onSave={(patch) => saveDetails(detailsItem.id, patch)}
           onDelete={() => void remove(detailsItem)}
+          onToggleActive={() => saveDetails(detailsItem.id, { active: !detailsItem.active })}
           onClose={() => setDetailsId(null)}
         />
       )}
@@ -536,6 +552,7 @@ export function InventoryList() {
                 onShowOrder={() => setOrderId(item.id)}
                 onCount={() => setCountId(item.id)}
                 onDelete={() => remove(item)}
+                onToggleActive={() => save(item.id, { active: !item.active })}
               />
             ))}
             {rows.length === 0 && !adding && (
@@ -545,7 +562,9 @@ export function InventoryList() {
                     ? canManage
                       ? 'No items yet. Add the first one.'
                       : 'No items yet. Someone who manages inventory can add them.'
-                    : 'Nothing matches.'}
+                    : query.filter === 'inactive'
+                      ? 'No inactive items.'
+                      : 'Nothing matches.'}
                 </td>
               </tr>
             )}
@@ -623,6 +642,7 @@ function ItemRow({
   onShowOrder,
   onCount,
   onDelete,
+  onToggleActive,
 }: {
   item: InventoryRow;
   now: Date;
@@ -638,12 +658,15 @@ function ItemRow({
   onShowOrder: () => void;
   onCount: () => void;
   onDelete: () => void;
+  onToggleActive: () => void;
 }) {
   const left = daysLeft(item);
   const due = isDue(item, now);
   const low = isLow(item);
   const link = orderLink(item.how_to_order);
-  const rowTone = highlighted ? 'bg-[var(--pyre-gold)]/10' : 'hover:bg-white/[0.02]';
+  const rowTone = `${highlighted ? 'bg-[var(--pyre-gold)]/10' : 'hover:bg-white/[0.02]'} ${
+    item.active ? '' : 'text-white/50'
+  }`;
 
   return (
     <tr id={`item-${item.id}`} className={`transition-colors ${rowTone}`}>
@@ -654,8 +677,11 @@ function ItemRow({
           editable={canManage}
           onSave={(v) => (v ? onSave({ name: v }) : Promise.resolve(false))}
         />
-        {(due || low) && (
+        {(due || low || !item.active) && (
           <div className="flex flex-wrap items-center gap-1.5 px-1.5 pb-1">
+            {!item.active && (
+              <span className={`${chipClass} border-white/20 text-white/50`}>Inactive</span>
+            )}
             {due && (
               <button
                 type="button"
@@ -843,7 +869,15 @@ function ItemRow({
           actions={[
             { label: canManage ? 'Edit details' : 'View details', onSelect: onDetails },
             { label: 'Analytics', onSelect: onAnalytics },
-            ...(canManage ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
+            ...(canManage
+              ? [
+                  {
+                    label: item.active ? 'Mark inactive' : 'Mark active',
+                    onSelect: onToggleActive,
+                  },
+                  { label: 'Delete', onSelect: onDelete, danger: true },
+                ]
+              : []),
           ]}
         />
       </td>

@@ -16,13 +16,13 @@ const LOW_NOTICE_DAYS = 14;
 
 export async function notifyIfLow(
   db: SupabaseClient,
-  item: Pick<InventoryRow, 'id' | 'name' | 'reorder_at' | 'vendor'>,
+  item: Pick<InventoryRow, 'id' | 'name' | 'reorder_at' | 'vendor' | 'active'>,
   before: number,
   after: number,
   actorEmail: string
 ): Promise<void> {
   try {
-    if (!crossedReorderLevel(item.reorder_at, before, after)) return;
+    if (!item.active || !crossedReorderLevel(item.reorder_at, before, after)) return;
     const rows = (await listStaff()) ?? [];
     await createNotifications(db, adminsPlus(rows), {
       kind: 'inventory_low',

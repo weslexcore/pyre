@@ -7,6 +7,7 @@ import type { FieldChange, InventoryFields, InventoryHistoryEntry } from './type
 
 /** The fields the history tracks, in the order the log lists them. */
 export const TRACKED_FIELDS: (keyof InventoryFields)[] = [
+  'active',
   'name',
   'category',
   'location',
@@ -20,6 +21,7 @@ export const TRACKED_FIELDS: (keyof InventoryFields)[] = [
 ];
 
 export const FIELD_LABELS: Record<keyof InventoryFields, string> = {
+  active: 'Status',
   name: 'Name',
   category: 'Category',
   location: 'Location',
@@ -73,6 +75,8 @@ const MAX_SHOWN = 80;
 export function formatFieldValue(key: keyof InventoryFields, value: unknown): string | null {
   if (value == null || value === '') return null;
   switch (key) {
+    case 'active':
+      return value ? 'Active' : 'Inactive';
     case 'in_stock':
     case 'reorder_at':
       return formatQuantity(Number(value));
