@@ -1,8 +1,8 @@
 // One inventory item's details dialog, opened from its row menu on
 // /admin/inventory. The Details tab is every column in one form (name,
 // category, location, stock, re-order level, count schedule and
-// instructions, cost, vendor, how to order); the History tab is how the item
-// has changed and how fast it's used (InventoryHistory).
+// instructions, cost, vendor, how to order); the Analytics tab is how fast it's
+// used and how it has changed (InventoryHistory).
 //
 // inventory:manage edits; everyone else reads. Edits save themselves: a text
 // box when you leave it, a drop-down when you pick, and anything pending when
@@ -31,7 +31,7 @@ import { Modal, modalPanelClass } from './Modal';
 
 const CUSTOM = 'custom';
 
-export type DetailsTab = 'details' | 'history';
+export type DetailsTab = 'details' | 'analytics';
 
 type SaveStatus =
   | { kind: 'idle' }
@@ -273,18 +273,18 @@ export function InventoryDetails({
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'history'}
-          className={tabClass(tab === 'history')}
+          aria-selected={tab === 'analytics'}
+          className={tabClass(tab === 'analytics')}
           onClick={() => {
             void commit();
-            setTab('history');
+            setTab('analytics');
           }}
         >
-          History
+          Analytics
         </button>
       </div>
 
-      {tab === 'history' ? (
+      {tab === 'analytics' ? (
         <InventoryHistory item={item} now={now} />
       ) : (
         <form

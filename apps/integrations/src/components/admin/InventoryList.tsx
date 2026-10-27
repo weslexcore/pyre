@@ -3,8 +3,9 @@
 // cancels. Headers sort, the toolbar searches and filters (due for a count,
 // needs re-ordering, by category). The setup columns (category, location,
 // re-order level, schedule, cost, vendor, how to order) stay hidden until
-// "Show all fields" is ticked, so the everyday view is what to count and how
-// fast it goes (use per week and when it runs out, from the item's history).
+// "Show all fields" is ticked, so the everyday view is just what to count.
+// Usage (use per week, when it runs out) shows there too, and always in an
+// item's Analytics tab.
 //
 // Anyone with the page can count: set the In stock number (Enter on an
 // unchanged number confirms it). Any edit to a row stamps Last counted with
@@ -118,8 +119,8 @@ const COLUMNS: Column[] = [
   { key: 'in_stock', label: 'In stock', width: 96, className: 'text-right' },
   { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right', setup: true },
   { key: 'last_counted_at', label: 'Last counted', width: 220 },
-  { key: 'usage', label: 'Use / week', width: 112, className: 'text-right' },
-  { key: 'days_left', label: 'Runs out', width: 112 },
+  { key: 'usage', label: 'Use / week', width: 112, className: 'text-right', setup: true },
+  { key: 'days_left', label: 'Runs out', width: 112, setup: true },
   { key: 'count_every_days', label: 'Count every', width: 170, setup: true },
   {
     key: 'unit_cost_cents',
@@ -531,7 +532,7 @@ export function InventoryList() {
                 highlighted={highlight === item.id}
                 onSave={(patch) => save(item.id, patch)}
                 onDetails={() => setDetailsId(item.id)}
-                onHistory={() => setDetailsId(item.id, 'history')}
+                onAnalytics={() => setDetailsId(item.id, 'analytics')}
                 onShowOrder={() => setOrderId(item.id)}
                 onCount={() => setCountId(item.id)}
                 onDelete={() => remove(item)}
@@ -552,9 +553,8 @@ export function InventoryList() {
         </table>
       </div>
       <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
-        Click a cell to edit, or open an item's menu for all its details and history. Any edit
-        updates Last counted. Shelf matches? Click In stock and press Enter. Use / week comes from
-        the last 90 days of counts.
+        Click a cell to edit, or open an item's menu for all its details and analytics. Any edit
+        updates Last counted. Shelf matches? Click In stock and press Enter.
         {!canManage && ' Changing other columns needs the inventory manage permission.'}
       </p>
     </div>
@@ -619,7 +619,7 @@ function ItemRow({
   highlighted,
   onSave,
   onDetails,
-  onHistory,
+  onAnalytics,
   onShowOrder,
   onCount,
   onDelete,
@@ -634,7 +634,7 @@ function ItemRow({
   highlighted: boolean;
   onSave: (patch: Patch) => Promise<boolean>;
   onDetails: () => void;
-  onHistory: () => void;
+  onAnalytics: () => void;
   onShowOrder: () => void;
   onCount: () => void;
   onDelete: () => void;
@@ -742,31 +742,35 @@ function ItemRow({
           <span className="text-white/30">Never</span>
         )}
       </td>
-      <td className={`${cellClass} text-right tabular-nums`}>
-        <button
-          type="button"
-          onClick={onHistory}
-          className={`${readClass} text-right ${item.usage_per_day == null ? 'text-white/20' : 'text-white/70'}`}
-          title="Count history"
-          aria-label={`Count history for ${item.name}`}
+      {shown.has('usage') && (
+        <td className={`${cellClass} text-right tabular-nums`}>
+          <button
+            type="button"
+            onClick={onAnalytics}
+            className={`${readClass} text-right ${item.usage_per_day == null ? 'text-white/20' : 'text-white/70'}`}
+            title="Analytics"
+            aria-label={`Analytics for ${item.name}`}
+          >
+            {item.usage_per_day == null ? '—' : formatPerWeek(item.usage_per_day)}
+          </button>
+        </td>
+      )}
+      {shown.has('days_left') && (
+        <td
+          className={`${cellClass} truncate whitespace-nowrap px-3.5 ${
+            left != null && item.count_every_days != null && left <= item.count_every_days
+              ? 'text-[var(--pyre-red)]'
+              : 'text-white/70'
+          }`}
+          title={
+            left != null && item.count_every_days != null && left <= item.count_every_days
+              ? 'Likely to run out before its next count'
+              : undefined
+          }
         >
-          {item.usage_per_day == null ? '—' : formatPerWeek(item.usage_per_day)}
-        </button>
-      </td>
-      <td
-        className={`${cellClass} truncate whitespace-nowrap px-3.5 ${
-          left != null && item.count_every_days != null && left <= item.count_every_days
-            ? 'text-[var(--pyre-red)]'
-            : 'text-white/70'
-        }`}
-        title={
-          left != null && item.count_every_days != null && left <= item.count_every_days
-            ? 'Likely to run out before its next count'
-            : undefined
-        }
-      >
-        {left == null ? <span className="text-white/20">—</span> : `~${formatDaysLeft(left)}`}
-      </td>
+          {left == null ? <span className="text-white/20">—</span> : `~${formatDaysLeft(left)}`}
+        </td>
+      )}
       {shown.has('count_every_days') && (
         <td className={cellClass}>
           <ScheduleCell
@@ -838,7 +842,7 @@ function ItemRow({
           itemName={item.name}
           actions={[
             { label: canManage ? 'Edit details' : 'View details', onSelect: onDetails },
-            { label: 'History', onSelect: onHistory },
+            { label: 'Analytics', onSelect: onAnalytics },
             ...(canManage ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
           ]}
         />

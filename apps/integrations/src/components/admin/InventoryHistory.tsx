@@ -1,4 +1,4 @@
-// The History tab of an inventory item's details dialog: how fast it's used,
+// The Analytics tab of an inventory item's details dialog: how fast it's used,
 // its stock over time, and every change to it with who made it — counts,
 // prices, links, schedules. Reads /api/admin/inventory-history, and reloads
 // whenever the item changes so a save made in the Details tab shows up.

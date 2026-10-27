@@ -1,4 +1,4 @@
-// One inventory item's history, for the History tab of its details dialog
+// One inventory item's history, for the Analytics tab of its details dialog
 // on /admin/inventory.
 //
 //   GET ?id=<uuid>   → InventoryHistoryResponse (newest first, capped)
