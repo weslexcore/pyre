@@ -662,6 +662,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     keywords: ['roster', 'today', 'sessions', 'attendees', 'booked', 'check in'],
   },
   {
+    href: '/admin/guests/floor',
+    title: 'On the Floor',
+    parent: '/admin/guests',
+    keywords: ['check in', 'checked in', 'timer', '15 minute warning', 'time left', 'progress'],
+  },
+  {
     href: '/admin/water/plunges',
     title: 'Plunge Setup',
     parent: '/admin/water',

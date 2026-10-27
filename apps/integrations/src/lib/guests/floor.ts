@@ -1,0 +1,168 @@
+// "Who needs their 15-minute warning?" — the data behind /admin/guests/floor.
+//
+// Momence knows who is booked and whether they were checked in, but not when.
+// The floor page checks guests in through Momence and keeps the time in
+// guest_floor_checkins; this module joins the two. A booking Momence says is
+// checked in but we have no time for (checked in at the desk in Momence) gets
+// an estimate — the later of the session start and when the booking was made,
+// since a walk-in is booked as they arrive — flagged so the page can say so
+// and staff can correct it.
+//
+// The types and the timing math live in floor-timing.ts, which the island
+// imports too. Server-only.
+
+import { todayEastern, utcToEastern } from '@pyre/schedule-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { GuestFloorCheckinRow } from '@/lib/db';
+import {
+  bookingMember,
+  fetchSessionBookings,
+  type HostSession,
+  type SessionBooking,
+} from '@/lib/momence/host-api';
+import { fetchScheduleFeed } from '@/lib/schedule/signups';
+import {
+  type Floor,
+  type FloorGuest,
+  type FloorSession,
+  LOOKAHEAD_MINUTES,
+  LOOKBACK_MINUTES,
+  MINUTE_MS,
+} from './floor-timing';
+
+export type { Floor, FloorGuest, FloorSession } from './floor-timing';
+
+function sessionMinutes(session: Pick<HostSession, 'startsAt' | 'endsAt'>): number {
+  const ms = Date.parse(session.endsAt) - Date.parse(session.startsAt);
+  return Number.isFinite(ms) && ms > 0 ? Math.round(ms / MINUTE_MS) : 60;
+}
+
+/** Sessions whose guests could be on the floor at `nowMs`, earliest first. */
+export function floorSessions(sessions: HostSession[], nowMs: number): FloorSession[] {
+  const earliest = nowMs - LOOKBACK_MINUTES * MINUTE_MS;
+  const latest = nowMs + LOOKAHEAD_MINUTES * MINUTE_MS;
+  return sessions
+    .filter((s) => {
+      const start = Date.parse(s.startsAt);
+      return start >= earliest && start <= latest;
+    })
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+    .map((s) => ({
+      id: String(s.id),
+      name: s.name,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      minutes: sessionMinutes(s),
+    }));
+}
+
+/**
+ * When a guest checked in at the desk most likely did: the session start, or
+ * when they booked if that was later (a walk-in booked on arrival).
+ */
+export function estimateCheckIn(sessionStart: string, bookedAt: string | undefined): string {
+  const start = Date.parse(sessionStart);
+  const booked = bookedAt ? Date.parse(bookedAt) : Number.NaN;
+  return new Date(Number.isFinite(booked) && booked > start ? booked : start).toISOString();
+}
+
+/** One session's live bookings joined with our recorded check-ins. */
+export function floorGuests(
+  session: FloorSession,
+  bookings: SessionBooking[],
+  rows: Map<string, GuestFloorCheckinRow>
+): FloorGuest[] {
+  const guests: FloorGuest[] = [];
+  for (const booking of bookings) {
+    if (booking.cancelledAt) continue;
+    const bookingId = String(booking.id);
+    const person = bookingMember(booking);
+    const row = rows.get(bookingId) ?? null;
+    const checkedIn = booking.checkedIn || row !== null;
+    const checkedInAt = row
+      ? row.checked_in_at
+      : booking.checkedIn
+        ? estimateCheckIn(session.startsAt, booking.createdAt)
+        : null;
+    guests.push({
+      bookingId,
+      sessionId: session.id,
+      memberId: person?.memberId ?? '',
+      name: person?.name || person?.email || 'Guest',
+      seats: Math.max(1, booking.ticketsBought || 1),
+      checkedIn,
+      checkedInAt,
+      estimated: !row && booking.checkedIn,
+      minutes: row?.session_minutes ?? session.minutes,
+      customMinutes: row?.session_minutes != null,
+      warnedAt: row?.warned_at ?? null,
+      warnedBy: row?.warned_by ?? null,
+    });
+  }
+  return guests;
+}
+
+/** Today's (ET) sessions in the floor window, from the cached schedule feed. */
+export async function loadFloorSessions(nowMs: number): Promise<FloorSession[]> {
+  const today = todayEastern();
+  const feed = await fetchScheduleFeed(today, today);
+  return floorSessions(
+    feed.sessions.filter((s) => utcToEastern(s.startsAt).date === today),
+    nowMs
+  );
+}
+
+/** Everyone booked into the window's sessions, with their check-in times. */
+export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floor> {
+  const sessions = await loadFloorSessions(nowMs);
+  if (sessions.length === 0) return { sessions, guests: [], complete: true };
+
+  const [bookingResults, rowsResult] = await Promise.all([
+    Promise.allSettled(sessions.map((s) => fetchSessionBookings(Number(s.id)))),
+    db
+      .from('guest_floor_checkins')
+      .select('*')
+      .in(
+        'session_id',
+        sessions.map((s) => s.id)
+      ),
+  ]);
+  if (rowsResult.error) throw new Error(rowsResult.error.message);
+
+  const rows = new Map(
+    ((rowsResult.data ?? []) as GuestFloorCheckinRow[]).map((r) => [r.booking_id, r])
+  );
+
+  let complete = true;
+  const guests: FloorGuest[] = [];
+  bookingResults.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      complete = false;
+      console.error(
+        `[guests/floor] bookings for session ${sessions[i].id} failed:`,
+        result.reason instanceof Error ? result.reason.message : result.reason
+      );
+      return;
+    }
+    guests.push(...floorGuests(sessions[i], result.value, rows));
+  });
+
+  return { sessions, guests, complete };
+}
+
+/**
+ * The booking a floor mutation names, checked against Momence: it must be a
+ * live booking on a session in today's window. Null when it isn't.
+ */
+export async function findFloorBooking(
+  sessionId: string,
+  bookingId: string,
+  nowMs: number
+): Promise<{ session: FloorSession; booking: SessionBooking } | null> {
+  const sessions = await loadFloorSessions(nowMs);
+  const session = sessions.find((s) => s.id === sessionId);
+  if (!session) return null;
+  const bookings = await fetchSessionBookings(Number(sessionId));
+  const booking = bookings.find((b) => String(b.id) === bookingId && !b.cancelledAt);
+  return booking ? { session, booking } : null;
+}

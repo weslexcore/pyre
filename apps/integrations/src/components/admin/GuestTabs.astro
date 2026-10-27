@@ -16,6 +16,7 @@ const canManage = !!access && hasGuestsManage(access);
 const tabs = [
   { href: '/admin/guests', label: 'Guests' },
   { href: '/admin/guests/sessions', label: "Who's coming" },
+  { href: '/admin/guests/floor', label: 'On the floor' },
   ...(canManage ? [{ href: '/admin/guests/fields', label: 'Fields' }] : []),
 ];
 ---

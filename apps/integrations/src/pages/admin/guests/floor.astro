@@ -1,0 +1,16 @@
+---
+// On the floor: who is checked in, when they came in, and how much of their
+// session is left — so whoever is on shift knows who needs the 15-minute
+// warning. Check-ins made here go through to Momence.
+import { GuestFloor } from '@/components/admin/GuestFloor';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="On the Floor"
+  subtitle="Who's checked in and how much of their session is left, so no one misses their 15-minute warning"
+>
+  <GuestTabs current="/admin/guests/floor" />
+  <GuestFloor client:load />
+</AdminLayout>

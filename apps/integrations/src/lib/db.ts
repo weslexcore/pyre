@@ -964,6 +964,23 @@ export interface GuestProfileNoteRow {
   updated_at: string;
 }
 
+// When a guest checked in, which Momence doesn't keep (see the
+// guest_floor_checkins migration and lib/guests/floor.ts). One row per
+// Momence booking.
+export interface GuestFloorCheckinRow {
+  booking_id: string;
+  session_id: string;
+  member_id: string | null;
+  checked_in_at: string;
+  /** Null = the session's own length. */
+  session_minutes: number | null;
+  warned_at: string | null;
+  warned_by: string | null;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // One configured schedule-lint rule (see the schedule_lint_rules migration
 // and lib/schedule-lint/registry.ts). Built-in rules are rows keyed by their
 // kind, present only once an admin has changed something; custom rules are

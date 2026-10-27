@@ -538,6 +538,8 @@ export interface SessionBooking {
   checkedIn: boolean;
   ticketsBought: number;
   cancelledAt: string | null;
+  /** When the booking was made — a walk-in booked at the desk is booked late. */
+  createdAt?: string;
   member?: MomenceBookingPerson | null;
   customer?: MomenceBookingPerson | null;
   memberId?: number | string | null;
@@ -633,6 +635,21 @@ export async function fetchHostSessions(params: {
  */
 export async function fetchSessionBookings(sessionId: number): Promise<SessionBooking[]> {
   return fetchAllPages<SessionBooking>(`/host/sessions/${sessionId}/bookings`, {});
+}
+
+/**
+ * Mark one booking checked in, or (`checkedIn: false`) not checked in.
+ * Momence keeps only the flag, not the time — /admin/guests/floor records
+ * that itself (lib/guests/floor.ts).
+ */
+export async function setSessionBookingCheckIn(
+  bookingId: number,
+  checkedIn: boolean
+): Promise<void> {
+  await momenceRequest<unknown>(
+    checkedIn ? 'POST' : 'DELETE',
+    `/host/session-bookings/${bookingId}/check-in`
+  );
 }
 
 /** Upcoming private appointment reservations in a UTC window. */
