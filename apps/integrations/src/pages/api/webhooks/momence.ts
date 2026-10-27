@@ -292,7 +292,7 @@ async function handleCheckIn(
   log.info(
     written
       ? `Check-in time recorded for booking ${bookingId}`
-      : `Booking ${bookingId} already has a check-in time — kept it`
+      : `Booking ${bookingId} already has this or a floor-recorded check-in time — kept it`
   );
 }
 

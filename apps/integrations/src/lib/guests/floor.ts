@@ -179,28 +179,44 @@ export async function findFloorBooking(
 
 /**
  * A check-in Momence told us about (the session-booking-checked-in webhook),
- * kept as the guest's time unless one is already recorded: a check-in made
- * on the floor, or a time someone corrected there, wins. A retried delivery
- * or a second check-in of the same booking leaves the first time in place.
- * Returns whether a row was written.
+ * kept as the guest's time unless the floor has its own: a check-in made
+ * there, or a time someone corrected there, wins.
+ *
+ * Momence sends nothing when a guest is un-checked, so a time it sent earlier
+ * can be left over from a check-in that was undone. A later check-in of the
+ * same booking replaces it and clears the check-ins marked done against the
+ * old one. A retried or out-of-order delivery (same or earlier time) changes
+ * nothing. Returns whether a row was written.
  */
 export async function recordMomenceCheckIn(
   db: SupabaseClient,
   checkIn: { bookingId: string; sessionId: string; memberId: string; checkedInAt: string }
 ): Promise<boolean> {
-  const { data, error } = await db
+  const fields = {
+    session_id: checkIn.sessionId,
+    member_id: checkIn.memberId || null,
+    checked_in_at: checkIn.checkedInAt,
+    checkpoints_done: {},
+    updated_by: MOMENCE_ACTOR,
+  };
+
+  const inserted = await db
     .from('guest_floor_checkins')
     .upsert(
-      {
-        booking_id: checkIn.bookingId,
-        session_id: checkIn.sessionId,
-        member_id: checkIn.memberId || null,
-        checked_in_at: checkIn.checkedInAt,
-        updated_by: MOMENCE_ACTOR,
-      },
+      { booking_id: checkIn.bookingId, ...fields },
       { onConflict: 'booking_id', ignoreDuplicates: true }
     )
     .select('booking_id');
-  if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
+  if (inserted.error) throw new Error(inserted.error.message);
+  if ((inserted.data ?? []).length > 0) return true;
+
+  const replaced = await db
+    .from('guest_floor_checkins')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('booking_id', checkIn.bookingId)
+    .eq('updated_by', MOMENCE_ACTOR)
+    .lt('checked_in_at', checkIn.checkedInAt)
+    .select('booking_id');
+  if (replaced.error) throw new Error(replaced.error.message);
+  return (replaced.data ?? []).length > 0;
 }
