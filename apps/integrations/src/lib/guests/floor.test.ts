@@ -247,7 +247,7 @@ describe('parseCheckpoints', () => {
 
 describe('moves between sessions', () => {
   // Arrived at -50 for a two-hour session; at -10, cancelled and rebooked
-  // into a one-hour one.
+  // into a one-hour one that started at the same time.
   const [long, short] = floorSessions(
     [
       { ...session(20, -50, 120), id: 20, name: 'Two hours' },
@@ -255,6 +255,10 @@ describe('moves between sessions', () => {
     ],
     NOW
   );
+  const sessions = new Map([
+    [long.id, long],
+    [short.id, short],
+  ]);
   const done = { 'warning-15': { at: at(-12), by: 'staff@pyresauna.com' } };
   const oldBooking = booking({
     id: 100,
@@ -273,10 +277,11 @@ describe('moves between sessions', () => {
     { session: long, booking: oldBooking },
     { session: short, booking: newBooking },
   ];
+  const rows = new Map([['100', oldRow]]);
+  const moveOf = (s: FloorSeat[], r = rows) => findMoves(s, r).moves.get('101');
 
   it('carries the arrival time and done check-ins to the new booking', () => {
-    const moves = findMoves(seats, new Map([['100', oldRow]]));
-    expect(moves.get('101')).toEqual({
+    expect(moveOf(seats)).toEqual({
       fromBookingId: '100',
       fromSessionId: '20',
       arrivedAt: at(-50),
@@ -285,22 +290,70 @@ describe('moves between sessions', () => {
   });
 
   it('uses the estimate when the old booking was checked in without a recorded time', () => {
-    const moves = findMoves(seats, new Map());
-    expect(moves.get('101')?.arrivedAt).toBe(long.startsAt);
+    expect(moveOf(seats, new Map())?.arrivedAt).toBe(long.startsAt);
   });
 
-  it('ignores a rebooking long after the cancellation', () => {
-    const late = booking({ id: 101, checkedIn: true, createdAt: at(30) });
-    const moves = findMoves(
-      [seats[0], { session: short, booking: late }],
-      new Map([['100', oldRow]])
+  it('carries a move made at the end of the hour, long after the old booking', () => {
+    const late = booking({ id: 101, checkedIn: true, createdAt: at(5) });
+    const cancelledLate = { ...oldBooking, cancelledAt: at(6) };
+    expect(
+      moveOf([
+        { session: long, booking: cancelledLate },
+        { session: short, booking: late },
+      ])?.arrivedAt
+    ).toBe(at(-50));
+  });
+
+  it('lets the latest live booking win when the old one is not cancelled yet', () => {
+    const stillLive = { ...oldBooking, cancelledAt: null };
+    const found = findMoves(
+      [
+        { session: long, booking: stillLive },
+        { session: short, booking: newBooking },
+      ],
+      rows
     );
-    expect(moves.size).toBe(0);
+    expect(found.superseded).toEqual(new Set(['100']));
+    expect(found.moves.get('101')?.arrivedAt).toBe(at(-50));
+    const guests = floorGuests(long, [stillLive], rows, found, sessions);
+    expect(guests).toEqual([]);
+  });
+
+  it('keeps the first arrival across two moves', () => {
+    const [middle] = floorSessions([{ ...session(22, -50, 90), id: 22 }], NOW);
+    const second = booking({ id: 102, checkedIn: true, cancelledAt: at(-5), createdAt: at(-20) });
+    const secondRow = row({ booking_id: '102', session_id: '22', checked_in_at: at(-20) });
+    const found = findMoves(
+      [
+        { session: long, booking: { ...oldBooking, cancelledAt: at(-20) } },
+        { session: middle, booking: second },
+        { session: short, booking: { ...newBooking, createdAt: at(-5) } },
+      ],
+      new Map([
+        ['100', oldRow],
+        ['102', secondRow],
+      ])
+    );
+    expect(found.moves.get('101')).toMatchObject({ fromBookingId: '102', arrivedAt: at(-50) });
+  });
+
+  it('starts a fresh clock for a session that does not overlap', () => {
+    const [later] = floorSessions([{ ...session(23, 70, 60), id: 23 }], NOW + min(120));
+    const next = booking({ id: 101, checkedIn: true, createdAt: at(-9) });
+    expect(
+      findMoves(
+        [
+          { session: long, booking: oldBooking },
+          { session: later, booking: next },
+        ],
+        rows
+      ).moves.size
+    ).toBe(0);
   });
 
   it('ignores a cancelled booking they never arrived for', () => {
     const neverCame = booking({ id: 100, checkedIn: false, cancelledAt: at(-10) });
-    expect(findMoves([{ session: long, booking: neverCame }, seats[1]], new Map()).size).toBe(0);
+    expect(moveOf([{ session: long, booking: neverCame }, seats[1]], new Map())).toBeUndefined();
   });
 
   it('ignores a different guest', () => {
@@ -310,42 +363,34 @@ describe('moves between sessions', () => {
       createdAt: at(-9),
       member: { id: 8, firstName: 'Grace', lastName: 'Hopper', email: 'grace@example.com' },
     });
-    expect(
-      findMoves([seats[0], { session: short, booking: other }], new Map([['100', oldRow]])).size
-    ).toBe(0);
+    expect(moveOf([seats[0], { session: short, booking: other }])).toBeUndefined();
   });
 
   it('does not carry a move twice', () => {
-    const carried = movedRow(
-      seats[1],
-      findMoves(seats, new Map([['100', oldRow]])).get('101')!,
-      null,
-      at(0)
-    );
+    const move = moveOf(seats);
+    if (!move) throw new Error('expected a move');
+    const carried = movedRow(seats[1], move, null, at(0));
     expect(
-      findMoves(
+      moveOf(
         seats,
         new Map([
           ['100', oldRow],
           ['101', carried],
         ])
-      ).size
-    ).toBe(0);
+      )
+    ).toBeUndefined();
   });
 
   it('shows the moved guest with their original time on the new session length', () => {
-    const move = findMoves(seats, new Map([['100', oldRow]])).get('101')!;
+    const move = moveOf(seats);
+    if (!move) throw new Error('expected a move');
     const carried = movedRow(seats[1], move, null, at(0));
     expect(carried).toMatchObject({ updated_by: MOVE_ACTOR, moved_from_booking_id: '100' });
-    const sessions = new Map([
-      [long.id, long],
-      [short.id, short],
-    ]);
     const [guest] = floorGuests(
       short,
       [newBooking],
       new Map([['101', carried]]),
-      new Map(),
+      undefined,
       sessions
     );
     expect(guest).toMatchObject({
@@ -358,11 +403,8 @@ describe('moves between sessions', () => {
 
   it('says a rebooked guest not yet checked in is a move', () => {
     const waiting = booking({ id: 101, checkedIn: false, createdAt: at(-9) });
-    const moves = findMoves(
-      [seats[0], { session: short, booking: waiting }],
-      new Map([['100', oldRow]])
-    );
-    const [guest] = floorGuests(short, [waiting], new Map(), moves, new Map([[long.id, long]]));
+    const found = findMoves([seats[0], { session: short, booking: waiting }], rows);
+    const [guest] = floorGuests(short, [waiting], new Map(), found, sessions);
     expect(guest).toMatchObject({
       checkedIn: false,
       movedFrom: { sessionName: 'Two hours', arrivedAt: at(-50) },

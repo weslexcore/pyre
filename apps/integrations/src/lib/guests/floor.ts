@@ -42,12 +42,6 @@ export type { Floor, FloorGuest, FloorSession } from './floor-timing';
 export const MOMENCE_ACTOR = 'momence';
 /** Who a check-in carried over from a cancelled booking is attributed to. */
 export const MOVE_ACTOR = 'floor-move';
-/**
- * A cancelled booking and a new one for the same guest are a move when one
- * was made within this long of the other — staff do both at the desk, in
- * either order.
- */
-export const MOVE_WINDOW_MINUTES = 30;
 
 function sessionMinutes(session: Pick<HostSession, 'startsAt' | 'endsAt'>): number {
   const ms = Date.parse(session.endsAt) - Date.parse(session.startsAt);
@@ -117,51 +111,85 @@ function arrivalOf(
   return null;
 }
 
+/** Two sessions running at the same time for some of it (touching isn't). */
+function overlaps(a: FloorSession, b: FloorSession): boolean {
+  return (
+    Date.parse(a.startsAt) < Date.parse(b.endsAt) && Date.parse(b.startsAt) < Date.parse(a.endsAt)
+  );
+}
+
+const createdMs = (seat: FloorSeat) => Date.parse(seat.booking.createdAt ?? '') || 0;
+
+export interface Moves {
+  /** Live bookings that carry a guest over from earlier ones, by booking id. */
+  moves: Map<string, Move>;
+  /** Live bookings a newer booking for the same guest replaces — not shown. */
+  superseded: Set<string>;
+}
+
 /**
- * Live bookings that are a guest moved from another session, keyed by the
- * new booking's id: the same guest had a booking they had arrived for, and it
- * was cancelled within MOVE_WINDOW_MINUTES of this one being made. When more
- * than one fits, the most recently cancelled wins — moved twice, the second
- * move's old booking already carries the first arrival time. A booking whose
- * row already records a move is left alone.
+ * One visit can span several bookings: to change a guest's length, staff
+ * cancel their booking and book them into a longer or shorter session (or
+ * book first and cancel later). Among one guest's bookings on sessions that
+ * overlap in time, the latest-made live booking is theirs; any older live one
+ * is superseded. That booking carries over the earliest arrival among the
+ * others they had arrived for — cancelled or superseded — and every check-in
+ * marked done on them. Only overlapping sessions count, so a separate visit
+ * later in the day, or a back-to-back next session, starts its own clock.
+ *
+ * A booking whose row already records a move is left alone: its carried time
+ * is an ordinary row by then, and may have been corrected on the floor.
  */
-export function findMoves(
-  seats: FloorSeat[],
-  rows: Map<string, GuestFloorCheckinRow>
-): Map<string, Move> {
-  const left = seats.flatMap((seat) => {
-    const cancelledAt = Date.parse(seat.booking.cancelledAt ?? '');
+export function findMoves(seats: FloorSeat[], rows: Map<string, GuestFloorCheckinRow>): Moves {
+  const byGuest = new Map<string, FloorSeat[]>();
+  for (const seat of seats) {
     const key = guestKey(seat.booking);
-    const arrival = arrivalOf(seat, rows);
-    return Number.isFinite(cancelledAt) && key && arrival
-      ? [{ seat, key, cancelledAt, arrival }]
-      : [];
-  });
+    if (!key) continue;
+    byGuest.set(key, [...(byGuest.get(key) ?? []), seat]);
+  }
 
   const moves = new Map<string, Move>();
-  if (left.length === 0) return moves;
-  const window = MOVE_WINDOW_MINUTES * MINUTE_MS;
+  const superseded = new Set<string>();
+  for (const group of byGuest.values()) {
+    if (group.length < 2) continue;
+    const live = group.filter((s) => !s.booking.cancelledAt);
 
-  for (const seat of seats) {
-    if (seat.booking.cancelledAt) continue;
-    const bookingId = String(seat.booking.id);
-    if (rows.get(bookingId)?.moved_from_booking_id) continue;
-    const key = guestKey(seat.booking);
-    const createdAt = Date.parse(seat.booking.createdAt ?? '');
-    if (!key || !Number.isFinite(createdAt)) continue;
+    for (const seat of live) {
+      const bookingId = String(seat.booking.id);
+      const newer = live.some(
+        (other) =>
+          other !== seat &&
+          overlaps(other.session, seat.session) &&
+          createdMs(other) > createdMs(seat)
+      );
+      if (newer) {
+        superseded.add(bookingId);
+        continue;
+      }
+      if (rows.get(bookingId)?.moved_from_booking_id) continue;
 
-    const from = left
-      .filter((l) => l.key === key && Math.abs(createdAt - l.cancelledAt) <= window)
-      .sort((x, y) => y.cancelledAt - x.cancelledAt)[0];
-    if (!from) continue;
-    moves.set(bookingId, {
-      fromBookingId: String(from.seat.booking.id),
-      fromSessionId: from.seat.session.id,
-      arrivedAt: from.arrival.at,
-      checkpointsDone: from.arrival.done,
-    });
+      const earlier = group.flatMap((other) => {
+        if (other === seat || !overlaps(other.session, seat.session)) return [];
+        const arrival = arrivalOf(other, rows);
+        return arrival ? [{ seat: other, arrival }] : [];
+      });
+      if (earlier.length === 0) continue;
+
+      const first = [...earlier].sort((x, y) => x.arrival.at.localeCompare(y.arrival.at))[0];
+      const latest = [...earlier].sort(
+        (x, y) =>
+          (Date.parse(y.seat.booking.cancelledAt ?? '') || createdMs(y.seat)) -
+          (Date.parse(x.seat.booking.cancelledAt ?? '') || createdMs(x.seat))
+      )[0];
+      moves.set(bookingId, {
+        fromBookingId: String(latest.seat.booking.id),
+        fromSessionId: latest.seat.session.id,
+        arrivedAt: first.arrival.at,
+        checkpointsDone: Object.assign({}, ...earlier.map((e) => e.arrival.done)),
+      });
+    }
   }
-  return moves;
+  return { moves, superseded };
 }
 
 /**
@@ -194,7 +222,7 @@ export function floorGuests(
   session: FloorSession,
   bookings: SessionBooking[],
   rows: Map<string, GuestFloorCheckinRow>,
-  moves: Map<string, Move> = new Map(),
+  { moves, superseded }: Moves = { moves: new Map(), superseded: new Set() },
   sessions: Map<string, FloorSession> = new Map()
 ): FloorGuest[] {
   const moveInfo = (sessionId: string, arrivedAt: string): FloorMove => {
@@ -209,8 +237,8 @@ export function floorGuests(
 
   const guests: FloorGuest[] = [];
   for (const booking of bookings) {
-    if (booking.cancelledAt) continue;
     const bookingId = String(booking.id);
+    if (booking.cancelledAt || superseded.has(bookingId)) continue;
     const person = bookingMember(booking);
     // A time Momence sent us, or one carried over from a move, stands only
     // while Momence still has them checked in, so un-checking someone there
@@ -313,7 +341,8 @@ export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floo
     ((rowsResult.data ?? []) as GuestFloorCheckinRow[]).map((r) => [r.booking_id, r])
   );
 
-  const moves = findMoves(seats, rows);
+  const found = findMoves(seats, rows);
+  const { moves } = found;
   const nowIso = new Date(nowMs).toISOString();
   for (const seat of seats) {
     const bookingId = String(seat.booking.id);
@@ -329,7 +358,7 @@ export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floo
 
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const guests = bySession.flatMap(({ session, bookings }) =>
-    floorGuests(session, bookings, rows, moves, byId)
+    floorGuests(session, bookings, rows, found, byId)
   );
   return { sessions, guests, complete };
 }
