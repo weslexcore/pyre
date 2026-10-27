@@ -38,14 +38,14 @@
     "astro": "^7.2.8",
     "posthog-node": "^5.46.0",
     "qr-code-styling": "^1.9.2",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "resend": "^6.18.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "packageManager": "yarn@4.18.0",
   "devDependencies": {
