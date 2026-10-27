@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GuestFloorCheckinRow } from '@/lib/db';
 import type { HostSession, SessionBooking } from '@/lib/momence/host-api';
-import { estimateCheckIn, floorGuests, floorSessions } from './floor';
+import { estimateCheckIn, floorGuests, floorSessions, MOMENCE_ACTOR } from './floor';
 import {
   type Checkpoint,
   compareFloor,
@@ -108,6 +108,23 @@ describe('floorGuests', () => {
   it('estimates a guest checked in elsewhere', () => {
     const [guest] = floorGuests(s, [booking({ checkedIn: true })], new Map());
     expect(guest).toMatchObject({ checkedInAt: at(-30), estimated: true });
+  });
+
+  it('uses the time Momence sent while Momence has them checked in', () => {
+    const rows = new Map([['1', row({ checked_in_at: at(-25), updated_by: MOMENCE_ACTOR })]]);
+    const [guest] = floorGuests(s, [booking({ checkedIn: true })], rows);
+    expect(guest).toMatchObject({ checkedIn: true, checkedInAt: at(-25), estimated: false });
+  });
+
+  it('drops a Momence-sent time once they are un-checked in Momence', () => {
+    const rows = new Map([['1', row({ updated_by: MOMENCE_ACTOR })]]);
+    const [guest] = floorGuests(s, [booking({ checkedIn: false })], rows);
+    expect(guest).toMatchObject({ checkedIn: false, checkedInAt: null });
+  });
+
+  it('keeps a time recorded here even if Momence lost the check-in', () => {
+    const [guest] = floorGuests(s, [booking({ checkedIn: false })], new Map([['1', row()]]));
+    expect(guest).toMatchObject({ checkedIn: true, checkedInAt: at(-20) });
   });
 
   it('drops cancelled bookings', () => {

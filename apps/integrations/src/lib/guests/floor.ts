@@ -31,6 +31,9 @@ import {
 
 export type { Floor, FloorGuest, FloorSession } from './floor-timing';
 
+/** Who a check-in recorded from Momence's webhook is attributed to. */
+export const MOMENCE_ACTOR = 'momence';
+
 function sessionMinutes(session: Pick<HostSession, 'startsAt' | 'endsAt'>): number {
   const ms = Date.parse(session.endsAt) - Date.parse(session.startsAt);
   return Number.isFinite(ms) && ms > 0 ? Math.round(ms / MINUTE_MS) : 60;
@@ -76,7 +79,12 @@ export function floorGuests(
     if (booking.cancelledAt) continue;
     const bookingId = String(booking.id);
     const person = bookingMember(booking);
-    const row = rows.get(bookingId) ?? null;
+    // A time Momence sent us stands only while Momence still has them
+    // checked in, so un-checking someone there takes them off the floor. One
+    // recorded or corrected here stands on its own.
+    const stored = rows.get(bookingId) ?? null;
+    const row =
+      stored && (stored.updated_by !== MOMENCE_ACTOR || booking.checkedIn) ? stored : null;
     const checkedIn = booking.checkedIn || row !== null;
     const checkedInAt = row
       ? row.checked_in_at
@@ -167,4 +175,32 @@ export async function findFloorBooking(
   const bookings = await fetchSessionBookings(Number(sessionId));
   const booking = bookings.find((b) => String(b.id) === bookingId && !b.cancelledAt);
   return booking ? { session, booking } : null;
+}
+
+/**
+ * A check-in Momence told us about (the session-booking-checked-in webhook),
+ * kept as the guest's time unless one is already recorded: a check-in made
+ * on the floor, or a time someone corrected there, wins. A retried delivery
+ * or a second check-in of the same booking leaves the first time in place.
+ * Returns whether a row was written.
+ */
+export async function recordMomenceCheckIn(
+  db: SupabaseClient,
+  checkIn: { bookingId: string; sessionId: string; memberId: string; checkedInAt: string }
+): Promise<boolean> {
+  const { data, error } = await db
+    .from('guest_floor_checkins')
+    .upsert(
+      {
+        booking_id: checkIn.bookingId,
+        session_id: checkIn.sessionId,
+        member_id: checkIn.memberId || null,
+        checked_in_at: checkIn.checkedInAt,
+        updated_by: MOMENCE_ACTOR,
+      },
+      { onConflict: 'booking_id', ignoreDuplicates: true }
+    )
+    .select('booking_id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
 }

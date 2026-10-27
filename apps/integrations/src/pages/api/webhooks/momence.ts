@@ -7,6 +7,7 @@ import {
 } from '@pyre/webhook-core';
 import { inferBookingAttribution } from '@/lib/analytics/booking-attribution';
 import { trackBookingEvent } from '@/lib/analytics/track-booking';
+import { getDb } from '@/lib/db';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { json } from '@/lib/http/route';
@@ -18,6 +19,7 @@ import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
   type MomenceAddressPayload,
+  type MomenceCheckInPayload,
   type MomenceEventType,
   type MomenceMemberPayload,
   type MomencePaymentTransactionPayload,
@@ -247,6 +249,53 @@ async function handleReportRunCompleted(
   log.info(`Report run ${payload.id} processed`, { ...result });
 }
 
+const ID_RE = /^\d{1,20}$/;
+
+/**
+ * A guest checked in. Momence keeps only the flag on the booking, so this is
+ * the one chance to keep the time: /admin/guests/floor reads it as the
+ * guest's check-in time (lib/guests/floor.ts). A failure throws so Momence's
+ * retry gets another go; the write is idempotent.
+ */
+async function handleCheckIn(
+  payload: MomenceCheckInPayload,
+  timestamp: string,
+  tracer: WebhookTracer
+): Promise<void> {
+  const bookingId = String(payload.sessionBookingId ?? '');
+  const sessionId = String(payload.sessionId ?? '');
+  if (!ID_RE.test(bookingId) || !ID_RE.test(sessionId)) {
+    log.warn('Check-in without a booking or session id — ignoring', { payload });
+    return;
+  }
+  const at = Date.parse(payload.checkedInAt);
+  const fallback = Date.parse(timestamp);
+  const checkedInAt = new Date(
+    Number.isFinite(at) ? at : Number.isFinite(fallback) ? fallback : Date.now()
+  ).toISOString();
+
+  const db = getDb();
+  if (!db) throw new Error('Storage unavailable');
+
+  const { recordMomenceCheckIn } = await import('@/lib/guests/floor');
+  const written = await tracer.span(
+    'Record check-in time',
+    () =>
+      recordMomenceCheckIn(db, {
+        bookingId,
+        sessionId,
+        memberId: String(payload.memberId ?? ''),
+        checkedInAt,
+      }),
+    { bookingId, sessionId, checkedInAt }
+  );
+  log.info(
+    written
+      ? `Check-in time recorded for booking ${bookingId}`
+      : `Booking ${bookingId} already has a check-in time — kept it`
+  );
+}
+
 const handler: TracedAPIRoute = async ({ request }, tracer) => {
   try {
     const { event, payload, requestId, timestamp } = await tracer.span(
@@ -263,6 +312,8 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
       await handleBookingEvent(event as MomenceEventType, payload as MomenceBookingPayload, tracer);
+    } else if (event === 'session-booking-checked-in') {
+      await handleCheckIn(payload as MomenceCheckInPayload, timestamp, tracer);
     } else if (event === 'host-report-run-completed') {
       await handleReportRunCompleted(payload as MomenceReportRunPayload, tracer);
     } else if (event === 'payment-transaction-succeeded') {

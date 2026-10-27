@@ -39,6 +39,18 @@ export interface MomenceReportRunPayload {
   reportUrlApi: string;
 }
 
+/**
+ * `session-booking-checked-in`: a guest checked in, anywhere — the Momence
+ * app at the desk, or /admin/guests/floor through the API. The only place
+ * Momence gives the check-in time.
+ */
+export interface MomenceCheckInPayload {
+  sessionBookingId: number;
+  sessionId: number;
+  memberId: number;
+  checkedInAt: string;
+}
+
 /** Fired for every successful charge — a pack, a membership, a product, and
  * the $0 booking a pack pays for. Only the transaction id is included; see
  * fetchPaymentTransaction for the rest. */
@@ -54,6 +66,7 @@ export type MomenceEventType =
   | 'member-address-deleted'
   | 'session-booked'
   | 'session-booking-cancelled'
+  | 'session-booking-checked-in'
   | 'session-created'
   | 'session-updated'
   | 'host-report-run-completed'
