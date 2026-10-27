@@ -10,6 +10,7 @@ function row(name: string, overrides: Partial<InventoryRow> = {}): InventoryRow 
     unit_cost_cents: null,
     vendor: null,
     how_to_order: null,
+    location: null,
     count_instructions: null,
     count_every_days: null,
     last_counted_at: null,

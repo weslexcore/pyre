@@ -1,9 +1,10 @@
 // The inventory list (/admin/inventory): one spreadsheet-style table, a row
 // per item. Click a cell to edit it; Enter or clicking away saves, Escape
 // cancels. Headers sort, the toolbar searches and filters (due for a count,
-// needs re-ordering, by category). The setup columns (category,
+// needs re-ordering, by category). The setup columns (category, location,
 // re-order level, schedule, cost, vendor, how to order) stay hidden until
-// "Show all fields" is ticked, so the everyday view is just what to count.
+// "Show all fields" is ticked, so the everyday view is what to count and how
+// fast it goes (use per week and when it runs out, from the item's history).
 //
 // Anyone with the page can count: set the In stock number (Enter on an
 // unchanged number confirms it). Any edit to a row stamps Last counted with
@@ -35,8 +36,11 @@ import { etStamp } from '@/lib/client/format';
 import {
   COUNT_SCHEDULES,
   countEveryLabel,
+  daysLeft,
   distinctValues,
   formatCents,
+  formatDaysLeft,
+  formatPerWeek,
   formatQuantity,
   type InventoryFilter,
   isDue,
@@ -53,7 +57,7 @@ import { INVENTORY_API, type InventoryResponse, type InventoryRow } from '@/lib/
 import { personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
 import { CategoryPicker } from './InventoryCategoryPicker';
-import { InventoryDetails } from './InventoryDetails';
+import { type DetailsTab, InventoryDetails } from './InventoryDetails';
 import { Chip } from './incidentUi';
 import { Modal, modalPanelClass } from './Modal';
 
@@ -110,9 +114,12 @@ interface Column {
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Item', width: 240 },
   { key: 'category', label: 'Category', width: 160, setup: true },
+  { key: 'location', label: 'Location', width: 160, setup: true },
   { key: 'in_stock', label: 'In stock', width: 96, className: 'text-right' },
   { key: 'reorder_at', label: 'Re-order at', width: 112, className: 'text-right', setup: true },
   { key: 'last_counted_at', label: 'Last counted', width: 220 },
+  { key: 'usage', label: 'Use / week', width: 112, className: 'text-right' },
+  { key: 'days_left', label: 'Runs out', width: 112 },
   { key: 'count_every_days', label: 'Count every', width: 170, setup: true },
   {
     key: 'unit_cost_cents',
@@ -194,8 +201,11 @@ export function InventoryList() {
   const [showAll, setShowAll] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  // The item whose details dialog is open.
-  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // The item whose details dialog is open, and the tab it opened on.
+  const [details, setDetails] = useState<{ id: string; tab: DetailsTab } | null>(null);
+  const detailsId = details?.id ?? null;
+  const setDetailsId = (id: string | null, tab: DetailsTab = 'details') =>
+    setDetails(id ? { id, tab } : null);
   // The item whose ordering instructions are open.
   const [orderId, setOrderId] = useState<string | null>(null);
   // The item whose count dialog (from its Due chip) is open.
@@ -238,6 +248,7 @@ export function InventoryList() {
   const items = data?.items ?? [];
   const vendors = useMemo(() => distinctValues(items, 'vendor'), [items]);
   const categories = useMemo(() => distinctValues(items, 'category'), [items]);
+  const locations = useMemo(() => distinctValues(items, 'location'), [items]);
   const columns = COLUMNS.filter((c) => showAll || !c.setup);
   const shown = new Set(columns.map((c) => c.key));
   // The column that grows to fill a wide screen: the last one showing, so
@@ -323,7 +334,7 @@ export function InventoryList() {
     setSaveError(null);
     try {
       await sendJson(`${INVENTORY_API}?id=${item.id}`, 'DELETE');
-      setDetailsId((open) => (open === item.id ? null : open));
+      setDetails((open) => (open?.id === item.id ? null : open));
       setData((prev) =>
         prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev
       );
@@ -353,7 +364,7 @@ export function InventoryList() {
           type="search"
           value={query.search}
           onChange={(e) => setQuery((q) => ({ ...q, search: e.target.value }))}
-          placeholder="Search items, categories, vendors"
+          placeholder="Search items, categories, locations, vendors"
           aria-label="Search inventory"
           className={`${compactInputClass} w-full sm:w-64`}
         />
@@ -438,6 +449,8 @@ export function InventoryList() {
           canManage={canManage}
           vendors={vendors}
           categories={categories}
+          locations={locations}
+          initialTab={details?.tab}
           countedBy={
             detailsItem.last_counted_by ? personName(detailsItem.last_counted_by, people) : null
           }
@@ -518,6 +531,7 @@ export function InventoryList() {
                 highlighted={highlight === item.id}
                 onSave={(patch) => save(item.id, patch)}
                 onDetails={() => setDetailsId(item.id)}
+                onHistory={() => setDetailsId(item.id, 'history')}
                 onShowOrder={() => setOrderId(item.id)}
                 onCount={() => setCountId(item.id)}
                 onDelete={() => remove(item)}
@@ -538,8 +552,9 @@ export function InventoryList() {
         </table>
       </div>
       <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
-        Click a cell to edit, or open an item's menu for all its details. Any edit updates Last
-        counted. Shelf matches? Click In stock and press Enter.
+        Click a cell to edit, or open an item's menu for all its details and history. Any edit
+        updates Last counted. Shelf matches? Click In stock and press Enter. Use / week comes from
+        the last 90 days of counts.
         {!canManage && ' Changing other columns needs the inventory manage permission.'}
       </p>
     </div>
@@ -604,6 +619,7 @@ function ItemRow({
   highlighted,
   onSave,
   onDetails,
+  onHistory,
   onShowOrder,
   onCount,
   onDelete,
@@ -618,10 +634,12 @@ function ItemRow({
   highlighted: boolean;
   onSave: (patch: Patch) => Promise<boolean>;
   onDetails: () => void;
+  onHistory: () => void;
   onShowOrder: () => void;
   onCount: () => void;
   onDelete: () => void;
 }) {
+  const left = daysLeft(item);
   const due = isDue(item, now);
   const low = isLow(item);
   const link = orderLink(item.how_to_order);
@@ -643,9 +661,9 @@ function ItemRow({
                 type="button"
                 onClick={onCount}
                 className={`${chipClass} border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/20`}
-                title={item.count_instructions ? 'Count instructions' : 'Count it'}
+                title={item.count_instructions || item.location ? 'How to count it' : 'Count it'}
               >
-                Due{item.count_instructions ? ' · how to count' : ''}
+                Due{item.count_instructions || item.location ? ' · how to count' : ''}
               </button>
             )}
             {low && (
@@ -673,6 +691,16 @@ function ItemRow({
           ) : (
             <span className="block truncate px-1.5 py-1 text-white/70">{item.category}</span>
           )}
+        </td>
+      )}
+      {shown.has('location') && (
+        <td className={cellClass}>
+          <TextCell
+            value={item.location ?? ''}
+            label={`Location of ${item.name}`}
+            editable={canManage}
+            onSave={(v) => onSave({ location: v || null })}
+          />
         </td>
       )}
       <td className={`${cellClass} text-right`}>
@@ -713,6 +741,31 @@ function ItemRow({
         ) : (
           <span className="text-white/30">Never</span>
         )}
+      </td>
+      <td className={`${cellClass} text-right tabular-nums`}>
+        <button
+          type="button"
+          onClick={onHistory}
+          className={`${readClass} text-right ${item.usage_per_day == null ? 'text-white/20' : 'text-white/70'}`}
+          title="Count history"
+          aria-label={`Count history for ${item.name}`}
+        >
+          {item.usage_per_day == null ? '—' : formatPerWeek(item.usage_per_day)}
+        </button>
+      </td>
+      <td
+        className={`${cellClass} truncate whitespace-nowrap px-3.5 ${
+          left != null && item.count_every_days != null && left <= item.count_every_days
+            ? 'text-[var(--pyre-red)]'
+            : 'text-white/70'
+        }`}
+        title={
+          left != null && item.count_every_days != null && left <= item.count_every_days
+            ? 'Likely to run out before its next count'
+            : undefined
+        }
+      >
+        {left == null ? <span className="text-white/20">—</span> : `~${formatDaysLeft(left)}`}
       </td>
       {shown.has('count_every_days') && (
         <td className={cellClass}>
@@ -785,6 +838,7 @@ function ItemRow({
           itemName={item.name}
           actions={[
             { label: canManage ? 'Edit details' : 'View details', onSelect: onDetails },
+            { label: 'History', onSelect: onHistory },
             ...(canManage ? [{ label: 'Delete', onSelect: onDelete, danger: true }] : []),
           ]}
         />
@@ -892,6 +946,16 @@ function CountDialog({
           Close
         </button>
       </div>
+      {item.location && (
+        <div className="mb-3 rounded border border-white/15 bg-white/[0.04] p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/50">
+            Where it's kept
+          </p>
+          <p className="whitespace-pre-wrap break-words text-sm text-[var(--pyre-creme)]">
+            {item.location}
+          </p>
+        </div>
+      )}
       {item.count_instructions && (
         <div className="mb-4 rounded border border-[var(--pyre-gold)]/30 bg-[var(--pyre-gold)]/5 p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">

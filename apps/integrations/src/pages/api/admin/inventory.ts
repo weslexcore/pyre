@@ -6,6 +6,9 @@
 //                              in_stock; every other field needs
 //                              inventory:manage. Any edit counts as a look at
 //                              the item: it stamps last_counted_at / _by.
+//
+// Adds and edits are written to inventory_history (who changed what, and the
+// stock after); rows come back with usage_per_day worked out from it.
 //   DELETE ?id=<uuid>        → remove an item (inventory:manage)
 //
 // Gated on the /admin/inventory page grant (counting), with inventory:manage
@@ -16,6 +19,7 @@ import type { APIRoute } from 'astro';
 import { hasInventoryManage } from '@/components/admin/adminTools';
 import { beginDelete, beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
 import { notifyIfLow } from '@/lib/inventory/alerts';
+import { recordChange, usageByItem } from '@/lib/inventory/history';
 import { normalizeFields } from '@/lib/inventory/rules';
 import { INVENTORY_HREF, type InventoryResponse, type InventoryRow } from '@/lib/inventory/types';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -40,7 +44,11 @@ export const GET: APIRoute = async ({ cookies }) => {
 
   const { data, error } = await db.from('inventory').select('*').order('name');
   if (error) return dbError(error);
-  const items = ((data ?? []) as InventoryRow[]).map(numericRow);
+  const usage = await usageByItem(db, new Date());
+  const items = ((data ?? []) as InventoryRow[]).map((row) => ({
+    ...numericRow(row),
+    usage_per_day: usage.get(row.id) ?? null,
+  }));
   const people = await getPeopleNames(
     items.map((i) => i.last_counted_by).filter((e): e is string => !!e)
   );
@@ -69,7 +77,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
   if (error) return dbError(error, DUPLICATE);
-  return json({ item: numericRow(data as InventoryRow) }, 201);
+  const item = numericRow(data as InventoryRow);
+  await recordChange(db, { action: 'add', before: null, after: item, email });
+  return json({ item: { ...item, usage_per_day: null } }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request, url }) => {
@@ -92,7 +102,7 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 
   const { data: beforeData, error: beforeError } = await db
     .from('inventory')
-    .select('in_stock')
+    .select('*')
     .eq('id', id)
     .maybeSingle();
   if (beforeError) return dbError(beforeError);
@@ -110,17 +120,15 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .maybeSingle();
   if (error) return dbError(error, DUPLICATE);
   if (!data) return json({ error: 'Item not found' }, 404);
-  const item = numericRow(data as InventoryRow);
+  const before = numericRow(beforeData as InventoryRow);
+  const saved = numericRow(data as InventoryRow);
 
+  await recordChange(db, { action: 'edit', before, after: saved, email });
   if ('in_stock' in changes || 'reorder_at' in changes) {
-    await notifyIfLow(
-      db,
-      item,
-      Number((beforeData as { in_stock: number }).in_stock),
-      item.in_stock,
-      email
-    );
+    await notifyIfLow(db, saved, before.in_stock, saved.in_stock, email);
   }
+  const usage = await usageByItem(db, new Date(), id);
+  const item = { ...saved, usage_per_day: usage.get(id) ?? null };
   const people = await getPeopleNames([email]);
   return json({ item, people });
 };

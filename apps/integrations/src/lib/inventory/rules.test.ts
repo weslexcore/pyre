@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  daysLeft,
   formatCents,
+  formatDaysLeft,
+  formatPerWeek,
   isDue,
   isLow,
   type ListQuery,
@@ -10,6 +13,7 @@ import {
   parseDollars,
   parseQuantity,
   UNCATEGORISED,
+  usageOf,
 } from './rules';
 import type { InventoryRow } from './types';
 
@@ -21,6 +25,7 @@ function row(overrides: Partial<InventoryRow> = {}): InventoryRow {
     unit_cost_cents: null,
     vendor: null,
     how_to_order: null,
+    location: null,
     count_instructions: null,
     count_every_days: null,
     last_counted_at: null,
@@ -135,6 +140,86 @@ describe('normalizeFields', () => {
     expect(normalizeFields({ count_every_days: 0 }, { partial: true }).ok).toBe(false);
     expect(normalizeFields({ unit_cost_cents: 1.5 }, { partial: true }).ok).toBe(false);
     expect(normalizeFields({ vendor: 'x'.repeat(121) }, { partial: true }).ok).toBe(false);
+    expect(normalizeFields({ location: 'x'.repeat(121) }, { partial: true }).ok).toBe(false);
+  });
+
+  it('trims a location, and blank clears it', () => {
+    expect(normalizeFields({ location: ' Back shelf ' }, { partial: true })).toEqual({
+      ok: true,
+      value: { location: 'Back shelf' },
+    });
+    expect(normalizeFields({ location: '  ' }, { partial: true })).toEqual({
+      ok: true,
+      value: { location: null },
+    });
+  });
+});
+
+describe('usageOf', () => {
+  const at = (day: number) => new Date(Date.UTC(2026, 9, day, 14)).toISOString();
+
+  it('is the drops between counts over the days they span', () => {
+    const usage = usageOf(
+      [
+        { in_stock: 20, at: at(10) },
+        { in_stock: 14, at: at(13) },
+        { in_stock: 10, at: at(15) },
+      ],
+      NOW
+    );
+    expect(usage).toEqual({ used: 10, days: 5, perDay: 2, restocks: 0 });
+  });
+
+  it('leaves out a stretch with a restock', () => {
+    const usage = usageOf(
+      [
+        { in_stock: 10, at: at(10) },
+        { in_stock: 4, at: at(12) },
+        { in_stock: 30, at: at(20) },
+        { in_stock: 26, at: at(22) },
+      ],
+      NOW
+    );
+    expect(usage).toEqual({ used: 10, days: 4, perDay: 2.5, restocks: 1 });
+  });
+
+  it('sorts its points and ignores ones outside the window', () => {
+    const usage = usageOf(
+      [
+        { in_stock: 4, at: at(12) },
+        { in_stock: 10, at: at(10) },
+        { in_stock: 100, at: '2026-01-01T12:00:00Z' },
+      ],
+      NOW
+    );
+    expect(usage?.perDay).toBe(3);
+  });
+
+  it('needs at least a day of measured history', () => {
+    expect(usageOf([], NOW)).toBeNull();
+    expect(usageOf([{ in_stock: 5, at: at(10) }], NOW)).toBeNull();
+    expect(
+      usageOf(
+        [
+          { in_stock: 5, at: '2026-10-10T12:00:00Z' },
+          { in_stock: 3, at: '2026-10-10T18:00:00Z' },
+        ],
+        NOW
+      )
+    ).toBeNull();
+  });
+
+  it('works out days left and labels', () => {
+    expect(daysLeft({ in_stock: 10, usage_per_day: 2 })).toBe(5);
+    expect(daysLeft({ in_stock: 10, usage_per_day: 0 })).toBeNull();
+    expect(daysLeft({ in_stock: 10, usage_per_day: null })).toBeNull();
+    expect(formatPerWeek(0.5)).toBe('3.5 / wk');
+    expect(formatDaysLeft(0)).toBe('Out');
+    expect(formatDaysLeft(0.4)).toBe('Under a day');
+    expect(formatDaysLeft(1)).toBe('1 day');
+    expect(formatDaysLeft(5.4)).toBe('5 days');
+    expect(formatDaysLeft(21)).toBe('3 weeks');
+    expect(formatDaysLeft(120)).toBe('4 months');
   });
 });
 

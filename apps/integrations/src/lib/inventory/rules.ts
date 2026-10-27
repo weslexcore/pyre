@@ -10,6 +10,7 @@ export const MAX_QUANTITY = 100_000;
 const MAX_NAME = 120;
 const MAX_VENDOR = 120;
 const MAX_CATEGORY = 60;
+const MAX_LOCATION = 120;
 const MAX_HOW_TO_ORDER = 2000;
 const MAX_INSTRUCTIONS = 2000;
 const MAX_COST_CENTS = 10_000_000;
@@ -135,6 +136,11 @@ export function normalizeFields(
     if (how instanceof Error) return { ok: false, error: how.message };
     out.how_to_order = how;
   }
+  if (has('location')) {
+    const location = optionalText(body.location, MAX_LOCATION, 'Location');
+    if (location instanceof Error) return { ok: false, error: location.message };
+    out.location = location;
+  }
   if (has('count_instructions')) {
     const how = optionalText(body.count_instructions, MAX_INSTRUCTIONS, 'Count instructions');
     if (how instanceof Error) return { ok: false, error: how.message };
@@ -178,6 +184,82 @@ export function normalizeFields(
 }
 
 // ---------------------------------------------------------------------------
+// Usage: how fast an item goes, from its history
+// ---------------------------------------------------------------------------
+
+/** The stretch of history usage rates are worked out over. */
+export const USAGE_WINDOW_DAYS = 90;
+
+/** A look at the shelf: the stock on hand at a time. */
+export interface StockPoint {
+  in_stock: number;
+  at: string;
+}
+
+export interface Usage {
+  /** Units used: the drops between looks. */
+  used: number;
+  /** Days those drops were measured over (restock stretches left out). */
+  days: number;
+  perDay: number;
+  /** Times the stock went up between looks. */
+  restocks: number;
+}
+
+/**
+ * How fast an item is used, from its stock over time. Between two looks a
+ * drop is what was used; a rise means a delivery came in, and how much was
+ * used around it is unknown, so that stretch is left out of both the units
+ * and the days rather than guessed at. Only looks within `windowDays` of
+ * `now` count. Null until there's at least a day of measured history.
+ */
+export function usageOf(
+  points: readonly StockPoint[],
+  now: Date,
+  windowDays = USAGE_WINDOW_DAYS
+): Usage | null {
+  const since = now.getTime() - windowDays * DAY_MS;
+  const series = points
+    .map((p) => ({ n: p.in_stock, t: Date.parse(p.at) }))
+    .filter((p) => p.t >= since && p.t <= now.getTime())
+    .sort((a, b) => a.t - b.t);
+  let used = 0;
+  let ms = 0;
+  let restocks = 0;
+  for (let i = 1; i < series.length; i++) {
+    const prev = series[i - 1];
+    const next = series[i];
+    if (next.n > prev.n) restocks++;
+    else {
+      used += prev.n - next.n;
+      ms += next.t - prev.t;
+    }
+  }
+  const days = ms / DAY_MS;
+  if (days < 1) return null;
+  return { used, days, perDay: used / days, restocks };
+}
+
+/** Days until it runs out at its usage rate; null when the rate is unknown or nil. */
+export function daysLeft(item: Pick<InventoryRow, 'in_stock' | 'usage_per_day'>): number | null {
+  return item.usage_per_day ? item.in_stock / item.usage_per_day : null;
+}
+
+/** '3.5 / wk' for a rate per day. */
+export function formatPerWeek(perDay: number): string {
+  return `${formatQuantity(Math.round(perDay * 7 * 10) / 10)} / wk`;
+}
+
+/** 'Out', 'Under a day', '5 days', '3 weeks', '4 months'. */
+export function formatDaysLeft(days: number): string {
+  if (days <= 0) return 'Out';
+  if (days < 1) return 'Under a day';
+  if (days < 14) return `${Math.round(days)} day${Math.round(days) === 1 ? '' : 's'}`;
+  if (days < 70) return `${Math.round(days / 7)} weeks`;
+  return `${Math.round(days / 30)} months`;
+}
+
+// ---------------------------------------------------------------------------
 // The list: filter and sort
 // ---------------------------------------------------------------------------
 
@@ -186,7 +268,10 @@ export type InventoryFilter = 'all' | 'due' | 'reorder';
 export type SortKey =
   | 'name'
   | 'category'
+  | 'location'
   | 'in_stock'
+  | 'usage'
+  | 'days_left'
   | 'reorder_at'
   | 'due'
   | 'last_counted_at'
@@ -206,11 +291,11 @@ export interface ListQuery {
 /** The category filter's value for items with no category. */
 export const UNCATEGORISED = '\u0000none';
 
-/** Whether an item matches a search term (name, category, vendor, or how to order). */
+/** Whether an item matches a search term (name, category, location, vendor, or how to order). */
 export function matchesSearch(item: InventoryRow, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
-  return [item.name, item.category, item.vendor, item.how_to_order].some((s) =>
+  return [item.name, item.category, item.location, item.vendor, item.how_to_order].some((s) =>
     s?.toLowerCase().includes(q)
   );
 }
@@ -218,7 +303,7 @@ export function matchesSearch(item: InventoryRow, search: string): boolean {
 /** The distinct non-empty values of a field, sorted for a drop-down. */
 export function distinctValues(
   items: readonly InventoryRow[],
-  key: 'vendor' | 'category'
+  key: 'vendor' | 'category' | 'location'
 ): string[] {
   const values = new Set<string>();
   for (const item of items) if (item[key]) values.add(item[key] as string);
@@ -233,6 +318,12 @@ function sortValue(item: InventoryRow, key: SortKey, now: Date): string | number
       return item.vendor?.toLowerCase() ?? null;
     case 'category':
       return item.category?.toLowerCase() ?? null;
+    case 'location':
+      return item.location?.toLowerCase() ?? null;
+    case 'usage':
+      return item.usage_per_day ?? null;
+    case 'days_left':
+      return daysLeft(item);
     case 'due':
       // due first, then scheduled-and-fine, then unscheduled
       return isDue(item, now) ? 0 : item.count_every_days ? 1 : 2;
