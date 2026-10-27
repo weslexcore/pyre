@@ -11,16 +11,15 @@
 // The types and the timing math live in floor-timing.ts, which the island
 // imports too. Server-only.
 
-import { todayEastern, utcToEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GuestFloorCheckinRow } from '@/lib/db';
 import {
   bookingMember,
+  fetchHostSessions,
   fetchSessionBookings,
   type HostSession,
   type SessionBooking,
 } from '@/lib/momence/host-api';
-import { fetchScheduleFeed } from '@/lib/schedule/signups';
 import {
   type Floor,
   type FloorGuest,
@@ -101,14 +100,18 @@ export function floorGuests(
   return guests;
 }
 
-/** Today's (ET) sessions in the floor window, from the cached schedule feed. */
+/**
+ * The sessions in the floor window, asked of Momence each time. Not the
+ * schedule feed: that is cached for five minutes, so a session added or moved
+ * at the desk would be missing from the floor for up to that long. The window
+ * is a single small page, and crossing midnight needs no special case.
+ */
 export async function loadFloorSessions(nowMs: number): Promise<FloorSession[]> {
-  const today = todayEastern();
-  const feed = await fetchScheduleFeed(today, today);
-  return floorSessions(
-    feed.sessions.filter((s) => utcToEastern(s.startsAt).date === today),
-    nowMs
-  );
+  const sessions = await fetchHostSessions({
+    startAfter: new Date(nowMs - LOOKBACK_MINUTES * MINUTE_MS).toISOString(),
+    startBefore: new Date(nowMs + LOOKAHEAD_MINUTES * MINUTE_MS).toISOString(),
+  });
+  return floorSessions(sessions, nowMs);
 }
 
 /** Everyone booked into the window's sessions, with their check-in times. */
