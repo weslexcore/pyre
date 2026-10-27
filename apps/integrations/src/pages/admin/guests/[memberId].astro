@@ -7,6 +7,11 @@
 import { GuestProfile } from '@/components/admin/GuestProfile';
 import GuestTabs from '@/components/admin/GuestTabs.astro';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { getSetting } from '@/lib/settings/store';
+
+// Guest profiles are switched off on /admin/settings: this page opens On the
+// floor instead.
+if (!(await getSetting('guests.profiles'))) return Astro.redirect('/admin/guests/floor');
 
 const { memberId } = Astro.params;
 if (!memberId || !/^\d{1,20}$/.test(memberId)) return Astro.redirect('/admin/guests');

@@ -1,4 +1,4 @@
-// "Who needs their 15-minute warning?" — the data behind /admin/guests/floor.
+// "Who needs checking on?" — the data behind /admin/guests/floor.
 //
 // Momence knows who is booked and whether they were checked in, but not when.
 // The floor page checks guests in through Momence and keeps the time in
@@ -95,8 +95,7 @@ export function floorGuests(
       estimated: !row && booking.checkedIn,
       minutes: row?.session_minutes ?? session.minutes,
       customMinutes: row?.session_minutes != null,
-      warnedAt: row?.warned_at ?? null,
-      warnedBy: row?.warned_by ?? null,
+      checkpointsDone: row?.checkpoints_done ?? {},
     });
   }
   return guests;

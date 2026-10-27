@@ -974,8 +974,8 @@ export interface GuestFloorCheckinRow {
   checked_in_at: string;
   /** Null = the session's own length. */
   session_minutes: number | null;
-  warned_at: string | null;
-  warned_by: string | null;
+  /** Check-ins marked done, keyed by the floor.checkpoints id. */
+  checkpoints_done: Record<string, { at: string; by: string }>;
   updated_by: string;
   created_at: string;
   updated_at: string;

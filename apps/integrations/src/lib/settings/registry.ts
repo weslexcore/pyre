@@ -11,9 +11,10 @@
 // saved value.
 
 import { HIDEABLE_TOOLS } from '@/components/admin/adminTools';
+import { type Checkpoint, DEFAULT_CHECKPOINTS, parseCheckpoints } from '@/lib/guests/floor-timing';
 import { DEFAULT_DUE_DAYS, type DueDays, parseDueDays } from '@/lib/suggestions/priority';
 
-export type SettingSection = 'suggestions' | 'sops' | 'navigation';
+export type SettingSection = 'suggestions' | 'sops' | 'navigation' | 'guests';
 
 export const SETTING_SECTIONS: { key: SettingSection; label: string; description: string }[] = [
   {
@@ -21,6 +22,12 @@ export const SETTING_SECTIONS: { key: SettingSection; label: string; description
     label: 'Page visibility',
     description:
       'Choose which tools appear in the dashboard, menu, pinned listings, and page search for everyone, including admins. Hidden pages still open through direct links under existing permissions. Widgets and quick actions stay available.',
+  },
+  {
+    key: 'guests',
+    label: 'Guests',
+    description:
+      'The Guests pages: who is on the floor, and the check-ins staff make with each guest during their session.',
   },
   {
     key: 'suggestions',
@@ -63,10 +70,20 @@ export interface DueDaysSetting extends Base {
   default: DueDays;
 }
 
-export type SettingDefinition = BooleanSetting | MultiChoiceSetting | DueDaysSetting;
+/** The check-ins staff make with each guest (lib/guests/floor-timing). */
+export interface CheckpointsSetting extends Base {
+  type: 'checkpoints';
+  default: readonly Checkpoint[];
+}
+
+export type SettingDefinition =
+  | BooleanSetting
+  | MultiChoiceSetting
+  | DueDaysSetting
+  | CheckpointsSetting;
 
 /** Any setting's value, untyped by key. */
-export type AnySettingValue = boolean | string[] | DueDays;
+export type AnySettingValue = boolean | string[] | DueDays | Checkpoint[];
 
 export const SETTINGS = {
   'navigation.hiddenTools': {
@@ -77,6 +94,22 @@ export const SETTINGS = {
       'Open any tool here, even when hidden. Settings always stays visible. Changes appear on navigation or refresh within about 30 seconds.',
     options: HIDEABLE_TOOLS.map((tool) => ({ value: tool.href, label: tool.title })),
     default: [],
+  },
+  'guests.profiles': {
+    type: 'boolean',
+    section: 'guests',
+    label: 'Guest profiles',
+    description:
+      'The guest list, Who’s coming, profile fields, and each guest’s profile page. Off, those pages open On the floor instead and their tabs are hidden; profiles already saved are kept.',
+    default: false,
+  },
+  'floor.checkpoints': {
+    type: 'checkpoints',
+    section: 'guests',
+    label: 'Check-ins during a session',
+    description:
+      'The moments staff check on each guest. On the floor highlights a guest when one comes due, until someone marks it done. Add as many as you like, timed from when the guest arrives or from when their session ends.',
+    default: DEFAULT_CHECKPOINTS,
   },
   'suggestions.enabled': {
     type: 'boolean',
@@ -136,7 +169,9 @@ export type SettingValue<K extends SettingKey> = (typeof SETTINGS)[K] extends { 
   ? boolean
   : (typeof SETTINGS)[K] extends { type: 'due_days' }
     ? DueDays
-    : string[];
+    : (typeof SETTINGS)[K] extends { type: 'checkpoints' }
+      ? Checkpoint[]
+      : string[];
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
@@ -160,6 +195,7 @@ export function parseSettingValue(
       : { ok: false, error: `${def.label} must be on or off` };
   }
   if (def.type === 'due_days') return parseDueDays(raw);
+  if (def.type === 'checkpoints') return parseCheckpoints(raw);
   if (!Array.isArray(raw) || !raw.every((v) => typeof v === 'string')) {
     return { ok: false, error: `${def.label} must be a list of choices` };
   }
@@ -181,8 +217,8 @@ export function parseEnvValue(
 ): AnySettingValue | undefined {
   if (raw === undefined || raw.trim() === '') return undefined;
   const def = settingDefinition(key);
-  // A grid has no environment-variable spelling.
-  if (def.type === 'due_days') return undefined;
+  // A grid or a list has no environment-variable spelling.
+  if (def.type === 'due_days' || def.type === 'checkpoints') return undefined;
   const text = raw.trim().toLowerCase();
   if (def.type === 'boolean') {
     if (['on', 'true', '1', 'yes'].includes(text)) return true;

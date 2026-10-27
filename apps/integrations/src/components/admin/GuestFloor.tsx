@@ -1,8 +1,10 @@
 // On the floor (/admin/guests/floor).
 //
 // Everyone checked in right now, with when they came in, how long their
-// session runs, and a bar of how much of it is behind them — sorted so the
-// guests due their 15-minute warning are at the top. Below, whoever is booked
+// session runs, a bar of how much of it is behind them, and the check-ins
+// staff make with them (set on /admin/settings: a 15-minute warning, a water
+// top-up, ...) — sorted so guests with a check-in due are at the top. Tapping
+// a due check-in marks it done. Below, whoever is booked
 // into a current or upcoming session and not here yet, with a Check in button
 // that checks them in on Momence and starts their clock.
 //
@@ -17,6 +19,8 @@ import { useCachedJson } from '@/lib/client/cachedJson';
 import { etTime } from '@/lib/client/format';
 import { timeAgo } from '@/lib/client/relativeTime';
 import {
+  type Checkpoint,
+  type CheckpointTiming,
   compareFloor,
   type FloorGuest,
   type FloorSession,
@@ -26,13 +30,13 @@ import {
   MINUTE_MS,
   onFloor,
   SESSION_LENGTH_CHOICES,
-  WARNING_MINUTES,
 } from '@/lib/guests/floor-timing';
 import { QuietBadge } from './guestUi';
 
 interface FloorResponse {
   available: boolean;
   now: string;
+  checkpoints: Checkpoint[];
   sessions: FloorSession[];
   guests: FloorGuest[];
   complete: boolean;
@@ -46,7 +50,7 @@ const TICK_MS = 5_000;
 const BAR_COLORS: Record<FloorStatus, string> = {
   waiting: 'bg-white/20',
   in: 'bg-[var(--pyre-sage)]',
-  warn: 'bg-[var(--pyre-gold)]',
+  due: 'bg-[var(--pyre-gold)]',
   over: 'bg-[var(--pyre-red)]',
 };
 
@@ -91,10 +95,11 @@ export function GuestFloor() {
   );
 
   const guests = floor.data?.guests ?? [];
+  const checkpoints = floor.data?.checkpoints ?? [];
   const inside = guests
     .filter((g) => g.checkedIn)
-    .map((guest) => ({ guest, timing: floorTiming(guest, now) }))
-    .filter(({ timing }) => onFloor(timing))
+    .map((guest) => ({ guest, timing: floorTiming(guest, checkpoints, now) }))
+    .filter(({ timing }) => onFloor(timing, now))
     .sort((a, b) => compareFloor(a.timing, b.timing));
   const waiting = guests
     .filter((g) => !g.checkedIn && Date.parse(sessions.get(g.sessionId)?.endsAt ?? '') > now)
@@ -104,7 +109,7 @@ export function GuestFloor() {
           sessions.get(b.sessionId)?.startsAt ?? ''
         ) || a.name.localeCompare(b.name)
     );
-  const dueNow = inside.filter(({ guest, timing }) => timing.status === 'warn' && !guest.warnedAt);
+  const dueNow = inside.filter(({ timing }) => timing.status === 'due');
 
   async function act(guest: FloorGuest, run: () => Promise<{ momenceSynced?: boolean }>) {
     setBusy(guest.bookingId);
@@ -152,11 +157,13 @@ export function GuestFloor() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm text-[var(--pyre-creme)]">
-          {dueNow.length > 0
-            ? `${dueNow.length} ${dueNow.length === 1 ? 'guest needs' : 'guests need'} a ${WARNING_MINUTES}-minute warning`
-            : `Nobody needs a warning right now`}
-        </p>
+        {checkpoints.length > 0 && (
+          <p className="text-sm text-[var(--pyre-creme)]">
+            {dueNow.length > 0
+              ? `${dueNow.length} ${dueNow.length === 1 ? 'guest has' : 'guests have'} a check-in due`
+              : 'No check-ins due right now'}
+          </p>
+        )}
         <button
           type="button"
           className={buttonClass}
@@ -203,7 +210,7 @@ export function GuestFloor() {
           {inside.map(({ guest, timing }) => (
             <li
               key={guest.bookingId}
-              className={`${cardClass} ${timing.status === 'warn' && !guest.warnedAt ? 'border-[var(--pyre-gold)]/60' : ''}`}
+              className={`${cardClass} ${timing.status === 'due' ? 'border-[var(--pyre-gold)]/60' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -228,23 +235,18 @@ export function GuestFloor() {
                     className={`block font-mono text-sm ${
                       timing.status === 'over'
                         ? 'text-[var(--pyre-red)]'
-                        : timing.status === 'warn'
+                        : timing.status === 'due'
                           ? 'text-[var(--pyre-gold)]'
                           : 'text-[var(--pyre-creme)]'
                     }`}
                   >
                     {remainingLabel(timing)}
                   </span>
-                  {guest.warnedAt && (
-                    <span className="block font-mono text-[10px] uppercase tracking-wide text-white/35">
-                      Warned {etTime(guest.warnedAt)}
-                    </span>
-                  )}
                 </div>
               </div>
 
               <div
-                className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"
+                className="relative mt-3 h-2 overflow-hidden rounded-full bg-white/10"
                 role="progressbar"
                 aria-label={`${guest.name}'s session`}
                 aria-valuemin={0}
@@ -255,19 +257,33 @@ export function GuestFloor() {
                   className={`h-full rounded-full transition-[width] duration-1000 ${BAR_COLORS[timing.status]}`}
                   style={{ width: `${timing.progress * 100}%` }}
                 />
+                {timing.endsAt !== null &&
+                  timing.checkpoints.map((c) => {
+                    const start = (timing.endsAt ?? 0) - guest.minutes * MINUTE_MS;
+                    const at = (c.dueAt - start) / (guest.minutes * MINUTE_MS);
+                    if (at <= 0 || at >= 1) return null;
+                    return (
+                      <span
+                        key={c.checkpoint.id}
+                        aria-hidden="true"
+                        className="absolute inset-y-0 w-0.5 bg-[var(--pyre-black)]/70"
+                        style={{ left: `${at * 100}%` }}
+                      />
+                    );
+                  })}
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {(timing.status === 'warn' || timing.status === 'over') && (
-                  <button
-                    type="button"
-                    className={guest.warnedAt ? buttonClass : goldButtonClass}
-                    disabled={busy === guest.bookingId}
-                    onClick={() => void patch(guest, { warned: !guest.warnedAt })}
-                  >
-                    {guest.warnedAt ? 'Not warned' : 'Mark warned'}
-                  </button>
-                )}
+                {timing.checkpoints.map((c) => (
+                  <CheckpointChip
+                    key={c.checkpoint.id}
+                    timing={c}
+                    busy={busy === guest.bookingId}
+                    onToggle={() =>
+                      void patch(guest, { checkpoint: { id: c.checkpoint.id, done: !c.done } })
+                    }
+                  />
+                ))}
                 <button
                   type="button"
                   className={buttonClass}
@@ -332,6 +348,48 @@ export function GuestFloor() {
         </ul>
       </section>
     </div>
+  );
+}
+
+/**
+ * One check-in on a guest's card: due ones are the gold button that marks
+ * them done; done ones say when, and tap again to un-mark; upcoming ones say
+ * when they're due.
+ */
+function CheckpointChip({
+  timing,
+  busy,
+  onToggle,
+}: {
+  timing: CheckpointTiming;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const { checkpoint, done, due, dueAt } = timing;
+  if (due) {
+    return (
+      <button type="button" className={goldButtonClass} disabled={busy} onClick={onToggle}>
+        {checkpoint.label} · Mark done
+      </button>
+    );
+  }
+  if (done) {
+    return (
+      <button
+        type="button"
+        className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-[var(--pyre-sage)] transition-colors hover:border-[var(--pyre-sage)] disabled:opacity-40"
+        disabled={busy}
+        title="Tap to mark not done"
+        onClick={onToggle}
+      >
+        {checkpoint.label} · Done {etTime(done.at)}
+      </button>
+    );
+  }
+  return (
+    <span className="rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
+      {checkpoint.label} · {etTime(new Date(dueAt).toISOString())}
+    </span>
   );
 }
 

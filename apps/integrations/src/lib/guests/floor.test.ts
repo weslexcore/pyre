@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { GuestFloorCheckinRow } from '@/lib/db';
 import type { HostSession, SessionBooking } from '@/lib/momence/host-api';
 import { estimateCheckIn, floorGuests, floorSessions } from './floor';
-import { compareFloor, floorTiming, onFloor } from './floor-timing';
+import {
+  type Checkpoint,
+  compareFloor,
+  DEFAULT_CHECKPOINTS,
+  floorTiming,
+  onFloor,
+  parseCheckpoints,
+} from './floor-timing';
 
 const NOW = Date.parse('2026-10-27T22:30:00.000Z');
 const min = (n: number) => n * 60_000;
@@ -37,8 +44,7 @@ function row(overrides: Partial<GuestFloorCheckinRow> = {}): GuestFloorCheckinRo
     member_id: '7',
     checked_in_at: at(-20),
     session_minutes: null,
-    warned_at: null,
-    warned_by: null,
+    checkpoints_done: {},
     updated_by: 'staff@pyresauna.com',
     created_at: at(-20),
     updated_at: at(-20),
@@ -109,44 +115,104 @@ describe('floorGuests', () => {
   });
 });
 
+const WARNING = DEFAULT_CHECKPOINTS;
+const guestAt = (offset: number, done: Record<string, { at: string; by: string }> = {}) => ({
+  checkedInAt: at(offset),
+  minutes: 60,
+  checkpointsDone: done,
+});
+
 describe('floorTiming', () => {
-  it('is in progress with more than 15 minutes left', () => {
-    const t = floorTiming({ checkedInAt: at(-30), minutes: 60 }, NOW);
+  it('is in progress with nothing due', () => {
+    const t = floorTiming(guestAt(-30), WARNING, NOW);
     expect(t.status).toBe('in');
     expect(t.progress).toBeCloseTo(0.5);
     expect(t.remainingMs).toBe(min(30));
+    expect(t.checkpoints[0]).toMatchObject({ dueAt: NOW + min(15), due: false });
   });
 
   it('calls for the warning at 15 minutes left', () => {
-    expect(floorTiming({ checkedInAt: at(-45), minutes: 60 }, NOW).status).toBe('warn');
-    expect(floorTiming({ checkedInAt: at(-44), minutes: 60 }, NOW).status).toBe('in');
+    expect(floorTiming(guestAt(-45), WARNING, NOW).status).toBe('due');
+    expect(floorTiming(guestAt(-44), WARNING, NOW).status).toBe('in');
   });
 
-  it('is over once their time is up, capped at a full bar', () => {
-    const t = floorTiming({ checkedInAt: at(-70), minutes: 60 }, NOW);
+  it('stops calling for a check-in once it is marked done', () => {
+    const done = { 'warning-15': { at: at(-1), by: 'staff@pyresauna.com' } };
+    const t = floorTiming(guestAt(-50, done), WARNING, NOW);
+    expect(t.status).toBe('in');
+    expect(t.checkpoints[0].done).toEqual(done['warning-15']);
+  });
+
+  it('times check-ins from arrival, before the end, and after the end', () => {
+    const points: Checkpoint[] = [
+      { id: 'after', label: 'Out?', minutes: 10, from: 'after_end' },
+      { id: 'water', label: 'Water', minutes: 20, from: 'after_arrival' },
+      { id: 'warn', label: 'Warning', minutes: 15, from: 'before_end' },
+    ];
+    const t = floorTiming(guestAt(0), points, NOW);
+    expect(t.checkpoints.map((c) => [c.checkpoint.id, (c.dueAt - NOW) / min(1)])).toEqual([
+      ['water', 20],
+      ['warn', 45],
+      ['after', 70],
+    ]);
+  });
+
+  it('is over once their time is up with nothing due, capped at a full bar', () => {
+    const t = floorTiming(guestAt(-70), [], NOW);
     expect(t.status).toBe('over');
     expect(t.progress).toBe(1);
     expect(t.remainingMs).toBe(-min(10));
   });
 
   it('is waiting without a check-in', () => {
-    expect(floorTiming({ checkedInAt: null, minutes: 60 }, NOW).status).toBe('waiting');
+    const t = floorTiming({ checkedInAt: null, minutes: 60, checkpointsDone: {} }, WARNING, NOW);
+    expect(t.status).toBe('waiting');
   });
 
-  it('keeps an overtime guest listed for half an hour', () => {
-    expect(onFloor(floorTiming({ checkedInAt: at(-80), minutes: 60 }, NOW))).toBe(true);
-    expect(onFloor(floorTiming({ checkedInAt: at(-91), minutes: 60 }, NOW))).toBe(false);
+  it('keeps a guest listed half an hour past their end or last check-in', () => {
+    expect(onFloor(floorTiming(guestAt(-80), [], NOW), NOW)).toBe(true);
+    expect(onFloor(floorTiming(guestAt(-91), [], NOW), NOW)).toBe(false);
+    const late: Checkpoint[] = [{ id: 'late', label: 'Late', minutes: 20, from: 'after_end' }];
+    const done = { late: { at: at(-1), by: 'staff@pyresauna.com' } };
+    expect(onFloor(floorTiming(guestAt(-100, done), late, NOW), NOW)).toBe(true);
   });
 
-  it('sorts warnings first, then overtime, then by time left', () => {
+  it('keeps a guest listed while a check-in is still due', () => {
+    expect(onFloor(floorTiming(guestAt(-200), WARNING, NOW), NOW)).toBe(true);
+  });
+
+  it('sorts due check-ins first, then overtime, then by time left', () => {
+    const done = { 'warning-15': { at: at(-1), by: 'staff@pyresauna.com' } };
     const timings = [
-      floorTiming({ checkedInAt: at(-10), minutes: 60 }, NOW),
-      floorTiming({ checkedInAt: at(-65), minutes: 60 }, NOW),
-      floorTiming({ checkedInAt: at(-50), minutes: 60 }, NOW),
-      floorTiming({ checkedInAt: at(-30), minutes: 60 }, NOW),
+      floorTiming(guestAt(-10), WARNING, NOW),
+      floorTiming(guestAt(-65, done), WARNING, NOW),
+      floorTiming(guestAt(-50), WARNING, NOW),
+      floorTiming(guestAt(-30), WARNING, NOW),
     ];
-    const order = [...timings].sort(compareFloor).map((t) => t.status);
-    expect(order).toEqual(['warn', 'over', 'in', 'in']);
-    expect([...timings].sort(compareFloor)[2].remainingMs).toBe(min(30));
+    const sorted = [...timings].sort(compareFloor);
+    expect(sorted.map((t) => t.status)).toEqual(['due', 'over', 'in', 'in']);
+    expect(sorted[2].remainingMs).toBe(min(30));
+  });
+});
+
+describe('parseCheckpoints', () => {
+  it('accepts a list and trims labels', () => {
+    expect(
+      parseCheckpoints([{ id: 'a', label: ' Water ', minutes: 20, from: 'after_arrival' }])
+    ).toEqual({
+      ok: true,
+      value: [{ id: 'a', label: 'Water', minutes: 20, from: 'after_arrival' }],
+    });
+    expect(parseCheckpoints([])).toEqual({ ok: true, value: [] });
+  });
+
+  it('rejects duplicate ids, blank labels, bad minutes, and unknown starting points', () => {
+    const ok = { id: 'a', label: 'Water', minutes: 20, from: 'after_arrival' };
+    expect(parseCheckpoints([ok, ok]).ok).toBe(false);
+    expect(parseCheckpoints([{ ...ok, label: '  ' }]).ok).toBe(false);
+    expect(parseCheckpoints([{ ...ok, minutes: -1 }]).ok).toBe(false);
+    expect(parseCheckpoints([{ ...ok, minutes: 2.5 }]).ok).toBe(false);
+    expect(parseCheckpoints([{ ...ok, from: 'whenever' }]).ok).toBe(false);
+    expect(parseCheckpoints('water').ok).toBe(false);
   });
 });

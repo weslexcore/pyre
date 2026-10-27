@@ -4,10 +4,19 @@
 // says where its current value comes from (saved here, an environment
 // variable, or the default), and a saved one can be reset back to that.
 
-import { useEffect, useState } from 'react';
+import { type KeyboardEvent, useEffect, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { readError } from '@/lib/client/api';
 import { etStamp } from '@/lib/client/format';
+import {
+  CHECKPOINT_FROM,
+  CHECKPOINT_FROM_LABELS,
+  type Checkpoint,
+  type CheckpointFrom,
+  MAX_CHECKPOINT_LABEL,
+  MAX_CHECKPOINT_MINUTES,
+  MAX_CHECKPOINTS,
+} from '@/lib/guests/floor-timing';
 import {
   type AnySettingValue,
   SETTING_SECTIONS,
@@ -46,6 +55,7 @@ const ELSEWHERE: { href: string; label: string; description: string }[] = [
 function describeValue(def: SettingDefinition, value: AnySettingValue): string {
   if (def.type === 'boolean') return value ? 'on' : 'off';
   if (def.type === 'due_days') return 'the default days';
+  if (def.type === 'checkpoints') return 'the default check-ins';
   const labels = def.options
     .filter((o) => (value as string[]).includes(o.value))
     .map((o) => o.label);
@@ -151,6 +161,142 @@ function DueDaysGrid({
   );
 }
 
+const checkpointFieldClass =
+  'rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-[var(--pyre-creme)] focus:border-[var(--pyre-gold)]/60 focus:outline-none disabled:opacity-40 [&>option]:bg-[var(--pyre-black)]';
+
+/** One check-in: its label, minutes, and what they count from. Text saves on blur. */
+function CheckpointRow({
+  checkpoint,
+  disabled,
+  onChange,
+  onRemove,
+}: {
+  checkpoint: Checkpoint;
+  disabled: boolean;
+  onChange: (next: Checkpoint) => void;
+  onRemove: () => void;
+}) {
+  const [label, setLabel] = useState(checkpoint.label);
+  const [minutes, setMinutes] = useState(String(checkpoint.minutes));
+  useEffect(() => setLabel(checkpoint.label), [checkpoint.label]);
+  useEffect(() => setMinutes(String(checkpoint.minutes)), [checkpoint.minutes]);
+
+  const commitLabel = () => {
+    const text = label.trim();
+    if (!text) return setLabel(checkpoint.label);
+    if (text !== checkpoint.label) onChange({ ...checkpoint, label: text });
+  };
+  const commitMinutes = () => {
+    const next = Number(minutes.trim());
+    if (!Number.isInteger(next) || next < 0 || next > MAX_CHECKPOINT_MINUTES) {
+      return setMinutes(String(checkpoint.minutes));
+    }
+    if (next !== checkpoint.minutes) onChange({ ...checkpoint, minutes: next });
+  };
+  const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') e.currentTarget.blur();
+  };
+
+  return (
+    <li className="flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        aria-label="Check-in label"
+        maxLength={MAX_CHECKPOINT_LABEL}
+        disabled={disabled}
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        onBlur={commitLabel}
+        onKeyDown={blurOnEnter}
+        className={`${checkpointFieldClass} w-48`}
+      />
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={MAX_CHECKPOINT_MINUTES}
+        aria-label={`Minutes for ${checkpoint.label}`}
+        disabled={disabled}
+        value={minutes}
+        onChange={(e) => setMinutes(e.target.value)}
+        onBlur={commitMinutes}
+        onKeyDown={blurOnEnter}
+        className={`${checkpointFieldClass} w-16 text-right font-mono`}
+      />
+      <span className="text-xs text-white/50">min</span>
+      <select
+        aria-label={`When ${checkpoint.label} counts from`}
+        disabled={disabled}
+        value={checkpoint.from}
+        onChange={(e) => onChange({ ...checkpoint, from: e.target.value as CheckpointFrom })}
+        className={checkpointFieldClass}
+      >
+        {CHECKPOINT_FROM.map((from) => (
+          <option key={from} value={from}>
+            {CHECKPOINT_FROM_LABELS[from]}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onRemove}
+        className="font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white disabled:opacity-40"
+      >
+        Remove
+      </button>
+    </li>
+  );
+}
+
+function CheckpointsEditor({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: Checkpoint[];
+  disabled: boolean;
+  onChange: (next: Checkpoint[]) => void;
+}) {
+  const add = () =>
+    onChange([
+      ...value,
+      {
+        id: `cp-${Date.now().toString(36)}`,
+        label: 'Check in',
+        minutes: 10,
+        from: 'after_end',
+      },
+    ]);
+  return (
+    <div className="space-y-2">
+      {value.length === 0 ? (
+        <p className="text-xs text-white/50">No check-ins: On the floor shows time left only.</p>
+      ) : (
+        <ul className="space-y-2">
+          {value.map((checkpoint, i) => (
+            <CheckpointRow
+              key={checkpoint.id}
+              checkpoint={checkpoint}
+              disabled={disabled}
+              onChange={(next) => onChange(value.map((c, j) => (j === i ? next : c)))}
+              onRemove={() => onChange(value.filter((_, j) => j !== i))}
+            />
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        disabled={disabled || value.length >= MAX_CHECKPOINTS}
+        onClick={add}
+        className="rounded border border-white/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+      >
+        Add check-in
+      </button>
+    </div>
+  );
+}
+
 function SettingRow({
   view,
   people,
@@ -237,6 +383,13 @@ function SettingRow({
       {def.type === 'due_days' && (
         <DueDaysGrid
           value={view.value as DueDays}
+          disabled={busy}
+          onChange={(next) => onSave(view.key, next)}
+        />
+      )}
+      {def.type === 'checkpoints' && (
+        <CheckpointsEditor
+          value={view.value as Checkpoint[]}
           disabled={busy}
           onChange={(next) => onSave(view.key, next)}
         />

@@ -227,7 +227,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
   },
   {
     href: '/admin/guests',
-    title: 'Guest Profiles',
+    title: 'Guests',
     navLabel: 'Guests',
     keywords: [
       'customers',
@@ -241,7 +241,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
       'plunge',
     ],
     description:
-      'What we know about the people who come in — heat, scents, plunge, drinks, local or visiting — next to their Momence visits and purchases, and who is booked into each session today.',
+      'Who is checked in right now, how much of their session is left, and which check-ins are due. Guest profiles (preferences, notes, who is booked) live here too when switched on in Settings.',
     section: 'operations',
   },
   {

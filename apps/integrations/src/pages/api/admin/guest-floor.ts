@@ -1,14 +1,17 @@
 // On the floor — check-in times behind /admin/guests/floor.
 //   GET                                          — today's sessions in the
-//                                                  window and everyone booked
-//                                                  into them, with check-in
-//                                                  times (lib/guests/floor.ts)
+//                                                  window, everyone booked
+//                                                  into them with check-in
+//                                                  times (lib/guests/floor.ts),
+//                                                  and the configured
+//                                                  check-ins (floor.checkpoints)
 //   POST   { sessionId, bookingId }              — check in now: Momence's
 //                                                  check-in, plus the time
 //   PATCH  { sessionId, bookingId, checkedInAt?,
-//            minutes?, warned? }                 — correct the time, set a
-//                                                  different length, mark the
-//                                                  15-minute warning given
+//            minutes?, checkpoint?: { id, done } }
+//                                                — correct the time, set a
+//                                                  different length, mark a
+//                                                  check-in done or not
 //   DELETE ?sessionId=&bookingId=                — undo a check-in, in
 //                                                  Momence and here
 //
@@ -26,6 +29,7 @@ import { findFloorBooking, loadFloor } from '@/lib/guests/floor';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { beginDelete, beginMutation, dbError, json } from '@/lib/http/route';
 import { bookingMember, setSessionBookingCheckIn } from '@/lib/momence/host-api';
+import { getSetting } from '@/lib/settings/store';
 
 export const prerender = false;
 
@@ -53,14 +57,16 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const now = Date.now();
+  const checkpoints = await getSetting('floor.checkpoints');
   try {
     const floor = await loadFloor(db, now);
-    return json({ available: true, now: new Date(now).toISOString(), ...floor });
+    return json({ available: true, now: new Date(now).toISOString(), checkpoints, ...floor });
   } catch (e) {
     console.error('[guests/floor] load failed:', e instanceof Error ? e.message : e);
     return json({
       available: false,
       now: new Date(now).toISOString(),
+      checkpoints,
       sessions: [],
       guests: [],
       complete: false,
@@ -103,8 +109,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         member_id: bookingMember(found.booking)?.memberId || null,
         checked_in_at: new Date(now).toISOString(),
         session_minutes: null,
-        warned_at: null,
-        warned_by: null,
+        checkpoints_done: {},
         updated_by: email,
         updated_at: new Date(now).toISOString(),
       },
@@ -145,13 +150,23 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     }
     changes.session_minutes = minutes;
   }
-  if (body.warned !== undefined) {
-    if (typeof body.warned !== 'boolean')
-      return json({ error: 'warned must be true or false' }, 400);
-    changes.warned_at = body.warned ? new Date(now).toISOString() : null;
-    changes.warned_by = body.warned ? email : null;
+  let checkpoint: { id: string; done: boolean } | null = null;
+  if (body.checkpoint !== undefined) {
+    const raw = body.checkpoint as Record<string, unknown> | null;
+    if (!raw || typeof raw.id !== 'string' || typeof raw.done !== 'boolean') {
+      return json({ error: 'checkpoint must be { id, done }' }, 400);
+    }
+    // Clearing a mark works for any id, so one left by a check-in since
+    // removed from settings can still be undone; marking needs a live one.
+    const configured = await getSetting('floor.checkpoints');
+    if (raw.done && !configured.some((c) => c.id === raw.id)) {
+      return json({ error: 'That check-in is no longer set up' }, 400);
+    }
+    checkpoint = { id: raw.id, done: raw.done };
   }
-  if (Object.keys(changes).length === 0) return json({ error: 'Nothing to change' }, 400);
+  if (Object.keys(changes).length === 0 && !checkpoint) {
+    return json({ error: 'Nothing to change' }, 400);
+  }
 
   let found: Awaited<ReturnType<typeof findFloorBooking>>;
   try {
@@ -176,11 +191,19 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'checkedInAt is required for a guest checked in elsewhere' }, 400);
   }
 
+  const current = existing as GuestFloorCheckinRow | null;
+  if (checkpoint) {
+    const done = { ...(current?.checkpoints_done ?? {}) };
+    if (checkpoint.done) done[checkpoint.id] = { at: new Date(now).toISOString(), by: email };
+    else delete done[checkpoint.id];
+    changes.checkpoints_done = done;
+  }
+
   const { data, error } = await db
     .from('guest_floor_checkins')
     .upsert(
       {
-        ...((existing as GuestFloorCheckinRow | null) ?? {
+        ...(current ?? {
           booking_id: target.bookingId,
           session_id: target.sessionId,
           member_id: bookingMember(found.booking)?.memberId || null,
