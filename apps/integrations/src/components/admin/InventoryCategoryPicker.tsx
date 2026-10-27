@@ -1,13 +1,21 @@
-// The category drop-down on /admin/inventory — in a row's Category cell and
-// in the details dialog. It offers every category already in use, "None",
-// and, last, "Add new category", which swaps the drop-down for a text box:
-// Enter (or clicking away) keeps the new name, Escape goes back. Categories
-// are plain text on the item, so a new one exists as soon as an item has it.
+// The category and location drop-downs on /admin/inventory — in a row's
+// cells and in the details dialog. It offers every value already in use,
+// "None", and, last, "Add new category" (or "area"), which swaps the
+// drop-down for a text box: Enter (or clicking away) keeps the new name,
+// Escape goes back. Both are plain text on the item, so a new one exists as
+// soon as an item has it.
 
 import { useState } from 'react';
 
 const ADD_NEW = '\u0000add';
 const MAX_CATEGORY = 60;
+const MAX_LOCATION = 120;
+
+/** What the picker chooses, for its wording and length limit. */
+const KINDS = {
+  category: { noun: 'category', max: MAX_CATEGORY },
+  location: { noun: 'area', max: MAX_LOCATION },
+} as const;
 
 export function CategoryPicker({
   value,
@@ -17,17 +25,20 @@ export function CategoryPicker({
   selectClassName,
   inputClassName,
   id,
+  kind = 'category',
 }: {
   value: string | null;
-  /** Categories already in use, sorted. */
+  /** Values already in use, sorted. */
   categories: readonly string[];
-  /** Called with the chosen or newly typed category (null = none). */
+  /** Called with the chosen or newly typed value (null = none). */
   onChange: (next: string | null) => void;
   label: string;
   selectClassName: string;
   inputClassName: string;
   id?: string;
+  kind?: keyof typeof KINDS;
 }) {
+  const { noun, max } = KINDS[kind];
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -41,10 +52,10 @@ export function CategoryPicker({
     return (
       <input
         id={id}
-        // biome-ignore lint/a11y/noAutofocus: shown only after choosing "Add new category"
+        // biome-ignore lint/a11y/noAutofocus: shown only after choosing "Add new …"
         autoFocus
         value={draft}
-        maxLength={MAX_CATEGORY}
+        maxLength={max}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => finish(true)}
         onKeyDown={(e) => {
@@ -57,8 +68,8 @@ export function CategoryPicker({
             finish(false);
           }
         }}
-        placeholder="New category name"
-        aria-label={`New category for ${label}`}
+        placeholder={`New ${noun} name`}
+        aria-label={`New ${noun} for ${label}`}
         className={inputClassName}
       />
     );
@@ -83,7 +94,7 @@ export function CategoryPicker({
           {c}
         </option>
       ))}
-      <option value={ADD_NEW}>Add new category…</option>
+      <option value={ADD_NEW}>Add new {noun}…</option>
     </select>
   );
 }

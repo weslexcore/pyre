@@ -544,6 +544,7 @@ export function InventoryList() {
                 canManage={canManage}
                 shown={shown}
                 categories={categories}
+                locations={locations}
                 countedBy={item.last_counted_by ? personName(item.last_counted_by, people) : null}
                 highlighted={highlight === item.id}
                 onSave={(patch) => save(item.id, patch)}
@@ -634,6 +635,7 @@ function ItemRow({
   canManage,
   shown,
   categories,
+  locations,
   countedBy,
   highlighted,
   onSave,
@@ -650,6 +652,7 @@ function ItemRow({
   /** The columns showing. */
   shown: ReadonlySet<ColumnKey>;
   categories: readonly string[];
+  locations: readonly string[];
   countedBy: string | null;
   highlighted: boolean;
   onSave: (patch: Patch) => Promise<boolean>;
@@ -721,12 +724,19 @@ function ItemRow({
       )}
       {shown.has('location') && (
         <td className={cellClass}>
-          <TextCell
-            value={item.location ?? ''}
-            label={`Location of ${item.name}`}
-            editable={canManage}
-            onSave={(v) => onSave({ location: v || null })}
-          />
+          {canManage ? (
+            <CategoryPicker
+              kind="location"
+              value={item.location}
+              categories={locations}
+              onChange={(next) => void onSave({ location: next })}
+              label={`Location of ${item.name}`}
+              selectClassName={`${compactSelectClass} w-full border-transparent bg-transparent hover:border-white/10`}
+              inputClassName={editClass}
+            />
+          ) : (
+            <span className="block truncate px-1.5 py-1 text-white/70">{item.location}</span>
+          )}
         </td>
       )}
       <td className={`${cellClass} text-right`}>

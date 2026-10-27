@@ -133,7 +133,7 @@ export function InventoryDetails({
   vendors: readonly string[];
   /** Categories already in use, offered in the drop-down. */
   categories: readonly string[];
-  /** Locations already in use, offered as suggestions. */
+  /** Locations already in use, offered in the drop-down. */
   locations: readonly string[];
   countedBy: string | null;
   now: Date;
@@ -335,18 +335,26 @@ export function InventoryDetails({
                 <label htmlFor={field('location')} className={labelClass}>
                   Location <span className="normal-case text-white/30">(optional)</span>
                 </label>
-                <input
-                  id={field('location')}
-                  {...text('location')}
-                  list={field('locations')}
-                  placeholder="Where it's kept"
-                  className={`${inputClass} w-full`}
-                />
-                <datalist id={field('locations')}>
-                  {locations.map((l) => (
-                    <option key={l} value={l} />
-                  ))}
-                </datalist>
+                {readOnly ? (
+                  <input
+                    id={field('location')}
+                    value={draft.location}
+                    readOnly
+                    placeholder="None"
+                    className={`${inputClass} w-full`}
+                  />
+                ) : (
+                  <CategoryPicker
+                    id={field('location')}
+                    kind="location"
+                    value={draft.location || null}
+                    categories={locations}
+                    onChange={(next) => pick({ location: next ?? '' })}
+                    label="Location"
+                    selectClassName={`${selectClass} w-full`}
+                    inputClassName={`${inputClass} w-full`}
+                  />
+                )}
               </div>
             </div>
 
