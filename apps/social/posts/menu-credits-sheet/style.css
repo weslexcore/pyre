@@ -34,16 +34,25 @@
   }
 }
 
-/* Page 2: credit packs and subscriptions first with their sharing footnote right under them,
-   then the Founding Unlimited panel. Rows: categories, footnote, feature, pine (takes the slack,
-   pinned to its bottom). */
+/* Page 2: pine mark on top, then credit packs and subscriptions with their sharing footnote
+   right under them, then the Founding Unlimited panel. Rows: pine, categories, footnote,
+   feature (takes the slack, pinned to its bottom). */
 .menu-sheet--black {
   grid-template-rows: auto auto auto 1fr;
+}
+
+.menu-sheet--black .tpl-menu-sheet__pine {
+  order: -2;
+  align-self: start;
 }
 
 .menu-sheet--black .tpl-menu-sheet__categories,
 .menu-sheet--black .tpl-menu-sheet__footnote {
   order: -1;
+}
+
+.menu-sheet--black .tpl-menu-sheet__feature {
+  align-self: end;
 }
 
 .menu-sheet--black .tpl-menu-sheet__categories {
@@ -53,4 +62,21 @@
 /* Pull the footnote up against the tables it qualifies instead of a full grid gap away. */
 .menu-sheet--black .tpl-menu-sheet__footnote {
   margin-top: -40px;
+}
+
+/* Page 2: credit packs and subscriptions set a step larger than the template. */
+@media (min-width: 2000px) {
+  .menu-sheet--black .tpl-menu-sheet__category-title {
+    font-size: 58px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__category-note,
+  .menu-sheet--black .tpl-menu-sheet__note {
+    font-size: 36px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__name {
+    font-size: 72px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__price {
+    font-size: 60px;
+  }
 }
