@@ -22,3 +22,14 @@
 .menu-sheet--black .tpl-menu-sheet__feature-badge {
   color: var(--pyre-black);
 }
+
+/* Pages 1–2: five credit packs run long, so tighten the rows and pine mark to keep the
+   footnote clear on the letter page. */
+@media (min-width: 2000px) {
+  .tpl-menu-sheet__item {
+    padding: 30px 0;
+  }
+  .tpl-menu-sheet__pine {
+    height: 220px;
+  }
+}

@@ -26,6 +26,7 @@ export const menu: MenuSheetData = {
       title: 'CREDIT PACKS',
       note: 'expire 3 months from purchase',
       items: [
+        { name: '1 credit', price: '$25' },
         { name: '2 credits', price: '$45', originalPrice: '$50', note: 'save $5' },
         { name: '4 credits', price: '$85', originalPrice: '$100', note: 'save $15' },
         {
