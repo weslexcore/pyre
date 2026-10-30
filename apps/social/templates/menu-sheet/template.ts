@@ -1,13 +1,19 @@
-import type { MenuCategory, MenuSheetData, MenuSheetItem } from './types.ts';
+import type {
+  MenuCategory,
+  MenuSheetData,
+  MenuSheetFeature,
+  MenuSheetItem,
+  MenuSheetOffer,
+} from './types.ts';
 
 export function renderMenuSheet(data: MenuSheetData, root: HTMLElement): void {
-  const children: HTMLElement[] = [
-    buildHeader(data.eyebrow, data.heading),
-    buildCategories(data.categories),
-  ];
+  const children: HTMLElement[] = [buildHeader(data.eyebrow, data.heading)];
+  if (data.feature) children.push(buildFeature(data.feature));
+  children.push(buildCategories(data.categories));
   if (data.footnote) children.push(buildFootnote(data.footnote));
   children.push(buildPineMark());
 
+  root.classList.toggle('tpl-menu-sheet--featured', Boolean(data.feature));
   root.replaceChildren(...children);
 }
 
@@ -42,12 +48,85 @@ function buildCategory(category: MenuCategory): HTMLElement {
   title.className = 'tpl-menu-sheet__category-title';
   title.textContent = category.title;
 
+  section.append(title);
+
+  if (category.note) {
+    const note = document.createElement('p');
+    note.className = 'tpl-menu-sheet__category-note';
+    note.textContent = category.note;
+    section.append(note);
+  }
+
   const list = document.createElement('ul');
   list.className = 'tpl-menu-sheet__items';
   for (const item of category.items) list.append(buildItem(item));
 
-  section.append(title, list);
+  section.append(list);
   return section;
+}
+
+/* Dark full-width spotlight: label, name + price, a two-column perk list, and an
+   optional nested offer callout. */
+function buildFeature(feature: MenuSheetFeature): HTMLElement {
+  const section = document.createElement('section');
+  section.className = 'tpl-menu-sheet__feature';
+
+  const label = document.createElement('span');
+  label.className = 'tpl-menu-sheet__feature-label';
+  label.textContent = feature.label;
+
+  const row = document.createElement('div');
+  row.className = 'tpl-menu-sheet__feature-row';
+  const name = document.createElement('h2');
+  name.className = 'tpl-menu-sheet__feature-name';
+  name.textContent = feature.name;
+  const price = document.createElement('span');
+  price.className = 'tpl-menu-sheet__feature-price';
+  price.textContent = feature.price;
+  row.append(name, price);
+
+  const perks = document.createElement('ul');
+  perks.className = 'tpl-menu-sheet__perks';
+  for (const perk of feature.perks) {
+    const li = document.createElement('li');
+    li.className = 'tpl-menu-sheet__perk';
+    li.textContent = perk;
+    perks.append(li);
+  }
+
+  section.append(label, row, perks);
+  if (feature.offer) section.append(buildOffer(feature.offer));
+  return section;
+}
+
+function buildOffer(offer: MenuSheetOffer): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'tpl-menu-sheet__offer';
+
+  const label = document.createElement('span');
+  label.className = 'tpl-menu-sheet__offer-label';
+  label.textContent = offer.label;
+
+  const row = document.createElement('div');
+  row.className = 'tpl-menu-sheet__offer-row';
+  const name = document.createElement('span');
+  name.className = 'tpl-menu-sheet__offer-name';
+  name.textContent = offer.name;
+  const price = document.createElement('span');
+  price.className = 'tpl-menu-sheet__offer-price';
+  price.textContent = offer.price;
+  row.append(name, price);
+
+  box.append(label, row);
+
+  if (offer.description) {
+    const p = document.createElement('p');
+    p.className = 'tpl-menu-sheet__offer-description';
+    p.textContent = offer.description;
+    box.append(p);
+  }
+
+  return box;
 }
 
 function buildItem(item: MenuSheetItem): HTMLElement {

@@ -27,7 +27,7 @@ When showing the address in a post, lead with the street address. "Westover Hill
 Currently operating **pre-opening and soft-open sessions**. **Grand Opening is Fall 2026.** For posts about memberships or pricing, the relevant nuance:
 
 - Founding members are charged today but **monthly billing pauses until Grand Opening**.
-- Founding Unlimited is **capped at 30 memberships**, **$199/mo for life** (normally $249).
+- **Founding Unlimited** ($199/mo) is the one membership, and the focal point of all pricing copy. See Pricing below.
 
 ## What people do here
 
@@ -44,17 +44,37 @@ Also available:
 - **Private Group Experiences** — up to 30 guests, on-site. Birthdays, bachelor/bachelorette, corporate, celebrations. Contact `groups@pyresauna.com`.
 - **Private Rentals** — mobile sauna + cold plunge units delivered to the customer for 24 hours. One unit (6–12 people) $650, two units (12+) $1,200. Contact `rentals@pyresauna.com`.
 
-## Pricing (credits)
+## Pricing
 
-| Pack | Credits | Price | Note |
+Lead with the membership and the intro offer. Credit packs and subscriptions are the secondary options.
+
+**Founding Unlimited: $199/mo**
+
+- Unlimited credits
+- 4 guest passes
+- 15% off drinks, merch and private rentals
+- 15% off partner businesses
+- Access to members-only events, chat and merch
+- Pause up to 3 months in a 12 month period
+
+**Intro offer: 2 weeks of Founding Unlimited for $50.** Anyone who becomes a member during their intro 2 weeks gets $50 off their first month.
+
+**Credit packs** (expire 3 months from purchase)
+
+| Credits | Price | Note |
+| --- | --- | --- |
+| 2 | $45 | Saves $5 |
+| 4 | $85 | Saves $15 |
+| 8 | $165 | $20.62 a session, saves $35 |
+
+**Subscriptions** (renew monthly)
+
+| Name | Credits/mo | Price | Note |
 | --- | --- | --- | --- |
-| Intro: Buy 1, Get 1 Free | 2 | $39 | First-time guests only, non-transferrable |
-| Single | 1 | $39 | Drop-in |
-| Duo | 2 | $72 | Saves $6 |
-| Circle | 4 | $129 | Saves $27 |
-| Ritual | 8 | $229 | Saves $83 — best value |
+| Circle | 4 | $75/mo | Saves $25 |
+| Ritual | 8 | $140/mo | Saves $60 |
 
-Credits work for Open Hours, Guided Sessions, and most Special Events. They're shareable with friends and family (intro pack excepted).
+Credits work for Open Hours, Guided Sessions, and most Special Events. Credit packs and subscriptions can all be shared with friends and family.
 
 ## Facility specs
 

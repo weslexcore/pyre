@@ -70,6 +70,14 @@ data file.
    `MenuItem` / `MenuFooter` are re-exported from the [`menu`](../menu/types.ts) template;
    `MenuSheetItem` is `MenuItem` plus `note`.
 
+   A category can carry a `note` (muted terms under its title, e.g. "expire 3 months from
+   purchase") so per-item notes don't repeat it.
+
+   A sheet-level `feature` renders a dark full-width spotlight panel between the header and the
+   categories: `label`, `name`, `price`, a two-column `perks` list, and an optional nested `offer`
+   (`label`, `name`, `price`, `description`) in red. Use it for the one item the sheet sells
+   hardest (see `posts/menu-credits-sheet/`).
+
    A sheet-level `footnote` renders full-width, centered, between the categories and the pine
    mark — use it for terms that apply to every item rather than repeating them per row.
 
@@ -83,6 +91,10 @@ data file.
 | `.tpl-menu-sheet__eyebrow` | Small uppercase label above the heading | `eyebrow` |
 | `.tpl-menu-sheet__heading` | Section title ("Drinks") | `heading` |
 | `.tpl-menu-sheet__category-title` | Category name ("Electrolytes") | `categories[].title` |
+| `.tpl-menu-sheet__category-note` | Muted terms under the category title (optional) | `categories[].note` |
+| `.tpl-menu-sheet__feature` | Dark spotlight panel above the categories (optional) | `feature` |
+| `.tpl-menu-sheet__perks` / `.tpl-menu-sheet__perk` | Two-column perk list inside the feature | `feature.perks` |
+| `.tpl-menu-sheet__offer` | Red nested offer callout inside the feature (optional) | `feature.offer` |
 | `.tpl-menu-sheet__name` | Item name | `categories[].items[].name` |
 | `.tpl-menu-sheet__price` | Item price, right-aligned on the name's line | `categories[].items[].price` |
 | `.tpl-menu-sheet__chips` / `.tpl-menu-sheet__chip` | Wrapping list of variants (optional) | `categories[].items[].chips` |
