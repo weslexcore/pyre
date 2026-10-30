@@ -73,7 +73,7 @@ function buildCategory(category: MenuCategory): HTMLElement {
   return section;
 }
 
-/* Dark full-width spotlight: label, name + price, a two-column perk list, and an
+/* Gold-framed blue full-width spotlight: label, name + price, a two-column perk list, and an
    optional nested offer callout. */
 function buildFeature(feature: MenuSheetFeature): HTMLElement {
   const section = document.createElement('section');

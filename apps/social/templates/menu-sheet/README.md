@@ -73,7 +73,7 @@ data file.
    A category can carry a `note` (muted terms under its title, e.g. "expire 3 months from
    purchase") so per-item notes don't repeat it.
 
-   A sheet-level `feature` renders a dark full-width spotlight panel between the header and the
+   A sheet-level `feature` renders a gold-framed blue spotlight panel between the header and the
    categories: `label`, `name`, `price`, a two-column `perks` list, and an optional nested `offer`
    (`label`, `name`, `price`, `description`) in red. Use it for the one item the sheet sells
    hardest (see `posts/menu-credits-sheet/`).
@@ -92,7 +92,7 @@ data file.
 | `.tpl-menu-sheet__heading` | Section title ("Drinks"), optional | `heading` |
 | `.tpl-menu-sheet__category-title` | Category name ("Electrolytes") | `categories[].title` |
 | `.tpl-menu-sheet__category-note` | Muted terms under the category title (optional) | `categories[].note` |
-| `.tpl-menu-sheet__feature` | Dark spotlight panel above the categories (optional) | `feature` |
+| `.tpl-menu-sheet__feature` | Gold-framed blue spotlight panel above the categories (optional) | `feature` |
 | `.tpl-menu-sheet__perks` / `.tpl-menu-sheet__perk` | Two-column perk list inside the feature | `feature.perks` |
 | `.tpl-menu-sheet__offer` | Red nested offer callout inside the feature (optional) | `feature.offer` |
 | `.tpl-menu-sheet__name` | Item name | `categories[].items[].name` |
