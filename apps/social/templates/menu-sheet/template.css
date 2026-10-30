@@ -211,6 +211,27 @@
   color: var(--pyre-gold);
 }
 
+/* Label on the left, optional badge pinned to the top-right corner. */
+.tpl-menu-sheet__feature-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tpl-menu-sheet__feature-badge {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pyre-blue);
+  background: var(--pyre-gold);
+  padding: 9px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .tpl-menu-sheet__feature-row {
   display: flex;
   align-items: baseline;
@@ -376,6 +397,10 @@
   }
   .tpl-menu-sheet__feature-label {
     font-size: 44px;
+  }
+  .tpl-menu-sheet__feature-badge {
+    font-size: 36px;
+    padding: 20px 36px;
   }
   .tpl-menu-sheet__feature-name {
     font-size: 150px;

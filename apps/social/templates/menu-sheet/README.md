@@ -74,7 +74,7 @@ data file.
    purchase") so per-item notes don't repeat it.
 
    A sheet-level `feature` renders a gold-framed blue spotlight panel between the header and the
-   categories: `label`, `name`, `price`, a two-column `perks` list, and an optional nested `offer`
+   categories: `label`, an optional top-right `badge` (e.g. a deadline), `name`, `price`, a two-column `perks` list, and an optional nested `offer`
    (`label`, `name`, `price`, `description`) in red. Use it for the one item the sheet sells
    hardest (see `posts/menu-credits-sheet/`).
 

@@ -79,9 +79,18 @@ function buildFeature(feature: MenuSheetFeature): HTMLElement {
   const section = document.createElement('section');
   section.className = 'tpl-menu-sheet__feature';
 
+  const top = document.createElement('div');
+  top.className = 'tpl-menu-sheet__feature-top';
   const label = document.createElement('span');
   label.className = 'tpl-menu-sheet__feature-label';
   label.textContent = feature.label;
+  top.append(label);
+  if (feature.badge) {
+    const badge = document.createElement('span');
+    badge.className = 'tpl-menu-sheet__feature-badge';
+    badge.textContent = feature.badge;
+    top.append(badge);
+  }
 
   const row = document.createElement('div');
   row.className = 'tpl-menu-sheet__feature-row';
@@ -102,7 +111,7 @@ function buildFeature(feature: MenuSheetFeature): HTMLElement {
     perks.append(li);
   }
 
-  section.append(label, row, perks);
+  section.append(top, row, perks);
   if (feature.offer) section.append(buildOffer(feature.offer));
   return section;
 }

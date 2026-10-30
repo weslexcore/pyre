@@ -26,6 +26,8 @@ export interface MenuSheetOffer {
 /** Full-width spotlight panel between the header and the categories, for the one item the sheet sells hardest. */
 export interface MenuSheetFeature {
   label: string;
+  /** Optional pill in the panel's top-right corner, e.g. an availability deadline. */
+  badge?: string;
   name: string;
   price: string;
   perks: string[];

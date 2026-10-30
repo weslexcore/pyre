@@ -3,6 +3,7 @@ import type { MenuSheetData } from '../../templates/menu-sheet/types.ts';
 export const menu: MenuSheetData = {
   feature: {
     label: 'Founding membership',
+    badge: 'Only through Dec 31',
     name: 'Founding Unlimited',
     price: '$199/mo',
     perks: [
