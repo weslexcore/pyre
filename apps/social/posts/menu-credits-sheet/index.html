@@ -12,14 +12,19 @@
     <script type="module" src="/shared/pages.js"></script>
   </head>
   <body>
+    <!-- Page 1: Founding Unlimited on blue, framed in gold. -->
     <section class="page" data-page="1">
       <section class="tpl-menu-sheet post"></section>
+    </section>
+    <!-- Page 2: same menu, Founding Unlimited on black, framed in gold. -->
+    <section class="page" data-page="2">
+      <section class="tpl-menu-sheet post menu-sheet--black"></section>
     </section>
     <script type="module">
       import { renderMenuSheet } from '/templates/menu-sheet/template.ts';
       import { menu } from './menu.data.ts';
 
-      renderMenuSheet(menu, document.querySelector('.tpl-menu-sheet'));
+      for (const root of document.querySelectorAll('.tpl-menu-sheet')) renderMenuSheet(menu, root);
     </script>
   </body>
 </html>

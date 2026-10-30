@@ -13,3 +13,12 @@
   grid-template-columns: 1fr 1fr;
   align-content: start;
 }
+
+/* Page 2: the Founding Unlimited panel on black instead of blue, still trimmed in gold. */
+.menu-sheet--black .tpl-menu-sheet__feature {
+  background: var(--pyre-black);
+}
+
+.menu-sheet--black .tpl-menu-sheet__feature-badge {
+  color: var(--pyre-black);
+}
