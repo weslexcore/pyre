@@ -1,0 +1,316 @@
+/* Page 3: loud editorial poster on creme. Every selector is scoped under .alt-page-3. */
+.alt-page-3 {
+  --p3-pad: 140px;
+  --p3-rule: 8px solid var(--pyre-black);
+
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 110px var(--p3-pad) 120px;
+  display: flex;
+  flex-direction: column;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+.alt-page-3 * {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Masthead */
+.alt-page-3 .alt-page-3__masthead {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding-bottom: 44px;
+  border-bottom: var(--p3-rule);
+}
+
+.alt-page-3 .alt-page-3__logo {
+  height: 96px;
+  width: auto;
+}
+
+.alt-page-3 .alt-page-3__label {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.alt-page-3 .alt-page-3__badge {
+  margin-left: auto;
+  padding: 18px 36px;
+  background: var(--pyre-black);
+  color: var(--pyre-creme);
+  font-family: var(--font-mono);
+  font-size: 46px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transform: rotate(-2deg);
+}
+
+/* Hero: the name as the image */
+.alt-page-3 .alt-page-3__hero {
+  padding-top: 56px;
+}
+
+.alt-page-3 .alt-page-3__lead {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 230px;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+.alt-page-3 .alt-page-3__word {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 400px;
+  line-height: 0.8;
+  letter-spacing: -0.055em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+  margin-top: 10px;
+  margin-left: -0.04em;
+}
+
+/* Price + perks grid */
+.alt-page-3 .alt-page-3__grid {
+  display: grid;
+  grid-template-columns: 1200px 1fr;
+  gap: 90px;
+  margin-top: 70px;
+  padding-top: 40px;
+  border-top: var(--p3-rule);
+}
+
+.alt-page-3 .alt-page-3__col-label {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+}
+
+.alt-page-3 .alt-page-3__price {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+
+.alt-page-3 .alt-page-3__price-amount {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 480px;
+  line-height: 0.82;
+  letter-spacing: -0.06em;
+}
+
+.alt-page-3 .alt-page-3__price-per {
+  margin-top: 40px;
+  margin-left: 16px;
+  font-family: var(--font-mono);
+  font-size: 96px;
+}
+
+.alt-page-3 .alt-page-3__perks {
+  list-style: none;
+  padding: 0;
+  margin-top: 16px;
+}
+
+.alt-page-3 .alt-page-3__perk {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: baseline;
+  padding: 18px 0;
+  border-bottom: 3px solid var(--pyre-black);
+}
+
+.alt-page-3 .alt-page-3__perk:last-child {
+  border-bottom: none;
+}
+
+.alt-page-3 .alt-page-3__perk-num {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  color: var(--pyre-red);
+}
+
+.alt-page-3 .alt-page-3__perk-text {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  line-height: 1.2;
+}
+
+/* Tear-off ticket */
+.alt-page-3 .alt-page-3__ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 820px 0 1fr;
+  margin-top: 70px;
+  background: var(--pyre-red);
+  color: var(--pyre-creme);
+}
+
+/* Notches punched at the perforation, top and bottom. */
+.alt-page-3 .alt-page-3__perforation {
+  position: relative;
+  border-left: 8px dashed var(--pyre-creme);
+}
+
+.alt-page-3 .alt-page-3__perforation::before,
+.alt-page-3 .alt-page-3__perforation::after {
+  content: "";
+  position: absolute;
+  left: -40px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--pyre-creme);
+}
+
+.alt-page-3 .alt-page-3__perforation::before {
+  top: -36px;
+}
+
+.alt-page-3 .alt-page-3__perforation::after {
+  bottom: -36px;
+}
+
+.alt-page-3 .alt-page-3__stub {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 50px 60px 40px;
+}
+
+.alt-page-3 .alt-page-3__stub-label {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.alt-page-3 .alt-page-3__stub-price {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 380px;
+  line-height: 0.82;
+  letter-spacing: -0.06em;
+}
+
+.alt-page-3 .alt-page-3__ticket-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 36px;
+  padding: 60px 80px;
+}
+
+.alt-page-3 .alt-page-3__ticket-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 150px;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+
+.alt-page-3 .alt-page-3__ticket-desc {
+  font-family: var(--font-sans);
+  font-size: 50px;
+  line-height: 1.25;
+  max-width: 1100px;
+}
+
+/* Fine print: credit packs and subscriptions */
+.alt-page-3 .alt-page-3__fine {
+  margin-top: auto;
+  padding-top: 36px;
+  border-top: var(--p3-rule);
+}
+
+.alt-page-3 .alt-page-3__tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 110px;
+}
+
+.alt-page-3 .alt-page-3__category-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 14px;
+  border-bottom: 3px solid var(--pyre-black);
+}
+
+.alt-page-3 .alt-page-3__category-title {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  letter-spacing: 0.08em;
+}
+
+.alt-page-3 .alt-page-3__category-note {
+  font-family: var(--font-sans);
+  font-size: 32px;
+  color: color-mix(in srgb, var(--pyre-black) 70%, var(--pyre-creme));
+}
+
+.alt-page-3 .alt-page-3__rows {
+  list-style: none;
+  padding: 0;
+}
+
+.alt-page-3 .alt-page-3__row {
+  padding: 14px 0;
+  border-bottom: 2px solid color-mix(in srgb, var(--pyre-black) 30%, var(--pyre-creme));
+}
+
+.alt-page-3 .alt-page-3__row-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 40px;
+}
+
+.alt-page-3 .alt-page-3__row-name {
+  font-family: var(--font-sans);
+}
+
+.alt-page-3 .alt-page-3__row-prices {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  font-family: var(--font-mono);
+}
+
+.alt-page-3 .alt-page-3__row-was {
+  font-size: 32px;
+  color: color-mix(in srgb, var(--pyre-black) 55%, var(--pyre-creme));
+}
+
+.alt-page-3 .alt-page-3__row-note {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 30px;
+  color: var(--pyre-red);
+}
+
+.alt-page-3 .alt-page-3__footnote {
+  margin-top: 30px;
+  font-family: var(--font-mono);
+  font-size: 32px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

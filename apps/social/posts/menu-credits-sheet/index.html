@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="/templates/menu-sheet/template.css" />
     <link rel="stylesheet" href="/shared/pages.css" />
     <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./page-3.css" />
+    <link rel="stylesheet" href="./page-4.css" />
     <script type="module" src="/shared/pages.js"></script>
   </head>
   <body>
@@ -20,11 +22,23 @@
     <section class="page" data-page="2">
       <section class="tpl-menu-sheet post menu-sheet--black"></section>
     </section>
+    <!-- Page 3: alternative design, built by page-3.ts and styled in page-3.css. -->
+    <section class="page" data-page="3">
+      <section class="alt-page-3 post"></section>
+    </section>
+    <!-- Page 4: alternative design, built by page-4.ts and styled in page-4.css. -->
+    <section class="page" data-page="4">
+      <section class="alt-page-4 post"></section>
+    </section>
     <script type="module">
       import { renderMenuSheet } from '/templates/menu-sheet/template.ts';
       import { menu } from './menu.data.ts';
+      import { renderPage3 } from './page-3.ts';
+      import { renderPage4 } from './page-4.ts';
 
       for (const root of document.querySelectorAll('.tpl-menu-sheet')) renderMenuSheet(menu, root);
+      renderPage3(menu, document.querySelector('.alt-page-3'));
+      renderPage4(menu, document.querySelector('.alt-page-4'));
     </script>
   </body>
 </html>

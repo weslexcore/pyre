@@ -1,0 +1,349 @@
+/* Page 4: calm, centered member card on sage. Every selector is scoped under .alt-page-4.
+   Sized for the letter canvas (2550x3300 at 300dpi). */
+.alt-page-4 {
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 240px 240px 140px;
+  background: var(--pyre-sage);
+  color: var(--pyre-black);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+.alt-page-4 * {
+  box-sizing: border-box;
+}
+
+/* ---------- The card ---------- */
+.alt-page-4__stage {
+  position: relative;
+  width: 1540px;
+}
+
+.alt-page-4__card {
+  position: relative;
+  width: 1540px;
+  aspect-ratio: 1.586;
+  border-radius: 64px;
+  padding: 84px 96px 88px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  color: var(--pyre-creme);
+  background:
+    radial-gradient(
+      120% 90% at 18% 0%,
+      color-mix(in srgb, var(--pyre-creme) 9%, transparent),
+      transparent 60%
+    ),
+    var(--pyre-black);
+  transform: rotate(-2.5deg);
+  box-shadow:
+    0 6px 0 color-mix(in srgb, var(--pyre-black) 35%, transparent),
+    0 50px 90px -20px color-mix(in srgb, var(--pyre-black) 55%, transparent),
+    inset 0 0 0 4px color-mix(in srgb, var(--pyre-gold) 45%, transparent);
+}
+
+.alt-page-4__card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.alt-page-4__brand {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.alt-page-4__logo {
+  height: 96px;
+  width: auto;
+  filter: brightness(0) invert(1) sepia(0.15);
+}
+
+.alt-page-4__wordmark {
+  font-family: var(--font-logo);
+  font-size: 104px;
+  line-height: 1;
+}
+
+.alt-page-4__card-label {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pyre-gold);
+  margin: 0 0 28px;
+}
+
+/* A gold "chip" for the card-stock feel. */
+.alt-page-4__chip {
+  width: 170px;
+  height: 128px;
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 32%,
+      color-mix(in srgb, var(--pyre-black) 35%, transparent) 32% 34%,
+      transparent 34% 66%,
+      color-mix(in srgb, var(--pyre-black) 35%, transparent) 66% 68%,
+      transparent 68%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 48%,
+      color-mix(in srgb, var(--pyre-black) 35%, transparent) 48% 52%,
+      transparent 52%
+    ),
+    linear-gradient(
+      135deg,
+      var(--pyre-gold),
+      color-mix(in srgb, var(--pyre-gold) 70%, var(--pyre-creme))
+    );
+}
+
+.alt-page-4__card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.alt-page-4__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 128px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.alt-page-4__price {
+  margin: 28px 0 0;
+  font-family: var(--font-mono);
+  font-size: 92px;
+  line-height: 1;
+  color: var(--pyre-gold);
+}
+
+.alt-page-4__pine {
+  width: 150px;
+  height: 230px;
+  background: url("/shared/textures/single-pine-tree.png") no-repeat center bottom / contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.85;
+}
+
+/* Round gold sticker over the card's top-right corner. */
+.alt-page-4__badge {
+  position: absolute;
+  top: -110px;
+  right: -110px;
+  width: 290px;
+  height: 290px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  text-align: center;
+  background: var(--pyre-gold);
+  color: var(--pyre-black);
+  transform: rotate(10deg);
+  box-shadow:
+    0 20px 40px -12px color-mix(in srgb, var(--pyre-black) 50%, transparent),
+    inset 0 0 0 10px var(--pyre-gold),
+    inset 0 0 0 13px color-mix(in srgb, var(--pyre-black) 70%, transparent);
+}
+
+.alt-page-4__badge-text {
+  font-family: var(--font-mono);
+  font-size: 38px;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Perks: a calm centered list, separated by small creme dots ---------- */
+.alt-page-4__perks {
+  list-style: none;
+  margin: 150px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.alt-page-4__perk {
+  font-size: 54px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.alt-page-4__perk + .alt-page-4__perk::before {
+  content: "";
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 18px auto;
+  border-radius: 50%;
+  background: var(--pyre-creme);
+}
+
+/* ---------- Intro offer tag ---------- */
+.alt-page-4__tag {
+  position: relative;
+  margin: 110px 0 110px;
+  width: 1900px;
+  display: flex;
+  align-items: center;
+  gap: 60px;
+  padding: 56px 80px 56px 150px;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  clip-path: polygon(70px 0, 100% 0, 100% 100%, 70px 100%, 0 50%);
+  transform: rotate(0.8deg);
+  filter: drop-shadow(0 18px 24px color-mix(in srgb, var(--pyre-black) 30%, transparent));
+}
+
+.alt-page-4__tag-hole {
+  position: absolute;
+  left: 78px;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: var(--pyre-sage);
+  box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--pyre-black) 25%, transparent);
+}
+
+.alt-page-4__tag-body {
+  flex: 1;
+  padding-left: 40px;
+  border-left: 4px dashed color-mix(in srgb, var(--pyre-black) 35%, transparent);
+}
+
+.alt-page-4__tag-head {
+  display: flex;
+  align-items: baseline;
+  gap: 36px;
+}
+
+.alt-page-4__tag-label {
+  font-family: var(--font-mono);
+  font-size: 38px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+}
+
+.alt-page-4__tag-name {
+  font-weight: 600;
+  font-size: 68px;
+  line-height: 1.05;
+}
+
+.alt-page-4__tag-desc {
+  margin: 18px 0 0;
+  font-size: 40px;
+  line-height: 1.3;
+}
+
+.alt-page-4__tag-price {
+  font-family: var(--font-mono);
+  font-size: 130px;
+  line-height: 1;
+  color: var(--pyre-red);
+}
+
+/* ---------- Fine print ---------- */
+.alt-page-4__fine {
+  margin-top: auto;
+  width: 2070px;
+  padding-top: 70px;
+  border-top: 4px solid var(--pyre-creme);
+}
+
+.alt-page-4__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 140px;
+}
+
+.alt-page-4__cat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+
+.alt-page-4__cat-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 40px;
+  letter-spacing: 0.1em;
+}
+
+.alt-page-4__cat-note {
+  margin: 0;
+  font-size: 32px;
+  opacity: 0.75;
+}
+
+.alt-page-4__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.alt-page-4__item-row {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  font-size: 40px;
+}
+
+.alt-page-4__item-dots {
+  flex: 1;
+  border-bottom: 3px dotted color-mix(in srgb, var(--pyre-black) 45%, transparent);
+  transform: translateY(-8px);
+}
+
+.alt-page-4__item-prices {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.alt-page-4__item-was {
+  font-size: 32px;
+  opacity: 0.6;
+}
+
+.alt-page-4__item-price {
+  font-family: var(--font-mono);
+}
+
+.alt-page-4__item-note {
+  margin: 4px 0 0;
+  font-size: 30px;
+  opacity: 0.75;
+}
+
+.alt-page-4__footnote {
+  margin: 56px 0 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 32px;
+  letter-spacing: 0.02em;
+}
