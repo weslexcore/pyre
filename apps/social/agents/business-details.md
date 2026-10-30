@@ -48,7 +48,7 @@ Also available:
 
 Lead with the membership and the intro offer. Credit packs and subscriptions are the secondary options.
 
-**Founding Unlimited: $199/mo**
+**Founding Unlimited: $199/mo**, available only through December 31, 2026.
 
 - Unlimited credits
 - 4 guest passes
