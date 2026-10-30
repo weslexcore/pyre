@@ -14,6 +14,11 @@
   align-content: start;
 }
 
+/* Side by side in a grid, so neither category needs the column-flow bottom margin. */
+.tpl-menu-sheet__categories .tpl-menu-sheet__category {
+  margin-bottom: 0;
+}
+
 /* Page 2: the Founding Unlimited panel on black instead of blue, still trimmed in gold. */
 .menu-sheet--black .tpl-menu-sheet__feature {
   background: var(--pyre-black);
@@ -36,8 +41,9 @@
 
 /* Page 2: pine mark on top, then credit packs and subscriptions with their sharing footnote
    right under them, then the Founding Unlimited panel. Rows: pine, categories, footnote,
-   feature (takes the slack, pinned to its bottom). */
-.menu-sheet--black {
+   feature (takes the slack, pinned to its bottom). Two classes so it beats the template's
+   .tpl-menu-sheet--featured.tpl-menu-sheet--headless row layout. */
+.tpl-menu-sheet.menu-sheet--black {
   grid-template-rows: auto auto auto 1fr;
 }
 
@@ -78,5 +84,18 @@
   }
   .menu-sheet--black .tpl-menu-sheet__price {
     font-size: 60px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__item {
+    padding: 46px 0;
+  }
+}
+
+/* Page 2: pull the pine mark up toward the top edge and closer to the tables below it. */
+@media (min-width: 2000px) {
+  .menu-sheet--black {
+    padding-top: 80px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__pine {
+    margin-bottom: -40px;
   }
 }
