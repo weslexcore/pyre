@@ -33,3 +33,18 @@
     height: 220px;
   }
 }
+
+/* Page 2: credit packs and subscriptions first, the Founding Unlimited panel below them.
+   Rows: categories, feature, footnote (takes the slack, pinned to its bottom), pine. */
+.menu-sheet--black {
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.menu-sheet--black .tpl-menu-sheet__categories {
+  order: -1;
+  height: auto;
+}
+
+.menu-sheet--black .tpl-menu-sheet__footnote {
+  align-self: end;
+}
