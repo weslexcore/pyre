@@ -24,7 +24,7 @@ export const menu: MenuSheetData = {
   categories: [
     {
       title: 'CREDIT PACKS',
-      note: 'expire 3 months from purchase',
+      note: 'shareable · expires in 3 months',
       items: [
         { name: '1 credit', price: '$25' },
         { name: '2 credits', price: '$45', originalPrice: '$50', note: 'save $5' },
@@ -39,7 +39,7 @@ export const menu: MenuSheetData = {
     },
     {
       title: 'SUBSCRIPTIONS',
-      note: 'renew monthly',
+      note: 'shareable · expires monthly',
       items: [
         {
           name: 'circle // 4 credits',
@@ -56,5 +56,4 @@ export const menu: MenuSheetData = {
       ],
     },
   ],
-  footnote: 'All credit packs and subscriptions can be shared with friends + family',
 };

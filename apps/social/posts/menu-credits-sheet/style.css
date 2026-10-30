@@ -39,12 +39,11 @@
   }
 }
 
-/* Page 2: pine mark on top, then credit packs and subscriptions with their sharing footnote
-   right under them, then the Founding Unlimited panel. Rows: pine, categories, footnote,
-   feature (takes the slack, pinned to its bottom). Two classes so it beats the template's
-   .tpl-menu-sheet--featured.tpl-menu-sheet--headless row layout. */
+/* Page 2: pine mark on top, then credit packs and subscriptions, then the Founding Unlimited
+   panel. Rows: pine, categories, feature (takes the slack, pinned to its bottom). Two classes
+   so it beats the template's .tpl-menu-sheet--featured.tpl-menu-sheet--headless row layout. */
 .tpl-menu-sheet.menu-sheet--black {
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto 1fr;
 }
 
 .menu-sheet--black .tpl-menu-sheet__pine {
@@ -52,8 +51,7 @@
   align-self: start;
 }
 
-.menu-sheet--black .tpl-menu-sheet__categories,
-.menu-sheet--black .tpl-menu-sheet__footnote {
+.menu-sheet--black .tpl-menu-sheet__categories {
   order: -1;
 }
 
@@ -63,11 +61,6 @@
 
 .menu-sheet--black .tpl-menu-sheet__categories {
   height: auto;
-}
-
-/* Pull the footnote up against the tables it qualifies instead of a full grid gap away. */
-.menu-sheet--black .tpl-menu-sheet__footnote {
-  margin-top: -40px;
 }
 
 /* Page 2: credit packs and subscriptions set a step larger than the template. */

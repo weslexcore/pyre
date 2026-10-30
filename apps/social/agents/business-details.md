@@ -68,14 +68,14 @@ Lead with the membership and the intro offer. Credit packs and subscriptions are
 | 4 | $85 | Saves $15 |
 | 8 | $165 | $20.62 a session, saves $35 |
 
-**Subscriptions** (renew monthly)
+**Subscriptions** (renew monthly, credits expire monthly)
 
 | Name | Credits/mo | Price | Note |
 | --- | --- | --- | --- |
 | Circle | 4 | $75/mo | Saves $25 |
 | Ritual | 8 | $140/mo | Saves $60 |
 
-Credits work for Open Hours, Guided Sessions, and most Special Events. Credit packs and subscriptions can all be shared with friends and family.
+Credits work for Open Hours, Guided Sessions, and most Special Events. Credit packs and subscriptions are shareable with friends and family. Subscription credits expire monthly.
 
 ## Facility specs
 
