@@ -90,13 +90,12 @@
   }
 }
 
-/* Page 2: the PYRE logo (wave mark + wordmark), centered, in place of the pine tree.
+/* Page 2: the PYRE logo (wave mark + wordmark), left aligned, in place of the pine tree.
    Built from the vector mark and the Eckmannpsych logo font so it stays sharp at 300dpi;
    the only PYRE lockup in the repo is a 439px PNG. */
 .menu-sheet--black .tpl-menu-sheet__pine {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.18em;
   height: auto;
   background: none;
