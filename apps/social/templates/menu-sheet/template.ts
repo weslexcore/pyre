@@ -17,19 +17,22 @@ export function renderMenuSheet(data: MenuSheetData, root: HTMLElement): void {
   root.replaceChildren(...children);
 }
 
-function buildHeader(eyebrow: string, heading: string): HTMLElement {
+function buildHeader(eyebrow: string | undefined, heading: string): HTMLElement {
   const header = document.createElement('header');
   header.className = 'tpl-menu-sheet__header';
 
-  const eb = document.createElement('span');
-  eb.className = 'tpl-menu-sheet__eyebrow';
-  eb.textContent = eyebrow;
+  if (eyebrow) {
+    const eb = document.createElement('span');
+    eb.className = 'tpl-menu-sheet__eyebrow';
+    eb.textContent = eyebrow;
+    header.append(eb);
+  }
 
   const h1 = document.createElement('h1');
   h1.className = 'tpl-menu-sheet__heading';
   h1.textContent = heading;
 
-  header.append(eb, h1);
+  header.append(h1);
   return header;
 }
 

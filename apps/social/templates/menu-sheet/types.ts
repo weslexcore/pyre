@@ -33,7 +33,8 @@ export interface MenuSheetFeature {
 }
 
 export interface MenuSheetData {
-  eyebrow: string;
+  /** Optional small label beside the heading. */
+  eyebrow?: string;
   heading: string;
   /** Optional spotlight panel above the categories. */
   feature?: MenuSheetFeature;
