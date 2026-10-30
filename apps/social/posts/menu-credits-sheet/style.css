@@ -34,17 +34,23 @@
   }
 }
 
-/* Page 2: credit packs and subscriptions first, the Founding Unlimited panel below them.
-   Rows: categories, feature, footnote (takes the slack, pinned to its bottom), pine. */
+/* Page 2: credit packs and subscriptions first with their sharing footnote right under them,
+   then the Founding Unlimited panel. Rows: categories, footnote, feature, pine (takes the slack,
+   pinned to its bottom). */
 .menu-sheet--black {
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr;
+}
+
+.menu-sheet--black .tpl-menu-sheet__categories,
+.menu-sheet--black .tpl-menu-sheet__footnote {
+  order: -1;
 }
 
 .menu-sheet--black .tpl-menu-sheet__categories {
-  order: -1;
   height: auto;
 }
 
+/* Pull the footnote up against the tables it qualifies instead of a full grid gap away. */
 .menu-sheet--black .tpl-menu-sheet__footnote {
-  align-self: end;
+  margin-top: -40px;
 }
