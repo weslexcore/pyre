@@ -127,27 +127,15 @@
 }
 
 .alt-page-3 .alt-page-3__perk {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  align-items: baseline;
-  padding: 18px 0;
+  font-family: var(--font-mono);
+  font-size: 54px;
+  line-height: 1.2;
+  padding: 12px 0;
   border-bottom: 3px solid var(--pyre-black);
 }
 
 .alt-page-3 .alt-page-3__perk:last-child {
   border-bottom: none;
-}
-
-.alt-page-3 .alt-page-3__perk-num {
-  font-family: var(--font-mono);
-  font-size: 44px;
-  color: var(--pyre-red);
-}
-
-.alt-page-3 .alt-page-3__perk-text {
-  font-family: var(--font-mono);
-  font-size: 44px;
-  line-height: 1.2;
 }
 
 /* Tear-off ticket */

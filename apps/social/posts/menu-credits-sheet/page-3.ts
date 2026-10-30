@@ -7,7 +7,7 @@ import type {
 } from '../../templates/menu-sheet/types.ts';
 
 /* Page 3: loud editorial poster. Founding Unlimited set as type that spans the page, perks as a
-   numbered mono list beside a giant price, the intro offer as a tear-off ticket, and credit packs
+   mono list beside a giant price, the intro offer as a tear-off ticket, and credit packs
    and subscriptions demoted to a fine-print table at the foot. */
 export function renderPage3(data: MenuSheetData, root: HTMLElement): void {
   const children: HTMLElement[] = [];
@@ -83,15 +83,8 @@ function buildPriceAndPerks(feature: MenuSheetFeature): HTMLElement {
 
   const perksCol = el('div', 'alt-page-3__perks-col');
   perksCol.append(el('p', 'alt-page-3__col-label', 'What it includes'));
-  const list = el('ol', 'alt-page-3__perks');
-  feature.perks.forEach((perk, i) => {
-    const li = el('li', 'alt-page-3__perk');
-    li.append(
-      el('span', 'alt-page-3__perk-num', String(i + 1).padStart(2, '0')),
-      el('span', 'alt-page-3__perk-text', perk)
-    );
-    list.append(li);
-  });
+  const list = el('ul', 'alt-page-3__perks');
+  for (const perk of feature.perks) list.append(el('li', 'alt-page-3__perk', perk));
   perksCol.append(list);
 
   grid.append(priceCol, perksCol);
