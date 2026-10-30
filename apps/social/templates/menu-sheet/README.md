@@ -89,7 +89,7 @@ data file.
 | Class | Purpose | Data field |
 | --- | --- | --- |
 | `.tpl-menu-sheet__eyebrow` | Small uppercase label above the heading (optional) | `eyebrow` |
-| `.tpl-menu-sheet__heading` | Section title ("Drinks") | `heading` |
+| `.tpl-menu-sheet__heading` | Section title ("Drinks"), optional | `heading` |
 | `.tpl-menu-sheet__category-title` | Category name ("Electrolytes") | `categories[].title` |
 | `.tpl-menu-sheet__category-note` | Muted terms under the category title (optional) | `categories[].note` |
 | `.tpl-menu-sheet__feature` | Dark spotlight panel above the categories (optional) | `feature` |

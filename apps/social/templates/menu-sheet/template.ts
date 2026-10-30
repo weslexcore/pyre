@@ -7,17 +7,20 @@ import type {
 } from './types.ts';
 
 export function renderMenuSheet(data: MenuSheetData, root: HTMLElement): void {
-  const children: HTMLElement[] = [buildHeader(data.eyebrow, data.heading)];
+  const hasHeader = Boolean(data.eyebrow || data.heading);
+  const children: HTMLElement[] = [];
+  if (hasHeader) children.push(buildHeader(data.eyebrow, data.heading));
   if (data.feature) children.push(buildFeature(data.feature));
   children.push(buildCategories(data.categories));
   if (data.footnote) children.push(buildFootnote(data.footnote));
   children.push(buildPineMark());
 
   root.classList.toggle('tpl-menu-sheet--featured', Boolean(data.feature));
+  root.classList.toggle('tpl-menu-sheet--headless', !hasHeader);
   root.replaceChildren(...children);
 }
 
-function buildHeader(eyebrow: string | undefined, heading: string): HTMLElement {
+function buildHeader(eyebrow: string | undefined, heading: string | undefined): HTMLElement {
   const header = document.createElement('header');
   header.className = 'tpl-menu-sheet__header';
 
@@ -28,11 +31,13 @@ function buildHeader(eyebrow: string | undefined, heading: string): HTMLElement 
     header.append(eb);
   }
 
-  const h1 = document.createElement('h1');
-  h1.className = 'tpl-menu-sheet__heading';
-  h1.textContent = heading;
+  if (heading) {
+    const h1 = document.createElement('h1');
+    h1.className = 'tpl-menu-sheet__heading';
+    h1.textContent = heading;
+    header.append(h1);
+  }
 
-  header.append(h1);
   return header;
 }
 

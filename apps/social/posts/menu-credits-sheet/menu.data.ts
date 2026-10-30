@@ -1,7 +1,6 @@
 import type { MenuSheetData } from '../../templates/menu-sheet/types.ts';
 
 export const menu: MenuSheetData = {
-  heading: 'PRICING',
   feature: {
     label: 'Founding membership',
     name: 'Founding Unlimited',

@@ -35,7 +35,8 @@ export interface MenuSheetFeature {
 export interface MenuSheetData {
   /** Optional small label beside the heading. */
   eyebrow?: string;
-  heading: string;
+  /** Optional page title. With no eyebrow either, the header is left out entirely. */
+  heading?: string;
   /** Optional spotlight panel above the categories. */
   feature?: MenuSheetFeature;
   categories: MenuCategory[];

@@ -13,34 +13,3 @@
   grid-template-columns: 1fr 1fr;
   align-content: start;
 }
-
-/* The membership panel takes most of the page, so tighten the rest of the sheet
-   to keep packs, subscriptions, footnote and pine mark on one letter page. */
-@media (min-width: 2000px) {
-  .tpl-menu-sheet {
-    gap: 72px;
-    padding: 140px 200px 120px;
-  }
-  .tpl-menu-sheet__header {
-    padding-bottom: 0;
-  }
-  .tpl-menu-sheet__heading {
-    font-size: 180px;
-  }
-  .tpl-menu-sheet__feature {
-    gap: 40px;
-    padding: 90px 110px;
-  }
-  .tpl-menu-sheet__perk {
-    padding: 24px 0;
-  }
-  .tpl-menu-sheet__offer {
-    padding: 52px 64px;
-  }
-  .tpl-menu-sheet__item {
-    padding: 30px 0;
-  }
-  .tpl-menu-sheet__pine {
-    height: 200px;
-  }
-}
