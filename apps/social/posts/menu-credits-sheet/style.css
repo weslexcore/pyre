@@ -39,7 +39,7 @@
   }
 }
 
-/* Page 2: pine mark on top, then credit packs and subscriptions, then the Founding Unlimited
+/* Page 2: logo on top, then credit packs and subscriptions, then the Founding Unlimited
    panel. Rows: pine, categories, feature (takes the slack, pinned to its bottom). Two classes
    so it beats the template's .tpl-menu-sheet--featured.tpl-menu-sheet--headless row layout. */
 .tpl-menu-sheet.menu-sheet--black {
@@ -83,12 +83,35 @@
   }
 }
 
-/* Page 2: pull the pine mark up toward the top edge and closer to the tables below it. */
+/* Page 2: less top padding so the logo sits near the top edge. */
 @media (min-width: 2000px) {
   .menu-sheet--black {
-    padding-top: 80px;
+    padding-top: 100px;
   }
-  .menu-sheet--black .tpl-menu-sheet__pine {
-    margin-bottom: -40px;
-  }
+}
+
+/* Page 2: the PYRE logo (wave mark + wordmark), left aligned, in place of the pine tree.
+   Built from the vector mark and the Eckmannpsych logo font so it stays sharp at 300dpi;
+   the only PYRE lockup in the repo is a 439px PNG. */
+.menu-sheet--black .tpl-menu-sheet__pine {
+  display: flex;
+  align-items: center;
+  gap: 0.18em;
+  height: auto;
+  background: none;
+  font-family: var(--font-logo);
+  font-size: 150px;
+  line-height: 1;
+  color: var(--pyre-black);
+}
+
+.menu-sheet--black .tpl-menu-sheet__pine::before {
+  content: "";
+  width: 0.86em;
+  height: 0.93em;
+  background: url("/shared/logos/pyre_logo.svg") no-repeat center / contain;
+}
+
+.menu-sheet--black .tpl-menu-sheet__pine::after {
+  content: "PYRE";
 }
