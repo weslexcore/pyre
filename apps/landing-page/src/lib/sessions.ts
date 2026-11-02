@@ -74,7 +74,7 @@ const sessions: SessionsContent = {
     },
     {
       id: 'single',
-      name: 'Single // 1 Credit',
+      name: '1 Credit',
       price: SINGLE_CREDIT_PRICE,
       description: 'Drop-in for an hour',
       href: '/events',
