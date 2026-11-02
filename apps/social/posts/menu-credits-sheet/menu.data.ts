@@ -42,13 +42,13 @@ export const menu: MenuSheetData = {
       note: 'shareable · expires monthly',
       items: [
         {
-          name: 'circle // 4 credits',
+          name: '4 credits',
           price: '$75/mo',
           originalPrice: '$100',
           note: 'save $25',
         },
         {
-          name: 'ritual // 8 credits',
+          name: '8 credits',
           price: '$140/mo',
           originalPrice: '$200',
           note: 'save $60',

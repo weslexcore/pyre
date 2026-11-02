@@ -75,7 +75,7 @@ const promoPopups: PromoPopupConfig[] = [
     delayMs: 1500,
   },
   {
-    id: 'intro-offer-email',
+    id: 'intro-unlimited-offer-email',
     enabled: true,
     headline: `New Here? ${introOffer.headline}`,
     body: `Join our mailing list for our intro offer: 2 weeks of unlimited sauna + cold plunge for $${introOffer.price}. Available once per customer.`,
