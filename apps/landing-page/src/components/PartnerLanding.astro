@@ -21,7 +21,8 @@ interface Props {
 const { content } = Astro.props;
 
 const intro = sessions.items.find((item) => item.id === 'intro');
-const packs = sessions.items.filter((item) => item.id !== 'intro');
+// Subscriptions stay off partner pages until partner discounts are confirmed to apply to them.
+const packs = sessions.items.filter((item) => item.id !== 'intro' && !item.subscription);
 
 const price = (amount: number): number => partnerPrice(amount, content.discountPercent);
 
@@ -179,7 +180,7 @@ const packHref = (id: string, href?: string): string =>
           />
         </div>
 
-        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6">
+        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
           {content.recovery.cards.map((card) => (
             <li class="border border-current/20 rounded-lg bg-[var(--pyre-black)]/60 p-5 md:p-6">
               <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-2">
@@ -306,7 +307,7 @@ const packHref = (id: string, href?: string): string =>
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch">
+        <div class={`grid grid-cols-1 gap-6 md:gap-8 items-stretch ${membership.tiers.length > 1 ? 'md:grid-cols-2' : 'max-w-xl mx-auto'}`}>
           {membership.tiers.map((tier) => (
             <div
               class={`relative flex flex-col rounded-lg p-6 md:p-8 ${

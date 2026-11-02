@@ -50,7 +50,7 @@ const faqs: FAQContent = {
     {
       question: 'Can I bring guests?',
       answer:
-        'Yes! You can book for your friends and family when signing up for a session. Check our membership tiers for guest pass options, or book a group session for private events.',
+        'Yes! You can book for your friends and family when signing up for a session. Founding Unlimited members get 4 guest passes a month, intro guests get 1, and you can book a group session for private events.',
     },
   ],
 };

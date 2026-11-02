@@ -21,10 +21,10 @@ export interface BannerConfig {
 }
 
 const banner: BannerConfig = {
-  id: 'founding-membership-30-launch',
+  id: 'founding-unlimited-through-dec-31',
   text: founding.announcement,
   href: founding.unlimited.href,
-  // expiresAt: '2026-04-23T00:00:00-04:00',
+  expiresAt: founding.endsAt,
   enabled: true,
 };
 

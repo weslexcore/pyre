@@ -29,7 +29,7 @@ export interface PromoPopupConfig {
     submitLabel: string;
     successMessage: string;
   };
-  /** Short text shown on the floating tab when popup is dismissed (e.g. "Buy 1, Get 1"). */
+  /** Short text shown on the floating tab when popup is dismissed (e.g. "2 Weeks Unlimited"). */
   promoText?: string;
   /** Optional dismiss link text. */
   dismiss?: {
@@ -78,7 +78,7 @@ const promoPopups: PromoPopupConfig[] = [
     id: 'intro-offer-email',
     enabled: true,
     headline: `New Here? ${introOffer.headline}`,
-    body: 'Sign up for our mailing list to receive an exclusive intro offer. Available once per customer. Credits cannot be shared.',
+    body: `Join our mailing list for our intro offer: 2 weeks of unlimited sauna + cold plunge for $${introOffer.price}. Available once per customer.`,
     promoText: introOffer.shortLabel,
     form: {
       submitLabel: 'Get Intro Offer',

@@ -1,11 +1,15 @@
+import { introOffer } from './sessions';
 import type { MembershipContent } from './types';
 
 // Founding-membership facts, in one place. Tier features, the site banner,
 // /hi, partner pages and the Rest Fest page all build their wording from
-// these, so a price or cap change is one edit here.
+// these, so a price or deadline change is one edit here.
 
-/** How many of each founding tier exist. */
-export const FOUNDING_CAP = 30;
+/** Last day the founding membership can be bought, for display. */
+export const FOUNDING_DEADLINE = 'Dec 31';
+
+/** End of the founding offer (exclusive), for anything that auto-expires. */
+export const FOUNDING_ENDS_AT = '2027-01-01T00:00:00-05:00';
 
 const UNLIMITED = {
   price: 199,
@@ -13,15 +17,9 @@ const UNLIMITED = {
   href: 'https://momence.com/m/943595',
 };
 
-const LIMITED = {
-  price: 119,
-  monthlyCredits: 8,
-  href: 'https://momence.com/m/633377',
-};
-
 const membership: MembershipContent = {
-  title: 'Memberships',
-  // subtitle: 'Founding Member offer: $199/mo for life (normally $249). Only 30 available.',
+  title: 'Membership',
+  subtitle: `On the intro? Join during your 2 weeks and take $${introOffer.membershipDiscount} off your first month.`,
   note: 'Founding rates are locked in for life. Memberships are not shareable.',
   tiers: [
     {
@@ -32,17 +30,14 @@ const membership: MembershipContent = {
       period: '/month for life',
       description:
         'Unlimited access, locked at the founding rate for life. The deepest way to make Pyre part of your routine.',
-      savings: 200,
       popular: true,
       features: [
-        {
-          text: "Unlimited access - use 12 credits + 4 guest passes and you'll save over $200",
-          highlighted: true,
-        },
-        { text: 'Free bathhouse tote' },
-        { text: '4 guest passes per month ($100+ value)' },
-        { text: '10% off drinks + merch' },
-        { text: `Only ${FOUNDING_CAP} available`, highlighted: true },
+        { text: 'Unlimited monthly credits', highlighted: true },
+        { text: '4 guest passes per month' },
+        { text: '15% off merch, drinks + private rentals' },
+        { text: 'Access to members-only events, chat + merch' },
+        { text: 'Pause up to 3 months in any 12-month period' },
+        { text: `Only available through ${FOUNDING_DEADLINE}`, highlighted: true },
       ],
       cta: {
         label: 'Claim Founding Membership',
@@ -50,40 +45,23 @@ const membership: MembershipContent = {
         ariaLabel: `Claim Founding Unlimited membership — $${UNLIMITED.price} per month for life`,
       },
     },
-    {
-      id: 'founding-limited',
-      name: 'Founding Limited',
-      price: LIMITED.price,
-      period: '/month',
-      description: `${LIMITED.monthlyCredits} credits every month at the founding rate for life. A steady rhythm without the unlimited commitment.`,
-      savings: 81,
-      features: [
-        { text: `${LIMITED.monthlyCredits} credits per month`, highlighted: true },
-        { text: '1 guest pass per month' },
-        { text: '10% off drinks + merch' },
-        { text: `Only ${FOUNDING_CAP} available`, highlighted: true },
-      ],
-      cta: {
-        label: 'Claim Founding Membership',
-        href: LIMITED.href,
-        ariaLabel: `Claim Founding Limited membership — $${LIMITED.price} per month`,
-      },
-    },
   ],
 };
 
-/** Wording shared by every page that pitches founding memberships. */
+/** Wording shared by every page that pitches the founding membership. */
 export const founding = {
-  cap: FOUNDING_CAP,
+  deadline: FOUNDING_DEADLINE,
+  endsAt: FOUNDING_ENDS_AT,
   unlimited: UNLIMITED,
-  limited: LIMITED,
-  /** Lowest monthly price across tiers: "From $119/mo". */
-  fromPrice: Math.min(...membership.tiers.map((tier) => tier.price)),
-  eyebrow: 'Founding Memberships',
-  /** One-line pitch for both tiers, used on partner pages. */
-  pitch: `Founding rates are locked in for life, and only ${FOUNDING_CAP} of each exist. Go unlimited or keep a steady rhythm of ${LIMITED.monthlyCredits} credits a month.`,
-  /** Announcement for the unlimited tier, used by the site banner. */
-  announcement: `Founding Memberships are here — $${UNLIMITED.price}/mo for life (normally $${UNLIMITED.originalPrice}). Only ${FOUNDING_CAP} available.`,
+  /** Monthly price: "$199/mo". */
+  fromPrice: UNLIMITED.price,
+  eyebrow: 'Founding Membership',
+  /** Availability line: "Only available through Dec 31". */
+  availability: `Only available through ${FOUNDING_DEADLINE}`,
+  /** One-line pitch, used on partner pages. */
+  pitch: `Unlimited access at $${UNLIMITED.price}/mo, locked in for life. The founding rate is only available through ${FOUNDING_DEADLINE}.`,
+  /** Announcement used by the site banner. */
+  announcement: `Founding Unlimited Membership — $${UNLIMITED.price}/mo for life (normally $${UNLIMITED.originalPrice}). Only available through ${FOUNDING_DEADLINE}.`,
 };
 
 export default membership;

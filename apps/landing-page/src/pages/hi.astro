@@ -78,7 +78,7 @@ import location, { formatWindow } from '../lib/location';
             <span class="font-primary-semibold text-4xl text-[var(--pyre-muted-gold)] leading-none">
               ${hi.hero.price}
             </span>
-            <s class="text-sm opacity-60">${hi.hero.originalPrice}</s>
+            {hi.hero.originalPrice && <s class="text-sm opacity-60">${hi.hero.originalPrice}</s>}
             <span class="text-sm opacity-70">{hi.hero.priceNote}</span>
           </div>
           <a

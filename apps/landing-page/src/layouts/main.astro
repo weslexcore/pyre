@@ -12,6 +12,7 @@ import PromoPopup from '../components/PromoPopup.astro';
 import PostHog from '../components/posthog.astro';
 import faqs from '../lib/faqs';
 import location from '../lib/location';
+import membership from '../lib/membership';
 import {
   ORGANIZATION,
   SITE_LOCALE,
@@ -22,6 +23,7 @@ import {
   SOCIAL_IMAGE_WIDTH,
   TWITTER_HANDLE,
 } from '../lib/seo';
+import sessions from '../lib/sessions';
 
 interface Props {
   title?: string;
@@ -242,42 +244,26 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 					'@type': 'OfferCatalog',
 					name: 'Sauna & Wellness Services',
 					itemListElement: [
-						{
+						...sessions.items.map((item) => ({
 							'@type': 'Offer',
 							itemOffered: {
 								'@type': 'Service',
-								name: 'Single Session',
-								description: 'Drop-in sauna and cold plunge visit',
+								name: item.name,
+								description: item.description,
 							},
-						},
-						{
-							'@type': 'Offer',
-							itemOffered: {
-								'@type': 'Service',
-								name: '2-Pack Intro',
-								description: '2 sessions for new guests',
-							},
-						},
-						{
-							'@type': 'Offer',
-							itemOffered: {
-								'@type': 'Service',
-								name: 'Limited Membership',
-								description: '4 sauna and cold plunge sessions per month',
-							},
-							price: '99',
+							price: String(item.price),
 							priceCurrency: 'USD',
-						},
-						{
+						})),
+						...membership.tiers.map((tier) => ({
 							'@type': 'Offer',
 							itemOffered: {
 								'@type': 'Service',
-								name: 'Unlimited Membership',
-								description: 'Unlimited sauna and cold plunge access',
+								name: `${tier.name} Membership`,
+								description: tier.description,
 							},
-							price: '199',
+							price: String(tier.price),
 							priceCurrency: 'USD',
-						},
+						})),
 					],
 				},
 			})} />

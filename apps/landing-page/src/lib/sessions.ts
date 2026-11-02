@@ -5,9 +5,13 @@ export interface SessionItem {
   name: string;
   price: number;
   originalPrice?: number;
+  /** Billing period shown after the price, e.g. "/mo" for subscriptions. */
+  period?: string;
   description: string;
   savings?: number;
   highlighted?: boolean;
+  /** Recurring credit subscription rather than a one-time purchase. */
+  subscription?: boolean;
   href?: string;
 }
 
@@ -19,7 +23,7 @@ export interface SessionsContent {
   cta?: ActionRef;
 }
 
-/** Drop-in price of one credit; the intro offer's value is measured against it. */
+/** Drop-in price of one credit; pack and subscription savings are measured against it. */
 export const SINGLE_CREDIT_PRICE = 25;
 
 /**
@@ -28,26 +32,29 @@ export const SINGLE_CREDIT_PRICE = 25;
  * offer is one edit here.
  */
 export const introOffer = {
-  /** Credits the customer receives. */
-  credits: 2,
-  price: 25,
-  /** Headline form: "Intro // Buy 1, Get 1 Free". */
-  headline: 'Buy 1, Get 1 Free',
+  price: 50,
+  /** Length of the unlimited intro period, in days. */
+  days: 14,
+  /** Dollars off the first month of membership when bought during the intro period. */
+  membershipDiscount: 50,
+  /** Headline form: "Intro // 2 Weeks Unlimited". */
+  headline: '2 Weeks Unlimited',
   /** Shortest form, for tight spots like the promo tab. */
-  shortLabel: 'Buy 1, Get 1',
-  /** Sentence form, written to open a sentence: "Buy 1 credit, get 1 free." */
-  sentence: 'Buy 1 credit, get 1 free',
-  href: 'https://momence.com/m/630918',
+  shortLabel: '2 Weeks Unlimited',
+  /** Sentence form, written to open a sentence: "Get 2 weeks of unlimited sauna + cold plunge for $50." */
+  sentence: 'Get 2 weeks of unlimited sauna + cold plunge for $50',
+  perks: ['Unlimited credits', '1 guest pass', '15% off drinks, merch + private events'],
+  href: 'https://momence.com/m/966626',
 };
 
-/** What the intro credits would cost at the single-credit price. */
-export const introValue = introOffer.credits * SINGLE_CREDIT_PRICE;
+/** Price caption: "for 2 weeks unlimited". */
+export const introPriceNote = 'for 2 weeks unlimited';
 
-/** Price caption: "for 2 credits". */
-export const introPriceNote = `for ${introOffer.credits} credits`;
+/** Membership upsell line for the intro: "Join during your intro and take $50 off your first month." */
+export const introMembershipPerk = `Join the Founding Unlimited membership during your intro and take $${introOffer.membershipDiscount} off your first month.`;
 
-/** A pack's price plus its struck-through value and savings vs. buying singles. */
-const packPricing = (credits: number, price: number) => ({
+/** A price plus its struck-through value and savings vs. buying single credits. */
+const creditPricing = (credits: number, price: number) => ({
   price,
   originalPrice: credits * SINGLE_CREDIT_PRICE,
   savings: credits * SINGLE_CREDIT_PRICE - price,
@@ -55,15 +62,13 @@ const packPricing = (credits: number, price: number) => ({
 
 const sessions: SessionsContent = {
   title: 'Credits',
-  note: 'All credits can be shared with friends & family!',
+  note: 'All credits can be shared with friends & family! Pack credits expire 3 months after purchase. Subscription credits renew monthly and expire at the end of each month.',
   items: [
     {
       id: 'intro',
       name: `Intro // ${introOffer.headline}`,
       price: introOffer.price,
-      originalPrice: introValue,
-      description: `New here? Start with ${introOffer.credits} credits and see how it feels. Available once per customer.`,
-      savings: introValue - introOffer.price,
+      description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks, merch + private events. Join the membership during your intro and get $${introOffer.membershipDiscount} off your first month. Available once per customer.`,
       highlighted: true,
       href: introOffer.href,
     },
@@ -77,24 +82,42 @@ const sessions: SessionsContent = {
     {
       id: 'pack-2',
       name: 'Duo // 2 Credits',
-      ...packPricing(2, 45),
+      ...creditPricing(2, 45),
       description: 'Come for a special event, stay for 2 hours, or come back again.',
       href: 'https://momence.com/m/702636',
     },
     {
       id: 'pack-4',
-      name: 'Circle // 4 Credits',
-      ...packPricing(4, 85),
-      description: 'Build momentum - come back often or bring your circle.',
+      name: 'Quad // 4 Credits',
+      ...creditPricing(4, 85),
+      description: 'Build momentum - come back often or bring a friend.',
       href: 'https://momence.com/m/630915',
     },
     {
       id: 'pack-8',
-      name: 'Ritual // 8 Credits',
-      ...packPricing(8, 165),
-      highlighted: true,
-      description: 'Our best value - designed for consistency, connection, and shared experiences.',
+      name: 'Octet // 8 Credits',
+      ...creditPricing(8, 165),
+      description: 'Stock up - designed for consistency and shared experiences.',
       href: 'https://momence.com/m/630916',
+    },
+    {
+      id: 'sub-4',
+      name: 'Circle Subscription // 4 Credits',
+      ...creditPricing(4, 75),
+      period: '/mo',
+      subscription: true,
+      description: '4 credits every month, charged monthly. Share them with your circle.',
+      href: 'https://momence.com/m/966625',
+    },
+    {
+      id: 'sub-8',
+      name: 'Ritual Subscription // 8 Credits',
+      ...creditPricing(8, 140),
+      period: '/mo',
+      subscription: true,
+      highlighted: true,
+      description: '8 credits every month, charged monthly. Our best value per credit.',
+      href: 'https://momence.com/m/966622',
     },
   ],
 };

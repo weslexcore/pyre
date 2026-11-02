@@ -8,7 +8,7 @@ import giftCards from './gift-cards';
 import location from './location';
 import { founding } from './membership';
 import { withBase } from './paths';
-import { introOffer, introPriceNote, introValue } from './sessions';
+import { introOffer, introPriceNote } from './sessions';
 
 export interface HiLink {
   id: string;
@@ -33,7 +33,7 @@ export interface HiContent {
     title: string;
     subtitle: string;
     price: number;
-    originalPrice: number;
+    originalPrice?: number;
     priceNote: string;
     cta: {
       label: string;
@@ -73,14 +73,13 @@ const hi: HiContent = {
   hero: {
     pillLabel: 'First time?',
     title: `Intro // ${introOffer.headline}`,
-    subtitle: `${introOffer.credits} sauna + cold plunge sessions for $${introOffer.price}.`,
+    subtitle: `Unlimited sauna + cold plunge for 2 weeks, plus ${introOffer.perks.slice(1).join(' and ')}.`,
     price: introOffer.price,
-    originalPrice: introValue,
     priceNote: introPriceNote,
     cta: {
       label: 'Claim Intro Offer',
       href: introOffer.href,
-      ariaLabel: `Claim the intro offer — ${introOffer.sentence.toLowerCase()} for $${introOffer.price}`,
+      ariaLabel: `Claim the intro offer — ${introOffer.sentence.toLowerCase()}`,
     },
   },
   events: {
@@ -98,7 +97,7 @@ const hi: HiContent = {
     {
       id: 'membership',
       label: 'Memberships',
-      sublabel: `From $${founding.fromPrice}/mo — founding rates locked for life`,
+      sublabel: `$${founding.fromPrice}/mo unlimited, locked for life — through ${founding.deadline}`,
       href: withBase('#membership'),
       ariaLabel: 'View Pyre membership options',
     },

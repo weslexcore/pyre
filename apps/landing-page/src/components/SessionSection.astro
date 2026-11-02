@@ -53,7 +53,7 @@ import SectionDivider from './SectionDivider.astro';
               {item.originalPrice && (
                 <span class="text-lg lg:text-base opacity-50 line-through">${item.originalPrice}</span>
               )}
-              <span>${item.price}</span>
+              <span>${item.price}{item.period && <span class="text-base lg:text-sm opacity-70">{item.period}</span>}</span>
             </div>
             {item.href && (
               <a

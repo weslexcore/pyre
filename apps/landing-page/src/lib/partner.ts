@@ -66,7 +66,7 @@ export interface PartnerContent {
     title: string;
     /**
      * Partner-voiced line that follows the generated offer sentence
-     * ("Buy 1 credit, get 1 free, and your BFT discount still applies.").
+     * ("Get 2 weeks of unlimited sauna + cold plunge for $50, and your BFT discount still applies.").
      * Keep offer specifics (counts, prices) out of it; they live in sessions.ts.
      */
     subtitle: string;
