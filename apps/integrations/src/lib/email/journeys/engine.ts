@@ -80,6 +80,7 @@ function isFastMode(): boolean {
 
 /** When a step should run: its anchor + offset, kept inside the send window. */
 function scheduleAt(step: JourneyStep, anchors: AnchorTimes, now: number): string {
+  if (step.sendImmediately) return new Date(now).toISOString();
   const fastMode = isFastMode();
   // Unknown anchor (no intro offer): due now, and the due-time check skips it.
   const due = stepDueAt(step.timing, anchors, { fastMode }) ?? now;
@@ -280,6 +281,9 @@ export async function enrollMember(
     event: 'journey_enrolled',
     properties: { journey: journey.id, cycle },
   });
+  if (inserted && steps[first].sendImmediately) {
+    await runImmediateSteps(journey, (inserted as { id: string }).id, gate);
+  }
   return 'enrolled';
 }
 
@@ -734,6 +738,9 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
 
     try {
       const outcome = await runDueStep(journey, row, { dryRun: ctx.dryRun, gate });
+      if (!ctx.dryRun && (outcome.kind === 'sent' || outcome.kind === 'advanced')) {
+        await runImmediateSteps(journey, row.id, gate);
+      }
       switch (outcome.kind) {
         case 'sent':
           counts.sent += 1;
@@ -789,6 +796,7 @@ async function runDueStep(
     return { kind: 'advanced', reason: 'completed' };
   }
   const step = steps[index];
+  const runNow = immediate || step.sendImmediately;
 
   if (journey.testMode && !gate.isAllowed(row.email)) {
     if (!dryRun) await exitJourney(journey, row, 'not-whitelisted', step.key);
@@ -824,7 +832,7 @@ async function runDueStep(
   const now = Date.now();
   const anchors = anchorsFor(row, await resolveExpiries([step], memberCtx));
 
-  if (step.timing.anchor !== 'previous') {
+  if (!step.sendImmediately && step.timing.anchor !== 'previous') {
     const dueAt = stepDueAt(step.timing, anchors, { fastMode: isFastMode() });
     if (dueAt === null) {
       if (!dryRun) await advance(journey, row, step, memberCtx, 'no-expiry-date');
@@ -859,7 +867,7 @@ async function runDueStep(
   }
 
   // Frequency cap across every journey — nobody gets a pile of marketing at once.
-  const capUntil = immediate
+  const capUntil = runNow
     ? null
     : frequencyCapUntil(await recentMarketingSends(row.email, now), now);
   if (capUntil !== null) {
@@ -930,6 +938,34 @@ async function runDueStep(
   const outcome = result.status === 'sent' ? 'sent' : `${result.status}:${result.reason}`;
   await advance(journey, row, step, memberCtx, outcome);
   return result.status === 'sent' ? { kind: 'sent' } : { kind: 'advanced', reason: outcome };
+}
+
+/**
+ * Run the "send immediately" steps someone is waiting on right now, one after
+ * another, instead of leaving them for the hourly tick. Best-effort: the row
+ * is already due now, so anything that fails here goes out on the next tick.
+ */
+async function runImmediateSteps(
+  journey: JourneyRecord,
+  enrollmentId: string,
+  gate?: EmailGate
+): Promise<void> {
+  // A switched-off journey holds everyone where they are, people added by hand included.
+  if (!journey.enabled) return;
+  const steps = journey.definition.steps;
+  try {
+    const sendGate = gate ?? (await getEmailGate());
+    for (let i = 0; i < steps.length; i += 1) {
+      const row = await loadActiveEnrollment(journey, enrollmentId);
+      if (!row?.current_step_key) return;
+      const index = currentStepIndex(steps, row.current_step_key);
+      if (index === null || !steps[index].sendImmediately) return;
+      const outcome = await runDueStep(journey, row, { dryRun: false, gate: sendGate });
+      if (outcome.kind !== 'sent' && outcome.kind !== 'advanced') return;
+    }
+  } catch (error) {
+    log.warn(`Immediate step failed for ${journey.id} enrollment ${enrollmentId}`, error);
+  }
 }
 
 async function advance(

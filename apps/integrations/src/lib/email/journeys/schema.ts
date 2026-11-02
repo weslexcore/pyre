@@ -314,6 +314,12 @@ export const stepSchema = z.object({
   /** Archived steps are skipped but kept so send history keeps its meaning. */
   archived: z.boolean().default(false),
   timing: timingSchema,
+  /**
+   * Goes out the moment someone reaches this step (at enrollment, or right
+   * after the step above), whatever its timing says: no hourly wait, no
+   * 9am-8pm send window, no frequency cap.
+   */
+  sendImmediately: z.boolean().default(false),
   /** Skip this step (move on without sending) when ANY of these match. */
   skipIf: z.array(conditionSchema).max(10).default([]),
   /** Run just before the email is sent (e.g. tag them for a discount Price Rule). */

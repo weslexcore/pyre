@@ -114,6 +114,7 @@ export function newStep(steps: JourneyStep[]): JourneyStep {
     name: `Email ${steps.length + 1}`,
     archived: false,
     timing: { anchor: steps.length === 0 ? 'trigger' : 'previous', offsetHours: 24 },
+    sendImmediately: false,
     skipIf: [],
     actions: [],
     content: {

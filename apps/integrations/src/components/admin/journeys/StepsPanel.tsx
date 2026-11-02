@@ -43,7 +43,9 @@ const TIPS = {
   name: 'Only staff see this. Name the step after what the email does, e.g. "Prorate offer".',
   key: 'The permanent id of this step. It is part of the send history, so it never changes - even if you rename or move the step.',
   timing:
-    'When this step runs. Count from when they entered (for bookings, when the session ends), from the previous email, or from an expiry date. Emails only go out 9am-8pm Eastern; anything due overnight waits for the morning.',
+    'When this step runs. Count from when they entered (for bookings, when the session ends), from the previous email, or from an expiry date. Emails only go out 9am-8pm Eastern; anything due overnight waits for the morning. "Send immediately" skips all of that.',
+  sendImmediately:
+    'Sends the moment someone reaches this step - when they enter the journey, or right after the step above - at any hour. It skips the 9am-8pm window and the limit on how many marketing emails one person gets, so keep it for emails they expect, like a purchase welcome.',
   skipIf:
     'Checked against live Momence data just before this step. If any is true, this step is skipped for that person and they move on to the next one. Use two steps with opposite conditions to send different emails to different people.',
   actions:
@@ -130,7 +132,9 @@ export function StepsPanel({
                   </span>
                 </span>
                 <span className="mt-1 block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80">
-                  {describeTiming(step.timing, sessionTrigger)}
+                  {step.sendImmediately
+                    ? 'Immediately'
+                    : describeTiming(step.timing, sessionTrigger)}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-white/45">
                   {step.archived
@@ -374,11 +378,30 @@ function StepEditor({
       </div>
 
       <Section number={1} title="When it goes out" aside={<InfoTipInline text={TIPS.timing} />}>
-        <TimingEditor
-          timing={step.timing}
-          onChange={(timing) => onChange({ timing })}
-          sessionTrigger={sessionTrigger}
-        />
+        <div className="flex flex-col gap-3">
+          <label className="flex items-center gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={step.sendImmediately}
+              onChange={(e) => onChange({ sendImmediately: e.target.checked })}
+            />
+            Send immediately
+            <InfoTip label="send immediately" text={TIPS.sendImmediately} />
+          </label>
+          {step.sendImmediately ? (
+            <p className="text-xs leading-relaxed text-white/45">
+              {index === 0
+                ? 'Goes out the moment they enter the journey, at any hour.'
+                : 'Goes out right after the step above, at any hour.'}
+            </p>
+          ) : (
+            <TimingEditor
+              timing={step.timing}
+              onChange={(timing) => onChange({ timing })}
+              sessionTrigger={sessionTrigger}
+            />
+          )}
+        </div>
       </Section>
 
       <Section

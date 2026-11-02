@@ -229,6 +229,7 @@ describe('definition validation', () => {
     const def = definitionSchema.parse(base);
     expect(def.reentry).toEqual({ mode: 'once' });
     expect(def.steps[0].skipIf).toEqual([]);
+    expect(def.steps[0].sendImmediately).toBe(false);
   });
 
   it('rejects duplicate step keys, unknown conditions and session conditions without a booking trigger', () => {

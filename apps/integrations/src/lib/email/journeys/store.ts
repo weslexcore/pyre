@@ -293,7 +293,8 @@ export async function saveJourney(
           return (
             before &&
             (before.timing.anchor !== step.timing.anchor ||
-              before.timing.offsetHours !== step.timing.offsetHours)
+              before.timing.offsetHours !== step.timing.offsetHours ||
+              before.sendImmediately !== step.sendImmediately)
           );
         })
         .map((s) => s.key)
