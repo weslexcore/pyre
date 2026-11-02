@@ -25,6 +25,7 @@ import {
   fetchPaymentTransaction,
   getIntroOfferMembershipIds,
   type HostPaymentTransaction,
+  invalidateMemberPacks,
   type SaleMember,
 } from '@/lib/momence/host-api';
 import { fetchMomenceMember } from '@/lib/momence/members';
@@ -160,6 +161,12 @@ export async function handlePaymentTransaction(
       allCaptured = false;
       continue;
     }
+
+    // Journey conditions read packs through a 20h cache; drop it so the next
+    // sweep sees this purchase (a new intro or membership) right away.
+    await invalidateMemberPacks(target.id).catch((error) =>
+      log.warn(`Could not clear cached packs for member ${target.id}`, error)
+    );
 
     const recipient = await resolveRecipient(tx, target, tracer);
     if (!recipient) {

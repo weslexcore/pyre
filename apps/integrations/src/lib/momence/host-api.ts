@@ -267,6 +267,12 @@ export async function fetchMemberActivePacks(
   return packs;
 }
 
+/** Drop a member's cached packs so the next read sees a purchase made since. */
+export async function invalidateMemberPacks(memberId: number): Promise<void> {
+  const redis = getRedis();
+  if (redis) await redis.del(`${PACKS_CACHE_PREFIX}${memberId}`);
+}
+
 /**
  * Every bought membership on a member's record, expired and used-up ones
  * included — the purchase history the guest profile shows. Undocumented

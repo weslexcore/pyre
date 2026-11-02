@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchPaymentTransaction = vi.fn();
 const fetchMemberActivePacks = vi.fn();
 const getIntroOfferMembershipIds = vi.fn(() => [630918]);
+const invalidateMemberPacks = vi.fn();
 const fetchMomenceMember = vi.fn();
 const captureEvent = vi.fn();
 const inferPurchaseAttribution = vi.fn();
@@ -20,6 +21,7 @@ vi.mock('@/lib/momence/host-api', () => ({
   fetchPaymentTransaction: (id: number) => fetchPaymentTransaction(id),
   fetchMemberActivePacks: (id: number, opts: unknown) => fetchMemberActivePacks(id, opts),
   getIntroOfferMembershipIds: () => getIntroOfferMembershipIds(),
+  invalidateMemberPacks: (id: number) => invalidateMemberPacks(id),
 }));
 vi.mock('@/lib/momence/members', () => ({
   fetchMomenceMember: (id: string) => fetchMomenceMember(id),
@@ -86,6 +88,7 @@ beforeEach(() => {
   getRedis.mockReturnValue(fakeRedis());
   captureEvent.mockResolvedValue(true);
   inferPurchaseAttribution.mockResolvedValue(null);
+  invalidateMemberPacks.mockResolvedValue(undefined);
   fetchMemberActivePacks.mockResolvedValue([
     { id: 74580257, type: 'subscription', membership: { id: 943595, name: 'Founding' } },
   ]);
@@ -122,6 +125,7 @@ describe('handlePaymentTransaction', () => {
     expect(summary.skipped).toBe('not-a-purchase');
     expect(fetchMomenceMember).not.toHaveBeenCalled();
     expect(fetchMemberActivePacks).not.toHaveBeenCalled();
+    expect(invalidateMemberPacks).not.toHaveBeenCalled();
     expect(captureEvent).not.toHaveBeenCalled();
     expect(getRedis().set).not.toHaveBeenCalled();
   });
@@ -148,6 +152,7 @@ describe('handlePaymentTransaction', () => {
     ]);
     expect(fetchMomenceMember).not.toHaveBeenCalled();
     expect(fetchMemberActivePacks).toHaveBeenCalledWith(22073, { fresh: true });
+    expect(invalidateMemberPacks).toHaveBeenCalledWith(22073);
     expect(inferPurchaseAttribution).toHaveBeenCalledWith(943595);
     expect(captureEvent).toHaveBeenCalledWith(
       expect.objectContaining({
