@@ -244,6 +244,20 @@ describe('definition validation', () => {
     ).toBe(false);
   });
 
+  it('accepts a purchase trigger, defaulting to any kind of purchase', () => {
+    const any = definitionSchema.parse({ ...base, trigger: { type: 'purchased' } });
+    expect(any.trigger).toEqual({ type: 'purchased', kinds: [] });
+    const intro = definitionSchema.parse({
+      ...base,
+      trigger: { type: 'purchased', kinds: ['intro_offer'] },
+    });
+    expect(intro.trigger).toEqual({ type: 'purchased', kinds: ['intro_offer'] });
+    expect(
+      definitionSchema.safeParse({ ...base, trigger: { type: 'purchased', kinds: ['renewal'] } })
+        .success
+    ).toBe(false);
+  });
+
   it('refuses to drop a step people may be waiting on', () => {
     const before = definitionSchema.parse(base);
     const after = definitionSchema.parse({

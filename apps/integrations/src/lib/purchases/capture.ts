@@ -9,7 +9,8 @@
 // line item keyed by the recipient's email so it stitches to the same person
 // as the web signups and bookings. Click→purchase inference fills in the
 // campaign for buyers who never identified on the site, exactly as it does
-// for bookings.
+// for bookings. Each counted line item also fires the journeys' purchase
+// trigger.
 //
 // Idempotent per transaction via a Redis marker set only after every line
 // item was captured — a failed capture leaves the marker unset so a Momence
@@ -29,6 +30,7 @@ import {
   type SaleMember,
 } from '@/lib/momence/host-api';
 import { fetchMomenceMember } from '@/lib/momence/members';
+import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import {
   COUNTED_PURCHASE_KINDS,
   classifyPurchase,
@@ -252,6 +254,28 @@ export async function handlePaymentTransaction(
       captured,
       ...(attribution?.attribution_method && { attributionMethod: attribution.attribution_method }),
     });
+
+    // Best-effort by contract too: dispatchTrigger swallows its own errors.
+    if (COUNTED_PURCHASE_KINDS.has(kind)) {
+      await tracer.span(
+        'Dispatch purchase trigger',
+        () =>
+          dispatchTrigger({
+            type: 'purchase',
+            memberId: target.id,
+            email,
+            firstName: recipient.firstName ?? '',
+            lastName: recipient.lastName ?? '',
+            saleId: sale.id,
+            itemType: item.itemType,
+            itemName: item.itemName,
+            saleItemId: item.saleItemId,
+            unitPrice: item.unitPriceExcludingTaxInCurrency,
+            kind,
+          }),
+        { kind, membershipId: item.saleItemId }
+      );
+    }
   }
 
   if (allCaptured) await markCaptured(transactionId);

@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
   const trigger = record.definition.trigger.type;
   if (trigger !== 'sweep') {
     const response: AudienceResponse = {
-      kind: trigger === 'session-booked' ? 'event' : 'manual',
+      kind: trigger === 'manual' ? 'manual' : 'event',
       scanned: 0,
       totalCandidates: 0,
       inAudience: 0,

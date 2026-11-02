@@ -10,6 +10,8 @@ import { sendJson } from '@/lib/client/api';
 import type { AudienceResponse } from '@/lib/email/journeys/api-types';
 import {
   type JourneyDefinition,
+  PURCHASE_TRIGGER_KIND_LABELS,
+  PURCHASE_TRIGGER_KINDS,
   TRIGGER_TYPES,
   TRIGGERS,
   type Trigger,
@@ -20,7 +22,9 @@ import { ActionList, ConditionList, TagListInput } from './RuleLists';
 
 const TIPS = {
   trigger:
-    'What puts someone into this journey. A booking enrolls them the moment Momence reports it; an audience is checked every hour against your Momence customers; "added by hand" only enrolls people you add on the People tab.',
+    'What puts someone into this journey. A booking or purchase enrolls them the moment Momence reports it; an audience is checked every hour against your Momence customers; "added by hand" only enrolls people you add on the People tab.',
+  purchaseKinds:
+    'Which purchases enroll someone. Leave all unticked for any intro offer, membership or credit pack. Which membership counts as the intro offer is set by MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS.',
   firstBooking:
     "Only a customer's first-ever booking at Pyre enrolls them - use this for welcome and intro-offer journeys.",
   activePurchase:
@@ -100,9 +104,11 @@ export function OverviewPanel({
     const next: Trigger =
       type === 'session-booked'
         ? { type, firstBookingOnly: false }
-        : type === 'sweep'
-          ? { type, withTags: [], withoutTags: [], withActivePurchase: false }
-          : { type };
+        : type === 'purchased'
+          ? { type, kinds: [] }
+          : type === 'sweep'
+            ? { type, withTags: [], withoutTags: [], withActivePurchase: false }
+            : { type };
     set({ trigger: next });
   };
 
@@ -115,7 +121,7 @@ export function OverviewPanel({
       >
         <Field label="Starts when someone" tip={TIPS.trigger}>
           <div
-            className="grid gap-2 sm:grid-cols-3"
+            className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
             role="radiogroup"
             aria-label="Starts when someone"
           >
@@ -156,6 +162,34 @@ export function OverviewPanel({
             Only their first-ever booking
             <InfoTip label="first-ever booking" text={TIPS.firstBooking} />
           </label>
+        )}
+
+        {trigger.type === 'purchased' && (
+          <Field label="Only when they buy" tip={TIPS.purchaseKinds}>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {PURCHASE_TRIGGER_KINDS.map((kind) => (
+                <label key={kind} className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={trigger.kinds.includes(kind)}
+                    onChange={(e) =>
+                      set({
+                        trigger: {
+                          ...trigger,
+                          kinds: e.target.checked
+                            ? PURCHASE_TRIGGER_KINDS.filter(
+                                (k) => k === kind || trigger.kinds.includes(k)
+                              )
+                            : trigger.kinds.filter((k) => k !== kind),
+                        },
+                      })
+                    }
+                  />
+                  {PURCHASE_TRIGGER_KIND_LABELS[kind]}
+                </label>
+              ))}
+            </div>
+          </Field>
         )}
 
         {trigger.type === 'sweep' && (

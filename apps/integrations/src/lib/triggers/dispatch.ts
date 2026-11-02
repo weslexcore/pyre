@@ -1,17 +1,13 @@
 import { createWebhookLogger } from '@pyre/webhook-core';
+import type { PurchaseKind } from '@/lib/purchases/classify';
 
 const log = createWebhookLogger('Triggers');
 
-// Tiny internal event bus. Producer: the Momence webhook route (bookings).
-// The only consumer is the journey engine's event-driven enrollment — kept
-// behind a lazy import so webhook cold starts don't pay for the engine until
-// a trigger actually fires.
-//
-// PurchaseTriggerEvent has no producer right now: purchases are captured for
-// analytics by lib/purchases/capture.ts (payment-transaction-succeeded
-// webhook), which deliberately does not dispatch, so journeys still enroll
-// from the first booking. Wiring it up is a one-line change there once the
-// email behaviour is wanted.
+// Tiny internal event bus. Producers: the Momence webhook route (bookings)
+// and lib/purchases/capture.ts (payment-transaction-succeeded, one event per
+// pack or membership line item). The only consumer is the journey engine's
+// event-driven enrollment — kept behind a lazy import so webhook cold starts
+// don't pay for the engine until a trigger actually fires.
 
 export interface BookingTriggerEvent {
   type: 'session-booked' | 'session-booking-cancelled';
@@ -38,6 +34,7 @@ export interface PurchaseTriggerEvent {
   /** catalog item id — for memberships this is the membership id */
   saleItemId: number;
   unitPrice: string;
+  kind: PurchaseKind;
 }
 
 export type TriggerEvent = BookingTriggerEvent | PurchaseTriggerEvent;

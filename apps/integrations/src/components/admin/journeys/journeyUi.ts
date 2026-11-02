@@ -9,6 +9,7 @@ import {
   type EmailBlockType,
   type JourneyDefinition,
   type JourneyStep,
+  type PurchaseTriggerKind,
   STEP_KEY_RE,
   TRIGGERS,
   type Trigger,
@@ -45,10 +46,20 @@ export const badgeClass = (tone: 'on' | 'off' | 'test' | 'warn') =>
     }[tone]
   }`;
 
+const PURCHASE_KIND_PHRASES: Record<PurchaseTriggerKind, string> = {
+  intro_offer: 'an intro offer',
+  membership: 'a membership',
+  credit_pack: 'a credit pack',
+};
+
 export function describeTrigger(trigger: Trigger): string {
   switch (trigger.type) {
     case 'session-booked':
       return trigger.firstBookingOnly ? 'Books their first session' : 'Books any session';
+    case 'purchased':
+      return trigger.kinds.length
+        ? `Buys ${trigger.kinds.map((k) => PURCHASE_KIND_PHRASES[k]).join(' or ')}`
+        : 'Buys an intro offer, membership or credit pack';
     case 'sweep': {
       const parts: string[] = [];
       if (trigger.inactiveDays && trigger.maxInactiveDays) {
@@ -167,9 +178,11 @@ export function blankDefinition(trigger: Trigger['type']): JourneyDefinition {
   const triggerValue: Trigger =
     trigger === 'session-booked'
       ? { type: 'session-booked', firstBookingOnly: false }
-      : trigger === 'sweep'
-        ? { type: 'sweep', withTags: [], withoutTags: [], withActivePurchase: false }
-        : { type: 'manual' };
+      : trigger === 'purchased'
+        ? { type: 'purchased', kinds: [] }
+        : trigger === 'sweep'
+          ? { type: 'sweep', withTags: [], withoutTags: [], withActivePurchase: false }
+          : { type: 'manual' };
   return {
     description: '',
     trigger: triggerValue,

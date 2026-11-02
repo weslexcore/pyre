@@ -114,14 +114,29 @@ export const CONDITIONS: Record<ConditionType, ConditionMeta> = {
 
 // --- Triggers ---
 
-export const TRIGGER_TYPES = ['session-booked', 'sweep', 'manual'] as const;
+export const TRIGGER_TYPES = ['session-booked', 'purchased', 'sweep', 'manual'] as const;
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
+
+/** What a purchase trigger can be limited to (lib/purchases/classify kinds; renewals never enroll). */
+export const PURCHASE_TRIGGER_KINDS = ['intro_offer', 'membership', 'credit_pack'] as const;
+export type PurchaseTriggerKind = (typeof PURCHASE_TRIGGER_KINDS)[number];
+
+export const PURCHASE_TRIGGER_KIND_LABELS: Record<PurchaseTriggerKind, string> = {
+  intro_offer: 'Intro offer',
+  membership: 'Membership',
+  credit_pack: 'Credit pack',
+};
 
 export const triggerSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('session-booked'),
     /** Only a member's first-ever booking enrolls. */
     firstBookingOnly: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal('purchased'),
+    /** Only these kinds of purchase enroll; empty means any of them. */
+    kinds: z.array(z.enum(PURCHASE_TRIGGER_KINDS)).default([]),
   }),
   z.object({
     type: z.literal('sweep'),
@@ -148,6 +163,11 @@ export const TRIGGERS: Record<TriggerType, { label: string; description: string 
     label: 'Books a session',
     description:
       'Enrolls the moment Momence reports a booking. Steps can be timed from when the session ends.',
+  },
+  purchased: {
+    label: 'Makes a purchase',
+    description:
+      'Enrolls the moment Momence reports a purchase: an intro offer, membership or credit pack. Renewals do not count.',
   },
   sweep: {
     label: 'Matches an audience',

@@ -8,6 +8,7 @@ const fetchPaymentTransaction = vi.fn();
 const fetchMemberActivePacks = vi.fn();
 const getIntroOfferMembershipIds = vi.fn(() => [630918]);
 const invalidateMemberPacks = vi.fn();
+const dispatchTrigger = vi.fn();
 const fetchMomenceMember = vi.fn();
 const captureEvent = vi.fn();
 const inferPurchaseAttribution = vi.fn();
@@ -25,6 +26,9 @@ vi.mock('@/lib/momence/host-api', () => ({
 }));
 vi.mock('@/lib/momence/members', () => ({
   fetchMomenceMember: (id: string) => fetchMomenceMember(id),
+}));
+vi.mock('@/lib/triggers/dispatch', () => ({
+  dispatchTrigger: (event: unknown) => dispatchTrigger(event),
 }));
 vi.mock('@/lib/analytics/posthog', () => ({
   captureEvent: (params: unknown) => captureEvent(params),
@@ -126,6 +130,7 @@ describe('handlePaymentTransaction', () => {
     expect(fetchMomenceMember).not.toHaveBeenCalled();
     expect(fetchMemberActivePacks).not.toHaveBeenCalled();
     expect(invalidateMemberPacks).not.toHaveBeenCalled();
+    expect(dispatchTrigger).not.toHaveBeenCalled();
     expect(captureEvent).not.toHaveBeenCalled();
     expect(getRedis().set).not.toHaveBeenCalled();
   });
@@ -153,6 +158,15 @@ describe('handlePaymentTransaction', () => {
     expect(fetchMomenceMember).not.toHaveBeenCalled();
     expect(fetchMemberActivePacks).toHaveBeenCalledWith(22073, { fresh: true });
     expect(invalidateMemberPacks).toHaveBeenCalledWith(22073);
+    expect(dispatchTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'purchase',
+        kind: 'membership',
+        memberId: 22073,
+        email: 'ada@example.com',
+        saleItemId: 943595,
+      })
+    );
     expect(inferPurchaseAttribution).toHaveBeenCalledWith(943595);
     expect(captureEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -271,7 +285,7 @@ describe('handlePaymentTransaction', () => {
     );
   });
 
-  it('marks a renewal so the report leaves it out, without click inference', async () => {
+  it('marks a renewal so the report leaves it out, without click inference or a journey trigger', async () => {
     fetchPaymentTransaction.mockResolvedValue(
       transaction({ paymentSource: 'scheduled-job-renew-membership' })
     );
@@ -280,6 +294,7 @@ describe('handlePaymentTransaction', () => {
 
     expect(summary.purchases[0]?.kind).toBe('renewal');
     expect(inferPurchaseAttribution).not.toHaveBeenCalled();
+    expect(dispatchTrigger).not.toHaveBeenCalled();
     expect(captureEvent).toHaveBeenCalledWith(
       expect.objectContaining({ properties: expect.objectContaining({ purchase_kind: 'renewal' }) })
     );

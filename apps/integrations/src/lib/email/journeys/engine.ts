@@ -15,7 +15,11 @@ import {
   removeMemberTag,
 } from '@/lib/momence/host-api';
 import { isMemberFirstBooking } from '@/lib/momence/members';
-import type { BookingTriggerEvent, TriggerEvent } from '@/lib/triggers/dispatch';
+import type {
+  BookingTriggerEvent,
+  PurchaseTriggerEvent,
+  TriggerEvent,
+} from '@/lib/triggers/dispatch';
 import {
   allMatch,
   buildContext,
@@ -33,6 +37,8 @@ import {
   type JourneyRecord,
   type JourneyStep,
   journeyCampaign,
+  PURCHASE_TRIGGER_KINDS,
+  type PurchaseTriggerKind,
   type Trigger,
 } from './schema';
 import { loadJourneys } from './store';
@@ -51,7 +57,7 @@ const log = createWebhookLogger('Journeys');
 
 // The journey engine. Journeys are rows in the journeys table (built in
 // /admin/journeys, loaded through ./store). Three entry points:
-//   enrollFromEvent()      — called by the trigger bus (Momence booking webhook)
+//   enrollFromEvent()      — called by the trigger bus (Momence booking and purchase webhooks)
 //   runEnrollmentSweeps()  — hourly cron job finding audience-journey matches
 //   advanceDueJourneys()   — hourly cron job running due steps
 // Enrollment rows in journey_enrollments remember WHERE someone is (journey,
@@ -316,6 +322,7 @@ function bookingContext(event: BookingTriggerEvent): EnrollmentContext {
 }
 
 export async function enrollFromEvent(event: TriggerEvent): Promise<void> {
+  if (event.type === 'purchase') return enrollFromPurchase(event);
   if (event.type !== 'session-booked') return;
 
   const journeys = (await loadJourneys()).filter(
@@ -342,6 +349,39 @@ export async function enrollFromEvent(event: TriggerEvent): Promise<void> {
       await enrollMember(journey, event, { anchorAt, context, ctx, gate });
     } catch (error) {
       log.warn(`Event enrollment check failed for ${journey.id}`, error);
+    }
+  }
+}
+
+function isPurchaseTriggerKind(kind: string): kind is PurchaseTriggerKind {
+  return (PURCHASE_TRIGGER_KINDS as readonly string[]).includes(kind);
+}
+
+async function enrollFromPurchase(event: PurchaseTriggerEvent): Promise<void> {
+  const { kind } = event;
+  if (!isPurchaseTriggerKind(kind)) return;
+
+  const journeys = (await loadJourneys()).filter((j) => {
+    const trigger = j.definition.trigger;
+    return (
+      j.enabled &&
+      trigger.type === 'purchased' &&
+      (trigger.kinds.length === 0 || trigger.kinds.includes(kind))
+    );
+  });
+  if (journeys.length === 0) return;
+
+  const gate = await getEmailGate();
+  // Packs fresh: the purchase is seconds old, and enrollIf usually asks about it.
+  const ctx = buildContext(event, { freshPacks: true });
+
+  for (const journey of journeys) {
+    try {
+      if (journey.testMode && !gate.isAllowed(event.email)) continue;
+      if (!(await allMatch(ctx, journey.definition.enrollIf))) continue;
+      await enrollMember(journey, event, { ctx, gate });
+    } catch (error) {
+      log.warn(`Purchase enrollment check failed for ${journey.id}`, error);
     }
   }
 }
