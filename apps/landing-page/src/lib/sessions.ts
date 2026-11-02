@@ -55,7 +55,7 @@ export const introOffer = {
   shortLabel: '2 Weeks Unlimited',
   /** Sentence form, written to open a sentence: "Get 2 weeks of unlimited sauna + cold plunge for $50." */
   sentence: 'Get 2 weeks of unlimited sauna + cold plunge for $50',
-  perks: ['Unlimited credits', '1 guest pass', '15% off drinks, merch + private events'],
+  perks: ['Unlimited credits', '1 guest pass', '15% off drinks + merch'],
   href: 'https://momence.com/m/966626',
 };
 
@@ -83,7 +83,7 @@ const sessions: SessionsContent = {
       id: 'intro',
       name: `Intro // ${introOffer.headline}`,
       price: introOffer.price,
-      description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks, merch + private events. Join the membership during your intro and get $${introOffer.membershipDiscount} off your first month. Available once per customer.`,
+      description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks, merch + private events. Available once per customer.`,
       highlighted: true,
       href: introOffer.href,
     },
@@ -110,7 +110,7 @@ const sessions: SessionsContent = {
       caption: PACK_CAPTION,
       href: 'https://momence.com/m/630915',
       subscription: {
-        name: 'Circle Subscription',
+        name: 'Subscription',
         ...creditPricing(4, 75),
         period: '/mo',
         caption: SUBSCRIPTION_CAPTION,
@@ -125,7 +125,7 @@ const sessions: SessionsContent = {
       caption: PACK_CAPTION,
       href: 'https://momence.com/m/630916',
       subscription: {
-        name: 'Ritual Subscription',
+        name: 'Subscription',
         ...creditPricing(8, 140),
         period: '/mo',
         caption: SUBSCRIPTION_CAPTION,

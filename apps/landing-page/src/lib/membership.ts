@@ -19,7 +19,7 @@ const UNLIMITED = {
 
 const membership: MembershipContent = {
   title: 'Membership',
-  subtitle: `On the intro? Join during your 2 weeks and take $${introOffer.membershipDiscount} off your first month.`,
+  subtitle: `Interested in becoming a member? Join a community of people who are putting their health and connection first`,
   note: 'Founding rates are locked in for life. Memberships are not shareable.',
   tiers: [
     {
@@ -34,8 +34,8 @@ const membership: MembershipContent = {
       features: [
         { text: 'Unlimited monthly credits', highlighted: true },
         { text: '4 guest passes per month' },
-        { text: '15% off merch, drinks + private rentals' },
-        { text: 'Access to members-only events, chat + merch' },
+        { text: '15% off merch + drinks + private rentals' },
+        { text: 'Access to members-only events + merch + members-only WhatsApp group' },
         { text: 'Pause up to 3 months in any 12-month period' },
         { text: `Only available through ${FOUNDING_DEADLINE}`, highlighted: true },
       ],
