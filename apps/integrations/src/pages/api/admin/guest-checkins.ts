@@ -6,7 +6,9 @@
 //                                                  the configured check-ins
 //                                                  (floor.checkpoints) and
 //                                                  session lengths
-//                                                  (floor.sessionLengths)
+//                                                  (floor.sessionLengths),
+//                                                  and what each guest is on
+//                                                  (lib/guests/floor-members.ts)
 //   POST   { sessionId, bookingId }              — check in now: Momence's
 //                                                  check-in, plus the time
 //   PATCH  { sessionId, bookingId, checkedInAt?,
@@ -29,6 +31,7 @@ import { requirePage } from '@/lib/auth/admin';
 import type { GuestFloorCheckinRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { findFloorBooking, loadFloor } from '@/lib/guests/floor';
+import { loadFloorMembers } from '@/lib/guests/floor-members';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { beginDelete, beginMutation, dbError, json } from '@/lib/http/route';
 import { bookingMember, setSessionBookingCheckIn } from '@/lib/momence/host-api';
@@ -66,11 +69,13 @@ export const GET: APIRoute = async ({ cookies }) => {
   ]);
   try {
     const floor = await loadFloor(db, now);
+    const members = await loadFloorMembers(floor.guests, now);
     return json({
       available: true,
       now: new Date(now).toISOString(),
       checkpoints,
       sessionLengths,
+      members,
       ...floor,
     });
   } catch (e) {
@@ -80,6 +85,7 @@ export const GET: APIRoute = async ({ cookies }) => {
       now: new Date(now).toISOString(),
       checkpoints,
       sessionLengths,
+      members: {},
       sessions: [],
       guests: [],
       complete: false,

@@ -12,8 +12,13 @@
 // off the list (Momence has no check-out; it's ours alone) and into Checked
 // out at the bottom, with an undo.
 //
+// Each guest also shows what they're on (lib/guests/plan.ts): credits left,
+// their membership, how far into the intro offer they are, and a First visit
+// badge for newcomers. Unlimited members are picked out in gold with a star.
+//
 // The list refetches every half minute; the bars re-run the timing locally
-// every few seconds in between.
+// every few seconds in between. Check out (and its undo) moves the guest at
+// once and saves behind it, putting them back if the save fails.
 
 import { easternToUtc, todayEastern, utcToEastern } from '@pyre/schedule-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -36,13 +41,16 @@ import {
   MINUTE_MS,
   onFloor,
 } from '@/lib/guests/floor-timing';
-import { QuietBadge } from './guestUi';
+import type { FloorMember, GuestPlan } from '@/lib/guests/plan';
+import { FirstVisitBadge, QuietBadge } from './guestUi';
 
 interface FloorResponse {
   available: boolean;
   now: string;
   checkpoints: Checkpoint[];
   sessionLengths: number[];
+  /** What each guest is on, by member id; a guest not looked up yet is missing. */
+  members: Record<string, FloorMember>;
   sessions: FloorSession[];
   guests: FloorGuest[];
   complete: boolean;
@@ -79,6 +87,139 @@ function wallClock(iso: string): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+const badgeBase =
+  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide';
+const goldBadge = `${badgeBase} border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`;
+const sageBadge = `${badgeBase} border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]`;
+const redBadge = `${badgeBase} border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]`;
+const quietBadge = `${badgeBase} border-white/10 bg-white/5 text-white/50`;
+
+function StarIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9z" />
+    </svg>
+  );
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/** "3 credits left", "2 of 4 credits left", "$40 left", or null. */
+function creditsLabel(plan: GuestPlan): string | null {
+  if (plan.creditsLeft !== null) {
+    return plan.kind === 'membership' && plan.creditsTotal
+      ? `${plan.creditsLeft} of ${plural(plan.creditsTotal, 'credit')} left`
+      : `${plural(plan.creditsLeft, 'credit')} left`;
+  }
+  if (plan.moneyLeft !== null) return `$${plan.moneyLeft} left`;
+  return null;
+}
+
+/** "Day 5 of 14", "9 days left", or "Starts today". */
+function introLabel(plan: GuestPlan): string {
+  const intro = plan.intro;
+  if (intro?.day && intro.days) return `Day ${intro.day} of ${intro.days}`;
+  if (intro?.daysLeft !== null && intro?.daysLeft !== undefined) {
+    return `${plural(intro.daysLeft, 'day')} left`;
+  }
+  return 'Starts today';
+}
+
+/** What a guest is on, as one or two badges (and the intro's progress). */
+function PlanBadges({ plan }: { plan: GuestPlan }) {
+  const credits = creditsLabel(plan);
+  const frozen = plan.frozen ? ' · frozen' : '';
+  switch (plan.kind) {
+    case 'unlimited':
+      return (
+        <span className={goldBadge}>
+          <StarIcon className="h-3 w-3" />
+          {plan.name ?? 'Unlimited'}
+          {frozen}
+        </span>
+      );
+    case 'intro': {
+      const intro = plan.intro;
+      const share = intro?.day && intro.days ? Math.min(1, intro.day / intro.days) : null;
+      return (
+        <span className={sageBadge} title={plan.name ?? undefined}>
+          Intro · {introLabel(plan)}
+          {share !== null && (
+            <span
+              className="relative ml-1 inline-block h-1 w-10 overflow-hidden rounded-full bg-white/15"
+              role="progressbar"
+              aria-label="Intro offer"
+              aria-valuemin={0}
+              aria-valuemax={intro?.days ?? 0}
+              aria-valuenow={intro?.day ?? 0}
+            >
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-[var(--pyre-sage)]"
+                style={{ width: `${share * 100}%` }}
+              />
+            </span>
+          )}
+        </span>
+      );
+    }
+    case 'membership':
+      return (
+        <span className={sageBadge}>
+          {plan.name ?? 'Member'}
+          {credits ? ` · ${credits}` : ''}
+          {frozen}
+        </span>
+      );
+    case 'credits':
+      return (
+        <span
+          className={plan.creditsLeft === 0 && !plan.moneyLeft ? redBadge : sageBadge}
+          title={plan.name ?? undefined}
+        >
+          {credits ?? plan.name ?? 'Pack'}
+        </span>
+      );
+    default:
+      return <span className={quietBadge}>No credits</span>;
+  }
+}
+
+/** A guest's name, seats, plan and first-visit badge; gold with a star when unlimited. */
+function GuestName({
+  guest,
+  member,
+  className,
+}: {
+  guest: FloorGuest;
+  member: FloorMember | undefined;
+  className: string;
+}) {
+  const unlimited = member?.plan.kind === 'unlimited';
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span
+        className={`inline-flex items-center gap-1 ${className} ${unlimited ? 'text-[var(--pyre-gold)]' : ''}`}
+      >
+        {unlimited && <StarIcon className="h-4 w-4" />}
+        {guest.name}
+        {unlimited && <span className="sr-only"> (unlimited member)</span>}
+      </span>
+      {guest.seats > 1 && <QuietBadge>×{guest.seats}</QuietBadge>}
+      {member?.firstVisit && <FirstVisitBadge />}
+      {member && <PlanBadges plan={member.plan} />}
+    </span>
+  );
+}
+
+/** Gold edge and wash for an unlimited member's card or row. */
+function unlimitedClass(member: FloorMember | undefined): string {
+  return member?.plan.kind === 'unlimited'
+    ? 'border-[var(--pyre-gold)]/70 bg-[var(--pyre-gold)]/[0.06]'
+    : '';
+}
+
 function useNow(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -94,8 +235,11 @@ export function GuestCheckIns() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'warn' } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  // Check-outs (and undos) shown before the server has them, by booking id:
+  // the time they left, or null for an undo.
+  const [leaving, setLeaving] = useState<Record<string, string | null>>({});
 
-  const { reload } = floor;
+  const { reload, setData } = floor;
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') void reload();
@@ -108,7 +252,11 @@ export function GuestCheckIns() {
     [floor.data]
   );
 
-  const guests = floor.data?.guests ?? [];
+  const members = floor.data?.members ?? {};
+  const memberOf = (guest: FloorGuest) => (guest.memberId ? members[guest.memberId] : undefined);
+  const guests = (floor.data?.guests ?? []).map((g) =>
+    g.bookingId in leaving ? { ...g, checkedOutAt: leaving[g.bookingId] } : g
+  );
   const checkpoints = floor.data?.checkpoints ?? [];
   const sessionLengths = floor.data?.sessionLengths ?? [];
   const inside = guests
@@ -169,6 +317,55 @@ export function GuestCheckIns() {
         ...changes,
       })
     );
+
+  /**
+   * Check a guest out (or undo it) at once, then save. The saved row goes
+   * straight into the floor data, so the guest stays put without waiting on
+   * a full refetch; a failed save puts them back where they were.
+   */
+  async function setCheckedOut(guest: FloorGuest, out: boolean) {
+    const key = guest.bookingId;
+    setEditing(null);
+    setNotice(null);
+    setLeaving((current) => ({ ...current, [key]: out ? new Date().toISOString() : null }));
+    try {
+      const { checkin } = await sendJson<{ checkin: { checked_out_at: string | null } }>(
+        FLOOR_URL,
+        'PATCH',
+        {
+          ...ids(guest),
+          ...(guest.estimated && { checkedInAt: guest.checkedInAt }),
+          checkedOut: out,
+        }
+      );
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              guests: prev.guests.map((g) =>
+                g.bookingId === key
+                  ? { ...g, checkedOutAt: checkin.checked_out_at, estimated: false }
+                  : g
+              ),
+            }
+          : prev
+      );
+      void reload();
+    } catch (e) {
+      setNotice({
+        tone: 'error',
+        text: `${out ? 'Check-out' : 'Undo'} for ${guest.name} didn't save: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      });
+    } finally {
+      setLeaving((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+  }
 
   const undo = (guest: FloorGuest) => {
     if (!window.confirm(`Undo ${guest.name}'s check-in? This also un-checks them in Momence.`)) {
@@ -234,16 +431,18 @@ export function GuestCheckIns() {
           {inside.map(({ guest, timing }) => (
             <li
               key={guest.bookingId}
-              className={`${cardClass} ${timing.status === 'due' ? 'border-[var(--pyre-gold)]/60' : ''}`}
+              className={`${cardClass} ${
+                unlimitedClass(memberOf(guest)) ||
+                (timing.status === 'due' ? 'border-[var(--pyre-gold)]/60' : '')
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-primary-semibold text-[var(--pyre-creme)]">
-                      {guest.name}
-                    </span>
-                    {guest.seats > 1 && <QuietBadge>×{guest.seats}</QuietBadge>}
-                  </div>
+                  <GuestName
+                    guest={guest}
+                    member={memberOf(guest)}
+                    className="text-base font-primary-semibold text-[var(--pyre-creme)]"
+                  />
                   <p className="mt-0.5 font-mono text-xs text-white/45">
                     In {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'}
                     {guest.estimated ? ' (est.)' : ''} · {guest.minutes} min
@@ -325,12 +524,9 @@ export function GuestCheckIns() {
                   type="button"
                   className={`${buttonClass} ml-auto`}
                   disabled={busy === guest.bookingId}
-                  onClick={() => {
-                    setEditing(null);
-                    void patch(guest, { checkedOut: true });
-                  }}
+                  onClick={() => void setCheckedOut(guest, true)}
                 >
-                  {busy === guest.bookingId ? 'Checking out…' : 'Check out'}
+                  Check out
                 </button>
               </div>
 
@@ -362,14 +558,16 @@ export function GuestCheckIns() {
           {waiting.map((guest) => {
             const session = sessions.get(guest.sessionId);
             return (
-              <li key={guest.bookingId} className="flex items-center justify-between gap-3 p-3">
+              <li
+                key={guest.bookingId}
+                className={`flex items-center justify-between gap-3 border-l-2 border-transparent p-3 ${unlimitedClass(memberOf(guest))}`}
+              >
                 <div className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-primary-semibold text-[var(--pyre-creme)]">
-                      {guest.name}
-                    </span>
-                    {guest.seats > 1 && <QuietBadge>×{guest.seats}</QuietBadge>}
-                  </span>
+                  <GuestName
+                    guest={guest}
+                    member={memberOf(guest)}
+                    className="text-sm font-primary-semibold text-[var(--pyre-creme)]"
+                  />
                   <span className="mt-0.5 block font-mono text-xs text-white/45">
                     {session ? `${session.name} · ${etTime(session.startsAt)}` : 'Session'} ·{' '}
                     {guest.minutes} min
@@ -411,10 +609,11 @@ export function GuestCheckIns() {
               return (
                 <li key={guest.bookingId} className="flex items-center justify-between gap-3 p-3">
                   <div className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-white/70">{guest.name}</span>
-                      {guest.seats > 1 && <QuietBadge>×{guest.seats}</QuietBadge>}
-                    </span>
+                    <GuestName
+                      guest={guest}
+                      member={memberOf(guest)}
+                      className="text-sm text-white/70"
+                    />
                     <span className="mt-0.5 block font-mono text-xs text-white/40">
                       {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'} –{' '}
                       {guest.checkedOutAt ? etTime(guest.checkedOutAt) : '—'}
@@ -426,8 +625,8 @@ export function GuestCheckIns() {
                   <button
                     type="button"
                     className={buttonClass}
-                    disabled={busy === guest.bookingId}
-                    onClick={() => void patch(guest, { checkedOut: false })}
+                    disabled={busy === guest.bookingId || guest.bookingId in leaving}
+                    onClick={() => void setCheckedOut(guest, false)}
                   >
                     Undo check-out
                   </button>
