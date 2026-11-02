@@ -36,7 +36,7 @@ import SectionDivider from './SectionDivider.astro';
               <h3 class={`font-mono-bold text-lg lg:text-base uppercase tracking-wide ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
                 {item.name}
               </h3>
-              {item.savings && (
+              {item.savings && !item.subscription && (
                 <span class={`text-xs font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
                   item.highlighted
                     ? 'bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]'
@@ -48,12 +48,71 @@ import SectionDivider from './SectionDivider.astro';
             </div>
             <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
           </div>
+          {item.subscription ? (
+            <div class="grid grid-cols-2 gap-3 lg:w-[26rem] lg:shrink-0">
+              {[
+                {
+                  label: 'One-time',
+                  price: item.price,
+                  originalPrice: item.originalPrice,
+                  savings: item.savings,
+                  period: '',
+                  caption: item.caption,
+                  href: item.href,
+                  featured: false,
+                },
+                { ...item.subscription, label: item.subscription.name, featured: true },
+              ].map((option) => (
+                <div
+                  class={`flex flex-col gap-2 p-3 rounded-md border ${
+                    option.featured
+                      ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
+                      : 'border-current/20'
+                  }`}
+                >
+                  <p class={`font-mono-bold text-[10px] md:text-xs uppercase tracking-wide ${option.featured ? 'text-[var(--pyre-muted-gold)]' : 'opacity-70'}`}>
+                    {option.label}
+                  </p>
+                  <div class={`flex items-baseline gap-1.5 font-primary-semibold text-2xl lg:text-xl ${option.featured ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                    {option.originalPrice && (
+                      <span class="text-sm opacity-50 line-through">${option.originalPrice}</span>
+                    )}
+                    <span>${option.price}{option.period && <span class="text-sm opacity-70">{option.period}</span>}</span>
+                  </div>
+                  {option.savings && (
+                    <span class={`self-start text-[10px] font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                      option.featured
+                        ? 'bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]'
+                        : 'bg-current/10 opacity-70'
+                    }`}>
+                      Save ${option.savings}{option.period}
+                    </span>
+                  )}
+                  {option.caption && <p class="text-xs opacity-60 flex-grow">{option.caption}</p>}
+                  <a
+                    href={option.href}
+                    data-track-placement="home_credit_packs"
+                    class={`mt-auto text-center px-3 py-2 text-xs font-mono-bold uppercase tracking-wide rounded transition-all duration-300 ${
+                      option.featured
+                        ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'
+                        : 'bg-current/10 hover:bg-current/20 border border-current/30'
+                    }`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Buy ${item.name} — ${option.label}`}
+                  >
+                    {option.featured ? 'Subscribe' : 'Buy'}
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div class="flex items-center justify-between lg:justify-end gap-4">
             <div class={`flex items-baseline gap-2 font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
               {item.originalPrice && (
                 <span class="text-lg lg:text-base opacity-50 line-through">${item.originalPrice}</span>
               )}
-              <span>${item.price}{item.period && <span class="text-base lg:text-sm opacity-70">{item.period}</span>}</span>
+              <span>${item.price}</span>
             </div>
             {item.href && (
               <a
@@ -71,6 +130,7 @@ import SectionDivider from './SectionDivider.astro';
               </a>
             )}
           </div>
+          )}
         </div>
       ))}
     </div>

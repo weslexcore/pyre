@@ -21,8 +21,8 @@ interface Props {
 const { content } = Astro.props;
 
 const intro = sessions.items.find((item) => item.id === 'intro');
-// Subscriptions stay off partner pages until partner discounts are confirmed to apply to them.
-const packs = sessions.items.filter((item) => item.id !== 'intro' && !item.subscription);
+// Packs only: subscriptions stay off partner pages until partner discounts are confirmed to apply to them.
+const packs = sessions.items.filter((item) => item.id !== 'intro');
 
 const price = (amount: number): number => partnerPrice(amount, content.discountPercent);
 

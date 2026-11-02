@@ -244,16 +244,32 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 					'@type': 'OfferCatalog',
 					name: 'Sauna & Wellness Services',
 					itemListElement: [
-						...sessions.items.map((item) => ({
-							'@type': 'Offer',
-							itemOffered: {
-								'@type': 'Service',
-								name: item.name,
-								description: item.description,
+						...sessions.items.flatMap((item) => [
+							{
+								'@type': 'Offer',
+								itemOffered: {
+									'@type': 'Service',
+									name: item.name,
+									description: item.description,
+								},
+								price: String(item.price),
+								priceCurrency: 'USD',
 							},
-							price: String(item.price),
-							priceCurrency: 'USD',
-						})),
+							...(item.subscription
+								? [
+										{
+											'@type': 'Offer',
+											itemOffered: {
+												'@type': 'Service',
+												name: `${item.subscription.name} // ${item.name}`,
+												description: item.subscription.caption,
+											},
+											price: String(item.subscription.price),
+											priceCurrency: 'USD',
+										},
+									]
+								: []),
+						]),
 						...membership.tiers.map((tier) => ({
 							'@type': 'Offer',
 							itemOffered: {

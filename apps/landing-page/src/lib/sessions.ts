@@ -1,17 +1,29 @@
 import type { ActionRef } from './types';
 
+/** A monthly subscription to the same number of credits as a pack, shown beside it. */
+export interface SessionSubscription {
+  name: string;
+  price: number;
+  originalPrice?: number;
+  savings?: number;
+  /** Billing period shown after the price: "/mo". */
+  period: string;
+  caption: string;
+  href: string;
+}
+
 export interface SessionItem {
   id: string;
   name: string;
   price: number;
   originalPrice?: number;
-  /** Billing period shown after the price, e.g. "/mo" for subscriptions. */
-  period?: string;
   description: string;
   savings?: number;
   highlighted?: boolean;
-  /** Recurring credit subscription rather than a one-time purchase. */
-  subscription?: boolean;
+  /** Fine print for the one-time option when a subscription is shown beside it. */
+  caption?: string;
+  /** When set, the row compares the one-time pack with this subscription. */
+  subscription?: SessionSubscription;
   href?: string;
 }
 
@@ -60,9 +72,12 @@ const creditPricing = (credits: number, price: number) => ({
   savings: credits * SINGLE_CREDIT_PRICE - price,
 });
 
+const PACK_CAPTION = 'Expires 3 months after purchase';
+const SUBSCRIPTION_CAPTION = 'Billed monthly, credits expire monthly';
+
 const sessions: SessionsContent = {
   title: 'Credits',
-  note: 'All credits can be shared with friends & family! Pack credits expire 3 months after purchase. Subscription credits renew monthly and expire at the end of each month.',
+  note: 'All credits can be shared with friends & family!',
   items: [
     {
       id: 'intro',
@@ -83,7 +98,8 @@ const sessions: SessionsContent = {
       id: 'pack-2',
       name: '2 Credits',
       ...creditPricing(2, 45),
-      description: 'Come for a special event, stay for 2 hours, or come back again.',
+      description:
+        'Come for a special event, stay for 2 hours, or come back again. Expires 3 months after purchase.',
       href: 'https://momence.com/m/702636',
     },
     {
@@ -91,33 +107,30 @@ const sessions: SessionsContent = {
       name: '4 Credits',
       ...creditPricing(4, 85),
       description: 'Build momentum - come back often or bring a friend.',
+      caption: PACK_CAPTION,
       href: 'https://momence.com/m/630915',
+      subscription: {
+        name: 'Circle Subscription',
+        ...creditPricing(4, 75),
+        period: '/mo',
+        caption: SUBSCRIPTION_CAPTION,
+        href: 'https://momence.com/m/966625',
+      },
     },
     {
       id: 'pack-8',
       name: '8 Credits',
       ...creditPricing(8, 165),
-      description: 'Stock up - designed for consistency and shared experiences.',
+      description: 'Our best value - designed for consistency and shared experiences.',
+      caption: PACK_CAPTION,
       href: 'https://momence.com/m/630916',
-    },
-    {
-      id: 'sub-4',
-      name: 'Circle Subscription // 4 Credits',
-      ...creditPricing(4, 75),
-      period: '/mo',
-      subscription: true,
-      description: '4 credits every month, charged monthly. Share them with your circle.',
-      href: 'https://momence.com/m/966625',
-    },
-    {
-      id: 'sub-8',
-      name: 'Ritual Subscription // 8 Credits',
-      ...creditPricing(8, 140),
-      period: '/mo',
-      subscription: true,
-      highlighted: true,
-      description: '8 credits every month, charged monthly. Our best value per credit.',
-      href: 'https://momence.com/m/966622',
+      subscription: {
+        name: 'Ritual Subscription',
+        ...creditPricing(8, 140),
+        period: '/mo',
+        caption: SUBSCRIPTION_CAPTION,
+        href: 'https://momence.com/m/966622',
+      },
     },
   ],
 };
