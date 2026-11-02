@@ -25,7 +25,7 @@ import SectionDivider from './SectionDivider.astro';
     <div class="space-y-4 lg:space-y-3">
       {sessions.items.map((item) => (
         <div
-          class={`session-item flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between lg:p-4 border rounded-lg transition-all duration-300 ${
+          class={`session-item flex flex-col gap-3 p-5 lg:p-4 border ${item.subscription ? '' : 'lg:flex-row lg:items-center lg:justify-between'} rounded-lg transition-all duration-300 ${
             item.highlighted
               ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
               : 'border-current/20 hover:border-current/40'
@@ -49,7 +49,7 @@ import SectionDivider from './SectionDivider.astro';
             <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
           </div>
           {item.subscription ? (
-            <div class="grid grid-cols-2 gap-3 lg:w-[26rem] lg:shrink-0">
+            <div class="flex flex-col gap-2">
               {[
                 {
                   label: 'One-time',
@@ -64,45 +64,51 @@ import SectionDivider from './SectionDivider.astro';
                 { ...item.subscription, label: item.subscription.name, featured: true },
               ].map((option) => (
                 <div
-                  class={`flex flex-col gap-2 p-3 rounded-md border ${
+                  class={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 p-3 rounded-md border ${
                     option.featured
                       ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
                       : 'border-current/20'
                   }`}
                 >
-                  <p class={`font-mono-bold text-[10px] md:text-xs uppercase tracking-wide ${option.featured ? 'text-[var(--pyre-muted-gold)]' : 'opacity-70'}`}>
-                    {option.label}
-                  </p>
-                  <div class={`flex items-baseline gap-1.5 font-primary-semibold text-2xl lg:text-xl ${option.featured ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
-                    {option.originalPrice && (
-                      <span class="text-sm opacity-50 line-through">${option.originalPrice}</span>
-                    )}
-                    <span>${option.price}{option.period && <span class="text-sm opacity-70">{option.period}</span>}</span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <p class={`font-mono-bold text-xs uppercase tracking-wide ${option.featured ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                        {option.label}
+                      </p>
+                      {option.savings && (
+                        <span class={`text-[10px] font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                          option.featured
+                            ? 'bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]'
+                            : 'bg-current/10 opacity-70'
+                        }`}>
+                          Save ${option.savings}{option.period}
+                        </span>
+                      )}
+                    </div>
+                    {option.caption && <p class="text-xs opacity-60 mt-0.5">{option.caption}</p>}
                   </div>
-                  {option.savings && (
-                    <span class={`self-start text-[10px] font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-                      option.featured
-                        ? 'bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]'
-                        : 'bg-current/10 opacity-70'
-                    }`}>
-                      Save ${option.savings}{option.period}
-                    </span>
-                  )}
-                  {option.caption && <p class="text-xs opacity-60 flex-grow">{option.caption}</p>}
-                  <a
-                    href={option.href}
-                    data-track-placement="home_credit_packs"
-                    class={`mt-auto text-center px-3 py-2 text-xs font-mono-bold uppercase tracking-wide rounded transition-all duration-300 ${
-                      option.featured
-                        ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'
-                        : 'bg-current/10 hover:bg-current/20 border border-current/30'
-                    }`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Buy ${item.name} — ${option.label}`}
-                  >
-                    {option.featured ? 'Subscribe' : 'Buy'}
-                  </a>
+                  <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                    <div class={`flex items-baseline gap-1.5 font-primary-semibold text-2xl lg:text-xl ${option.featured ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                      {option.originalPrice && (
+                        <span class="text-sm opacity-50 line-through">${option.originalPrice}</span>
+                      )}
+                      <span>${option.price}{option.period && <span class="text-sm opacity-70">{option.period}</span>}</span>
+                    </div>
+                    <a
+                      href={option.href}
+                      data-track-placement="home_credit_packs"
+                      class={`px-3 py-2 text-xs font-mono-bold uppercase tracking-wide rounded transition-all duration-300 ${
+                        option.featured
+                          ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'
+                          : 'bg-current/10 hover:bg-current/20 border border-current/30'
+                      }`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Buy ${item.name} — ${option.label}`}
+                    >
+                      {option.featured ? 'Subscribe' : 'Buy'}
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
