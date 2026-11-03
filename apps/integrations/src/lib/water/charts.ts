@@ -176,7 +176,7 @@ export const FRESH_FILL_SALT_GRAMS = 920;
 // that dichlor adds ~14 ppm free chlorine in 120 gal and kept the tub above
 // the limit into the next day; the salt cell supplies the chlorine, and a low
 // reading is topped up by the test that comes first, sized to ~2 ppm.
-export const SHOCK_DOSES = [{ chemical: PRODUCTS.oxidizer, grams: 30 }] as const;
+export const SHOCK_DOSES = [{ chemical: PRODUCTS.oxidizer, grams: 25 }] as const;
 
 /** The shock dose sized for a plunge's volume. */
 export const shockDoses = (gallons: number): { chemical: string; grams: number }[] =>
