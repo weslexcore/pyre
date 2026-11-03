@@ -65,8 +65,9 @@ export function trackPurchaseLinkClicked(href: string, placement: string): void 
 /**
  * Track a click on any CTA that carries `data-track-placement`: a Momence
  * checkout link (/s/<session>) is booking intent, a buy link (/m/<membership>)
- * is purchase intent, and anything else is left alone. Used by the shared
- * CtaTracking component.
+ * is purchase intent, a gift card link (/gcc/<id>) is a gift card purchase
+ * intent, and anything else (e.g. "Book" → /events) is a generic `cta_clicked`.
+ * Used by the shared CtaTracking component.
  */
 export function trackCtaLinkClicked(href: string, placement: string): void {
   const sessionId = sessionIdFromHref(href);
@@ -74,7 +75,15 @@ export function trackCtaLinkClicked(href: string, placement: string): void {
     capture('booking_link_clicked', { placement, session_id: sessionId, href });
     return;
   }
-  if (membershipIdFromHref(href)) trackPurchaseLinkClicked(href, placement);
+  if (membershipIdFromHref(href)) {
+    trackPurchaseLinkClicked(href, placement);
+    return;
+  }
+  if (/momence\.com\/gcc\//.test(href)) {
+    capture('gift_card_link_clicked', { placement, href });
+    return;
+  }
+  capture('cta_clicked', { placement, href });
 }
 
 /**

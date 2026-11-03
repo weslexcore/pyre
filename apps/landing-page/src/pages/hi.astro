@@ -19,7 +19,7 @@ import location, { formatWindow } from '../lib/location';
   transparentNav={true}
   logoOnly={true}
 >
-  <div class="dark relative bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-x-clip">
+  <div data-own-click-tracking class="dark relative bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-x-clip">
     <!-- Ambient drifting color blobs. Animated via transform only so the
          effect stays cheap on mobile (no gradient repaints). -->
     <div class="hi-bg fixed inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
@@ -316,6 +316,8 @@ import location, { formatWindow } from '../lib/location';
 </style>
 
 <script>
+  import { membershipIdFromHref, trackPurchaseLinkClicked } from '@/lib/analytics';
+
   // The special-events section starts hidden and is revealed only once the
   // carousel has loaded and found matching events, so the heading never
   // flashes on a page that ends up with no special events.
@@ -356,6 +358,13 @@ import location, { formatWindow } from '../lib/location';
     try {
       url = new URL(link.href, window.location.origin);
     } catch {
+      return;
+    }
+
+    // Pack / intro / membership buy links feed the purchase funnel, keyed by
+    // the Momence catalog id, like every other buy link on the site.
+    if (membershipIdFromHref(link.href)) {
+      trackPurchaseLinkClicked(link.href, placement);
       return;
     }
 

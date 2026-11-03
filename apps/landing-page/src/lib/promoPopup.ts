@@ -28,6 +28,17 @@ export interface PromoPopupConfig {
   form?: {
     submitLabel: string;
     successMessage: string;
+    /**
+     * After a successful signup, send the visitor here (same tab) so they can
+     * buy the offer right away. A fallback link with `redirect.label` is shown
+     * in case the redirect doesn't happen.
+     */
+    redirect?: {
+      href: string;
+      label: string;
+      /** Delay before redirecting, in ms. Defaults to 1200. */
+      delayMs?: number;
+    };
   };
   /** Short text shown on the floating tab when popup is dismissed (e.g. "2 Weeks Unlimited"). */
   promoText?: string;
@@ -78,11 +89,15 @@ const promoPopups: PromoPopupConfig[] = [
     id: 'intro-unlimited-offer-email',
     enabled: true,
     headline: `New Here? ${introOffer.headline}`,
-    body: `Join our mailing list for our intro offer: 2 weeks of unlimited sauna + cold plunge for $${introOffer.price}. Available once per customer.`,
+    body: `Join our mailing list and claim our intro offer: 2 weeks of unlimited sauna + cold plunge for $${introOffer.price}. Available once per customer.`,
     promoText: introOffer.shortLabel,
     form: {
-      submitLabel: 'Get Intro Offer',
-      successMessage: "You're in! Check your email for details.",
+      submitLabel: 'Claim My Intro',
+      successMessage: "You're in! Taking you to your intro offer…",
+      redirect: {
+        href: introOffer.href,
+        label: 'Continue to checkout',
+      },
     },
     dismiss: {
       label: 'No thanks',

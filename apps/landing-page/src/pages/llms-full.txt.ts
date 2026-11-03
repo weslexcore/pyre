@@ -6,6 +6,7 @@ import faqs from '@/lib/faqs';
 import groupBooking from '@/lib/group-booking';
 import membership from '@/lib/membership';
 import privateRentals from '@/lib/private-rentals';
+import sessions, { introMembershipPerk, introOffer } from '@/lib/sessions';
 import shop from '@/lib/shop';
 
 export const prerender = true;
@@ -36,6 +37,16 @@ export const GET: APIRoute = async ({ site }) => {
         `### ${tier.name} - $${tier.price}${tier.period}\n\n${tier.description}\n\n${tier.features.map((f) => `- ${f.text}`).join('\n')}`
     )
     .join('\n\n');
+
+  const creditsSection = sessions.items
+    .filter((item) => item.id !== 'intro')
+    .map((item) => {
+      const subscription = item.subscription
+        ? ` or $${item.subscription.price}${item.subscription.period} as a monthly subscription`
+        : '';
+      return `- **${item.name}**: $${item.price}${subscription}. ${item.description}`;
+    })
+    .join('\n');
 
   const experiencesSection = benefits.items
     .map((item) => `### ${item.title}\n\n${item.description}`)
@@ -75,6 +86,18 @@ Our facilities include traditional Finnish saunas reaching 170-195 F and cold pl
 ### What to Bring
 
 Bring a swimsuit, a water bottle, and an optional robe or sandals. We provide towels and all the amenities you need for your session.
+
+## Intro Offer (first-time guests)
+
+${introOffer.sentence}: ${introOffer.perks.join(', ')}. Available once per customer. ${introMembershipPerk}
+
+Buy: ${introOffer.href}
+
+## Credits
+
+${sessions.note ?? ''}
+
+${creditsSection}
 
 ## Memberships
 

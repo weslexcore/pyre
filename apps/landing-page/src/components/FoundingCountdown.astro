@@ -1,0 +1,57 @@
+---
+// "X days left at the founding rate" pill. The day count is computed on the
+// visitor's clock from FOUNDING_ENDS_AT so a prerendered page never shows a
+// stale number. The same script hides anything marked
+// `data-founding-only` once the founding offer has ended.
+import { founding } from '../lib/membership';
+
+interface Props {
+  class?: string;
+}
+
+const { class: extraClass = '' } = Astro.props;
+---
+
+<span
+  data-founding-countdown
+  data-ends-at={founding.endsAt}
+  class={`hidden items-center gap-1.5 rounded-full bg-[var(--pyre-muted-gold)]/15 px-2.5 py-1 font-mono-bold text-[10px] md:text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] ${extraClass}`}
+>
+  <span class="size-1.5 rounded-full bg-[var(--pyre-muted-gold)]" aria-hidden="true"></span>
+  <span data-founding-countdown-text>{founding.availability}</span>
+</span>
+
+<script>
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  function updateFoundingCountdowns() {
+    const now = Date.now();
+    let ended = false;
+
+    document.querySelectorAll<HTMLElement>('[data-founding-countdown]').forEach((pill) => {
+      const endsAt = Date.parse(pill.dataset.endsAt ?? '');
+      if (Number.isNaN(endsAt)) return;
+      const msLeft = endsAt - now;
+      if (msLeft <= 0) {
+        ended = true;
+        pill.remove();
+        return;
+      }
+      const daysLeft = Math.ceil(msLeft / DAY_MS);
+      const text = pill.querySelector<HTMLElement>('[data-founding-countdown-text]');
+      if (text) {
+        text.textContent =
+          daysLeft === 1 ? 'Last day at the founding rate' : `${daysLeft} days left at the founding rate`;
+      }
+      pill.classList.remove('hidden');
+      pill.classList.add('inline-flex');
+    });
+
+    if (ended) {
+      document.querySelectorAll('[data-founding-only]').forEach((el) => el.remove());
+    }
+  }
+
+  updateFoundingCountdowns();
+  document.addEventListener('astro:page-load', updateFoundingCountdowns);
+</script>

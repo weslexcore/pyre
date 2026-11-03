@@ -1,5 +1,7 @@
 ---
 import location from '../lib/location';
+import GoogleRatingBadge from './GoogleRatingBadge.astro';
+import HeroOfferCta from './HeroOfferCta.astro';
 import HeroTileCurtain from './HeroTileCurtain.astro';
 import HeroVideo from './HeroVideo.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
@@ -30,8 +32,11 @@ import InstagramIcon from './icons/InstagramIcon.astro';
       </div>
 
 
-      <!-- Contact Info -->
+      <!-- Offer CTAs + Contact Info -->
       <div class="space-y-6">
+        <HeroOfferCta role="desktop" />
+        <GoogleRatingBadge placement="home_hero_google_rating_desktop" />
+
         <!-- Address -->
         <div>
           <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
@@ -52,10 +57,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
           </a>
         </div>
 
-        <!-- Mailing List -->
-        <div>
-          <a href="#signup" class="text-lg hover:underline underline-offset-4 text-[var(--pyre-red)]" >Join Our Mailing List</a>
-        </div>
+
       </div>
     </div>
 

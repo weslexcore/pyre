@@ -114,6 +114,8 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
             data-honeypot={signupForm.mailchimp.honeypotFieldName}
             data-antispam={JSON.stringify(signupForm.antiSpam)}
             data-success-message={promoConfig.form!.successMessage}
+            data-redirect-href={promoConfig.form!.redirect?.href}
+            data-redirect-delay={String(promoConfig.form!.redirect?.delayMs ?? 1200)}
           >
             <div class="flex-1 min-w-0">
               <label for={emailId} class="sr-only">Email</label>
@@ -143,6 +145,16 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
 
             <p aria-live="polite" class="text-sm text-[var(--pyre-burnt-orange)] hidden" data-popup-error></p>
             <p role="status" class="text-sm text-green-400 hidden" data-popup-success></p>
+            {promoConfig.form!.redirect && (
+              <a
+                href={promoConfig.form!.redirect.href}
+                data-popup-redirect-link
+                data-track-placement="popup_intro"
+                class="hidden text-center text-sm font-mono-bold uppercase tracking-wide text-[var(--pyre-gold)] underline underline-offset-4"
+              >
+                {promoConfig.form!.redirect.label}
+              </a>
+            )}
           </form>
 
           <!-- Dismiss link -->
@@ -328,6 +340,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
 
       function show() {
         previousFocus = document.activeElement as HTMLElement | null;
+        capture('promo_popup_shown', { popup_id: popupId });
 
         // Show the dialog
         dialog.classList.remove('hidden');
@@ -350,6 +363,8 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
       }
 
       function dismiss() {
+        capture('promo_popup_dismissed', { popup_id: popupId });
+
         // Save dismissal
         try {
           localStorage.setItem(storageKey, '1');
@@ -574,8 +589,25 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
                   });
                 }
 
-                // Offer taken — fully remove after showing success (no tab)
-                setTimeout(removeAll, 2000);
+                // Offer taken. With a redirect, send the visitor straight to
+                // checkout (same tab, so no popup blocker after the async
+                // JSONP callback) and show a fallback link meanwhile.
+                // Otherwise remove the popup after showing success (no tab).
+                const redirectHref = popupForm.getAttribute('data-redirect-href');
+                if (redirectHref) {
+                  try {
+                    localStorage.setItem(takenKey, '1');
+                  } catch {}
+                  const redirectLink = popupForm.querySelector('[data-popup-redirect-link]') as HTMLElement | null;
+                  redirectLink?.classList.remove('hidden');
+                  capture('promo_popup_redirected', { popup_id: popupId, href: redirectHref });
+                  const redirectDelay = Number(popupForm.getAttribute('data-redirect-delay')) || 1200;
+                  setTimeout(() => {
+                    window.location.href = redirectHref;
+                  }, redirectDelay);
+                } else {
+                  setTimeout(removeAll, 2000);
+                }
               } else if (response?.msg) {
                 if (successEl) successEl.classList.add('hidden');
                 if (errorEl) {

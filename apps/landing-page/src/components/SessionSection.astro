@@ -1,5 +1,5 @@
 ---
-import sessions from '../lib/sessions';
+import sessions, { introMembershipPerk } from '../lib/sessions';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
 ---
@@ -47,6 +47,9 @@ import SectionDivider from './SectionDivider.astro';
               )}
             </div>
             <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
+            {item.id === 'intro' && (
+              <p class="text-xs text-[var(--pyre-muted-gold)] mt-1">{introMembershipPerk}</p>
+            )}
           </div>
           {item.subscription ? (
             <div class="flex flex-col gap-2">

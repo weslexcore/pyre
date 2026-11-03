@@ -1,0 +1,125 @@
+---
+// Mobile-only bottom bar that keeps an offer one tap away. It appears once the
+// visitor scrolls past the first screen (the homepage hero has its own CTAs),
+// hides while the homepage offer section is on screen, and switches from the
+// intro offer to the founding membership once the visitor has scrolled past
+// the membership section. The founding variant is dropped after the founding
+// offer ends.
+import stickyOfferBar from '../lib/stickyOfferBar';
+
+const { intro, founding, endsAt } = stickyOfferBar;
+---
+
+<div
+  data-sticky-offer-bar
+  data-ends-at={endsAt}
+  class="fixed inset-x-0 bottom-0 z-40 translate-y-full border-t border-[var(--pyre-muted-gold)]/40 bg-[var(--pyre-black)]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-[var(--pyre-creme)] backdrop-blur transition-transform duration-300 motion-reduce:transition-none md:hidden"
+  aria-hidden="true"
+>
+  {[
+    { variant: 'intro', ...intro },
+    { variant: 'founding', ...founding },
+  ].map((option) => (
+    <a
+      href={option.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      tabindex="-1"
+      aria-label={option.ariaLabel}
+      data-sticky-variant={option.variant}
+      data-track-placement={option.placement}
+      class={`${option.variant === 'intro' ? 'flex' : 'hidden'} items-center justify-between gap-3`}
+    >
+      <span class="min-w-0">
+        <span class="block font-mono-bold text-[10px] uppercase tracking-wider text-[var(--pyre-muted-gold)]">{option.eyebrow}</span>
+        <span class="block truncate font-mono-bold text-sm uppercase tracking-wide">{option.label}</span>
+      </span>
+      <span class="shrink-0 rounded-md bg-[var(--pyre-muted-gold)] px-4 py-2.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-black)]">
+        {option.action}
+      </span>
+    </a>
+  ))}
+</div>
+
+<script>
+  function initStickyOfferBar(): (() => void) | undefined {
+    const bar = document.querySelector<HTMLElement>('[data-sticky-offer-bar]');
+    if (!bar) return;
+
+    const introLink = bar.querySelector<HTMLElement>('[data-sticky-variant="intro"]');
+    const foundingLink = bar.querySelector<HTMLElement>('[data-sticky-variant="founding"]');
+    const foundingLive = Date.now() < Date.parse(bar.dataset.endsAt ?? '');
+    const membership = document.getElementById('membership');
+    const offerSection = document.getElementById('offer');
+
+    let offerInView = false;
+    let visible = false;
+
+    function setVariant() {
+      const pastMembership =
+        foundingLive && !!membership && membership.getBoundingClientRect().top < 0;
+      introLink?.classList.toggle('hidden', pastMembership);
+      introLink?.classList.toggle('flex', !pastMembership);
+      foundingLink?.classList.toggle('hidden', !pastMembership);
+      foundingLink?.classList.toggle('flex', pastMembership);
+    }
+
+    function setVisible(next: boolean) {
+      if (next === visible) return;
+      visible = next;
+      bar!.classList.toggle('translate-y-full', !next);
+      bar!.setAttribute('aria-hidden', String(!next));
+      bar!.querySelectorAll('a').forEach((a) => a.setAttribute('tabindex', next ? '0' : '-1'));
+      // Keep the bar from covering the bottom of the page (e.g. the footer).
+      document.body.style.paddingBottom = next ? `${bar!.offsetHeight}px` : '';
+    }
+
+    function update() {
+      const pastFirstScreen = window.scrollY > window.innerHeight * 0.8;
+      const popupOpen = document.body.style.overflow === 'hidden';
+      setVisible(pastFirstScreen && !offerInView && !popupOpen);
+      setVariant();
+    }
+
+    let observer: IntersectionObserver | undefined;
+    if (offerSection) {
+      observer = new IntersectionObserver((entries) => {
+        offerInView = entries.some((entry) => entry.isIntersecting);
+        update();
+      });
+      observer.observe(offerSection);
+    }
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        update();
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update();
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+      document.body.style.paddingBottom = '';
+    };
+  }
+
+  let cleanup: (() => void) | undefined;
+  function boot() {
+    cleanup?.();
+    cleanup = initStickyOfferBar();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+  document.addEventListener('astro:page-load', boot);
+</script>

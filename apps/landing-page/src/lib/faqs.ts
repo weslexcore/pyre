@@ -1,8 +1,25 @@
+import { founding } from './membership';
+import sessions, { introMembershipPerk, introOffer, SINGLE_CREDIT_PRICE } from './sessions';
 import type { FAQContent } from './types';
+
+/** Cheapest multi-credit pack, for "credit packs start at …". */
+const smallestPack = sessions.items.find((item) => item.id === 'pack-2');
 
 const faqs: FAQContent = {
   title: 'Frequently Asked Questions',
   items: [
+    {
+      question: "I've never done a sauna or cold plunge. Is Pyre for me?",
+      answer: `Absolutely. No experience needed. Our certified sauna masters lead guided sessions with full instruction, and staff are always around to help you through your first visit. The easiest way to start is the intro: ${introOffer.sentence.charAt(0).toLowerCase()}${introOffer.sentence.slice(1)}.`,
+    },
+    {
+      question: 'What happens after my intro?',
+      answer: `${introMembershipPerk} Prefer to come less often? Credit packs start at $${smallestPack?.price ?? SINGLE_CREDIT_PRICE} for ${smallestPack?.name.toLowerCase() ?? '1 credit'}, and every credit can be shared with friends and family.`,
+    },
+    {
+      question: 'Can I pause or cancel my membership?',
+      answer: `You can pause your membership for up to 3 months in any 12-month period, and your founding rate stays the same. If you cancel, the founding rate ends, and rejoining later would be at the standard $${founding.unlimited.originalPrice}/mo.`,
+    },
     {
       question: 'What should I bring to my session?',
       answer:

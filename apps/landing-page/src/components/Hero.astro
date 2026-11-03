@@ -1,5 +1,7 @@
 ---
 import location, { formatWindow } from '../lib/location';
+import GoogleRatingBadge from './GoogleRatingBadge.astro';
+import HeroOfferCta from './HeroOfferCta.astro';
 import HeroVideo from './HeroVideo.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
@@ -11,7 +13,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
     <HeroVideo role="mobile" class="opacity-40" />
   </div>
   <div data-nav-sentinel class="absolute top-[20dvh] left-0 w-full h-1 lg:hidden" aria-hidden="true"></div>
-  <div class="relative flex flex-col justify-between p-6 md:p-10 min-h-[80dvh]">
+  <div class="relative flex flex-col justify-between p-6 md:p-10 min-h-[100dvh]">
     <!-- Location Name -->
     <div style="padding-top: calc(4rem + var(--banner-height, 0px));">
       <h1 class="font-logo text-[clamp(4rem,20vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase text-[var(--pyre-creme)]">
@@ -29,14 +31,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
   </h3>
     </div>
 
-    <!-- Tagline
-    <div>
-
-    </div> -->
-
-
-    <!-- Contact Info -->
+    <!-- Bottom group: offer CTAs, Google rating, contact info -->
     <div class="space-y-4 my-6">
+      <HeroOfferCta role="mobile" />
+      <GoogleRatingBadge placement="home_hero_google_rating_mobile" />
       <div>
         <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
         <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-base md:text-lg hover:underline underline-offset-4">{location.address}</a>
@@ -52,9 +50,6 @@ import InstagramIcon from './icons/InstagramIcon.astro';
           <InstagramIcon class="size-[1.1em] shrink-0" />
           {location.instagram}
         </a>
-      </div>
-      <div>
-        <a href="#signup" class="text-lg hover:underline underline-offset-4 text-[var(--pyre-red)]">Join Our Mailing List</a>
       </div>
     </div>
 

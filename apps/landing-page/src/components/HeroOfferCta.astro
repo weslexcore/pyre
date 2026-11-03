@@ -1,0 +1,38 @@
+---
+// Intro offer + booking CTAs shown in both the mobile and desktop homepage heroes.
+import heroOffer from '../lib/hero';
+
+interface Props {
+  /** Tracking placement suffix: "mobile" or "desktop". */
+  role: 'mobile' | 'desktop';
+}
+
+const { role } = Astro.props;
+---
+
+<div class="flex flex-col gap-3">
+  <p class="font-mono-bold text-xs uppercase tracking-wider text-[var(--pyre-muted-gold)]">
+    {heroOffer.eyebrow}
+  </p>
+  <div class="flex flex-wrap items-start gap-3">
+    <a
+      href={heroOffer.primary.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={heroOffer.primary.ariaLabel}
+      data-track-placement={`home_hero_intro_${role}`}
+      class="inline-flex items-center justify-center rounded-md bg-[var(--pyre-muted-gold)] px-5 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-black)] transition-colors hover:bg-[var(--pyre-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-creme)]/60"
+    >
+      {heroOffer.primary.label}
+    </a>
+    <a
+      href={heroOffer.secondary.href}
+      aria-label={heroOffer.secondary.ariaLabel}
+      data-track-placement={`home_hero_book_${role}`}
+      class="inline-flex items-center justify-center rounded-md border border-[var(--pyre-creme)]/40 px-5 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-creme)]/60"
+    >
+      {heroOffer.secondary.label}
+    </a>
+  </div>
+  <p class="text-xs opacity-60">{heroOffer.trust}</p>
+</div>

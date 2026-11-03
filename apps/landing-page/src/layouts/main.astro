@@ -6,10 +6,12 @@ import fontMonoWoff2 from '../assets/fonts/PPNeueMontreal-Mono.woff2';
 import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import AnnouncementBanner from '../components/AnnouncementBanner.astro';
+import CtaTracking from '../components/CtaTracking.astro';
 import Footer from '../components/Footer.astro';
 import Navbar from '../components/Navbar.astro';
 import PromoPopup from '../components/PromoPopup.astro';
 import PostHog from '../components/posthog.astro';
+import StickyOfferBar from '../components/StickyOfferBar.astro';
 import faqs from '../lib/faqs';
 import location from '../lib/location';
 import membership from '../lib/membership';
@@ -180,7 +182,7 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 				{ '@type': 'SiteNavigationElement', position: 1, name: 'Book a Session', url: new URL('/events', Astro.site ?? 'https://pyresauna.com').toString() },
 				{ '@type': 'SiteNavigationElement', position: 2, name: 'Blog', url: new URL('/blog', Astro.site ?? 'https://pyresauna.com').toString() },
 				{ '@type': 'SiteNavigationElement', position: 3, name: 'Membership', url: new URL('/#membership', Astro.site ?? 'https://pyresauna.com').toString() },
-				{ '@type': 'SiteNavigationElement', position: 4, name: 'FAQs', url: new URL('/#faqs', Astro.site ?? 'https://pyresauna.com').toString() },
+				{ '@type': 'SiteNavigationElement', position: 4, name: 'FAQs', url: new URL('/#faq', Astro.site ?? 'https://pyresauna.com').toString() },
 				{ '@type': 'SiteNavigationElement', position: 5, name: 'Health & Safety', url: new URL('/health-and-safety', Astro.site ?? 'https://pyresauna.com').toString() },
 			],
 		})} />
@@ -410,5 +412,7 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		</main>
 		{!isAdminRoute && <Footer />}
 		{!hidePromos && <PromoPopup />}
+		{!hidePromos && !isAdminRoute && <StickyOfferBar />}
+		{!isAdminRoute && <CtaTracking />}
 	</body>
 </html>

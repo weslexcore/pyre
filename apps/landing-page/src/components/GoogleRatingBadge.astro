@@ -1,0 +1,83 @@
+---
+// "4.9 stars on Google · 120 reviews" badge, filled client-side from
+// /api/google-rating (CDN-cached) so prerendered pages stay static and always
+// show the current numbers. Stays hidden if the rating isn't available.
+// Every badge on the page shares one request.
+interface Props {
+  class?: string;
+  /** Tracking placement for the link to the Google listing. */
+  placement: string;
+}
+
+const { class: extraClass = '', placement } = Astro.props;
+const star =
+  'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
+---
+
+<a
+  data-google-rating
+  data-track-placement={placement}
+  href="#"
+  target="_blank"
+  rel="noopener noreferrer"
+  class={`hidden items-center gap-2 text-sm hover:underline underline-offset-4 ${extraClass}`}
+>
+  <span class="flex text-[var(--pyre-muted-gold)]" aria-hidden="true">
+    {[0, 1, 2, 3, 4].map((i) => (
+      <svg class="size-4" viewBox="0 0 24 24" data-star={i}>
+        <defs>
+          <linearGradient id={`gr-${placement}-${i}`}>
+            <stop offset="0%" stop-color="currentColor" data-star-fill />
+            <stop offset="0%" stop-color="currentColor" stop-opacity="0.25" data-star-empty />
+          </linearGradient>
+        </defs>
+        <path d={star} fill={`url(#gr-${placement}-${i})`} />
+      </svg>
+    ))}
+  </span>
+  <span data-google-rating-text></span>
+</a>
+
+<script>
+  interface GoogleRating {
+    rating: number;
+    count: number;
+    url: string;
+  }
+
+  let request: Promise<GoogleRating | null> | null = null;
+
+  function loadRating(): Promise<GoogleRating | null> {
+    request ??= fetch('/api/google-rating')
+      .then((res) => (res.ok ? (res.json() as Promise<GoogleRating | null>) : null))
+      .catch(() => null);
+    return request;
+  }
+
+  async function initGoogleRatings() {
+    const badges = document.querySelectorAll<HTMLAnchorElement>('[data-google-rating]');
+    if (badges.length === 0) return;
+
+    const data = await loadRating();
+    if (!data) return;
+
+    const label = `${data.rating.toFixed(1)} stars on Google · ${data.count.toLocaleString()} reviews`;
+    badges.forEach((badge) => {
+      badge.href = data.url;
+      badge.setAttribute('aria-label', `${label} (opens Google Maps)`);
+      const text = badge.querySelector('[data-google-rating-text]');
+      if (text) text.textContent = label;
+      badge.querySelectorAll<SVGElement>('[data-star]').forEach((svg) => {
+        const i = Number(svg.dataset.star);
+        const pct = `${Math.max(0, Math.min(1, data.rating - i)) * 100}%`;
+        svg.querySelector('[data-star-fill]')?.setAttribute('offset', pct);
+        svg.querySelector('[data-star-empty]')?.setAttribute('offset', pct);
+      });
+      badge.classList.remove('hidden');
+      badge.classList.add('inline-flex');
+    });
+  }
+
+  initGoogleRatings();
+  document.addEventListener('astro:page-load', initGoogleRatings);
+</script>

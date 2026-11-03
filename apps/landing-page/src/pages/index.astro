@@ -3,7 +3,6 @@ export const prerender = true;
 
 import ogImg from '../assets/images/cyano_sweat_logo.jpg';
 import AboutSection from '../components/AboutSection.astro';
-import CtaTracking from '../components/CtaTracking.astro';
 import EventsSection from '../components/EventsSection.astro';
 import ExperiencesSection from '../components/ExperiencesSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
@@ -12,8 +11,9 @@ import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
-import HeroCarousel from '../components/HeroCarousel.astro';
+// import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
+import OfferSection from '../components/OfferSection.astro';
 import SessionSection from '../components/SessionSection.astro';
 import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SignupForm from '../components/SignupForm.astro';
@@ -36,10 +36,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
       <Hero />
     </div>
 
-    <div class="mobile-hero-background sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer pointer-events-none lg:hidden" aria-hidden="true">
-      <HeroCarousel />
-    </div>
-
     <div class="hidden lg:block">
       <HeroBackground />
       <ShaderCanvas
@@ -56,12 +52,8 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <AboutSection />
       </div>
 
-      <div class="home-card home-card--deferred home-card--lg" data-section="benefits">
-        <ExperiencesSection />
-      </div>
-
-      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="events">
-        <EventsSection limit={10} />
+      <div class="home-card home-card--lg" data-section="offer">
+        <OfferSection />
       </div>
 
       <div class="home-card home-card--deferred home-card--md" data-section="testimonials">
@@ -71,12 +63,20 @@ import { heroGrainGradient } from '../lib/shader-configs';
         </div>
       </div>
 
-      <div class="home-card home-card--deferred home-card--md" data-section="sessions">
-        <SessionSection />
+      <div class="home-card home-card--deferred home-card--lg" data-section="benefits">
+        <ExperiencesSection />
       </div>
 
       <div class="home-card home-card--deferred home-card--lg" data-section="membership">
         <MembershipSection />
+      </div>
+
+      <div class="home-card home-card--deferred home-card--md" data-section="sessions">
+        <SessionSection />
+      </div>
+
+      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="events">
+        <EventsSection limit={10} />
       </div>
 
       <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--sm" data-section="group-booking">
@@ -98,7 +98,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
   </div>
 </Layout>
 
-<CtaTracking />
 
 <style>
   .hero-wave-mask {

@@ -1,6 +1,8 @@
 ---
 import membership, { founding } from '../lib/membership';
+import { introMembershipPerk } from '../lib/sessions';
 import Button from './Button.astro';
+import FoundingCountdown from './FoundingCountdown.astro';
 import SectionDivider from './SectionDivider.astro';
 
 const maxMobileFeatures = 10;
@@ -60,13 +62,24 @@ const maxMobileFeatures = 10;
           </div>
 
           <div class="mb-3 md:mb-6 lg:mb-2 flex items-baseline lg:justify-between">
-            <div>
+            <div class="flex items-baseline gap-2 flex-wrap">
+              {tier.originalPrice && tier.originalPrice > tier.price && (
+                <span class="text-lg md:text-2xl lg:text-base opacity-50 line-through">${tier.originalPrice}</span>
+              )}
               <span class={`font-primary-semibold text-2xl md:text-[clamp(2.5rem,5vw,3.5rem)] lg:text-xl leading-none ${tier.popular ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
                 ${tier.price}
               </span>
               <span class="text-xs md:text-sm lg:text-xs opacity-70">{tier.period}</span>
             </div>
           </div>
+          {tier.originalPrice && tier.originalPrice > tier.price && (
+            <div class="flex items-center gap-2 flex-wrap mb-3 md:mb-6 lg:mb-3">
+              <span class="text-xs font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]">
+                Save ${tier.originalPrice - tier.price}/mo forever
+              </span>
+              {tier.id === 'unlimited' && <FoundingCountdown />}
+            </div>
+          )}
 
           {/* Mobile/tablet: show limited features in list */}
           <ul class="space-y-2 mb-4 flex-grow">
@@ -103,8 +116,12 @@ const maxMobileFeatures = 10;
             {tier.cta.label}
           </Button>
           {tier.id === 'unlimited' && (
+            <p class="mt-3 text-center text-xs md:text-sm lg:text-xs text-[var(--pyre-muted-gold)]">{introMembershipPerk}</p>
+          )}
+          {tier.id === 'unlimited' && (
             <a
               href={founding.details.href}
+              data-track-placement="home_membership_details"
               class="mt-3 text-center text-xs md:text-sm lg:text-xs underline underline-offset-4 opacity-70 hover:opacity-100"
             >
               {founding.details.label}

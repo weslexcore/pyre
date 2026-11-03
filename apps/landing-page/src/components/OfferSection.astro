@@ -1,0 +1,114 @@
+---
+// Homepage offer section: the intro → member path in three steps, then the
+// intro offer and the Founding Unlimited membership side by side.
+import offer from '../lib/offer';
+import FoundingCountdown from './FoundingCountdown.astro';
+import SectionDivider from './SectionDivider.astro';
+
+const { intro, founding } = offer;
+
+const check = 'M5 13l4 4L19 7';
+---
+
+<section id="offer" aria-labelledby="offer-heading" class="py-10 md:py-16 lg:py-0 px-4 lg:px-0">
+  <div class="text-center mb-6">
+    <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+      {offer.eyebrow}
+    </p>
+    <h2
+      id="offer-heading"
+      class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] lg:text-[clamp(1.5rem,2.5vw,2rem)] tracking-[-0.02em] uppercase"
+    >
+      {offer.heading}
+    </h2>
+  </div>
+  <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true} />
+
+  <ol class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+    {offer.steps.map((step, index) => (
+      <li class="border border-current/20 rounded-lg p-4">
+        <span class="block font-primary-semibold text-2xl text-[var(--pyre-muted-gold)] leading-none mb-2">{index + 1}</span>
+        <h3 class="font-mono-bold text-sm uppercase tracking-wide mb-1">{step.title}</h3>
+        <p class="text-sm opacity-75">{step.body}</p>
+      </li>
+    ))}
+  </ol>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Intro offer -->
+    <div class="flex flex-col rounded-lg border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10 p-5">
+      <p class="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)]">{intro.label}</p>
+      <h3 class="font-mono-bold text-lg uppercase tracking-wide mt-1">{intro.name}</h3>
+      <div class="flex items-baseline gap-2 mt-3">
+        <span class="font-primary-semibold text-4xl leading-none text-[var(--pyre-muted-gold)]">${intro.price}</span>
+        <span class="text-sm opacity-70">{intro.priceNote}</span>
+      </div>
+      <ul class="space-y-2 mt-4 mb-4 flex-grow">
+        {intro.perks.map((perk) => (
+          <li class="flex items-start gap-2 text-sm">
+            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
+            </svg>
+            <span>{perk}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="text-xs text-[var(--pyre-muted-gold)] mb-4">{intro.perk}</p>
+      <a
+        href={intro.cta.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={intro.cta.ariaLabel}
+        data-track-placement="home_offer_intro"
+        class="inline-flex w-full items-center justify-center rounded-md bg-[var(--pyre-muted-gold)] px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-black)] transition-colors hover:bg-[var(--pyre-gold)]"
+      >
+        {intro.cta.label}
+      </a>
+      <p class="mt-2 text-center text-xs opacity-60">{intro.finePrint}</p>
+    </div>
+
+    <!-- Founding membership (removed client-side once the founding offer ends) -->
+    <div data-founding-only class="flex flex-col rounded-lg border border-current/25 p-5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <p class="font-mono-bold text-xs uppercase tracking-wide opacity-70">{founding.label}</p>
+        <FoundingCountdown />
+      </div>
+      <h3 class="font-mono-bold text-lg uppercase tracking-wide mt-1">{founding.name}</h3>
+      <div class="flex items-baseline gap-2 mt-3 flex-wrap">
+        <span class="text-lg opacity-50 line-through">${founding.originalPrice}</span>
+        <span class="font-primary-semibold text-4xl leading-none">${founding.price}</span>
+        <span class="text-sm opacity-70">{founding.period}</span>
+      </div>
+      <p class="mt-2 inline-flex self-start rounded-full bg-current/10 px-2 py-0.5 font-mono-bold text-xs uppercase tracking-wide">
+        {founding.savings}
+      </p>
+      <ul class="space-y-2 mt-4 mb-4 flex-grow">
+        {founding.perks.map((perk) => (
+          <li class="flex items-start gap-2 text-sm">
+            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
+            </svg>
+            <span>{perk}</span>
+          </li>
+        ))}
+      </ul>
+      <a
+        href={founding.cta.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={founding.cta.ariaLabel}
+        data-track-placement="home_offer_founding"
+        class="inline-flex w-full items-center justify-center rounded-md border-2 border-current px-4 py-3 font-mono-bold text-sm uppercase tracking-wide transition-colors hover:bg-[var(--pyre-creme)] hover:text-[var(--pyre-black)]"
+      >
+        {founding.cta.label}
+      </a>
+      <a
+        href={founding.details.href}
+        data-track-placement="home_offer_founding_details"
+        class="mt-2 text-center text-xs underline underline-offset-4 opacity-70 hover:opacity-100"
+      >
+        {founding.details.label}
+      </a>
+    </div>
+  </div>
+</section>

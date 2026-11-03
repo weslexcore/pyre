@@ -83,7 +83,7 @@ const sessions: SessionsContent = {
       id: 'intro',
       name: `Intro // ${introOffer.headline}`,
       price: introOffer.price,
-      description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks, merch + private events. Available once per customer.`,
+      description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks + merch. Available once per customer.`,
       highlighted: true,
       href: introOffer.href,
     },
