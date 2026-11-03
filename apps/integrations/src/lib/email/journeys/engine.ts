@@ -48,6 +48,7 @@ import {
   currentStepIndex,
   frequencyCapUntil,
   isStale,
+  journeyFastMode,
   nextStepIndex,
   sendKeyFor,
   stepDueAt,
@@ -72,16 +73,22 @@ const log = createWebhookLogger('Journeys');
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-function isFastMode(): boolean {
-  return import.meta.env.JOURNEY_FAST_MODE === 'true';
+/** Fast-mode time for this journey: the env flag, and only while it is in test mode. */
+function isFastMode(journey: Pick<JourneyRecord, 'testMode'>): boolean {
+  return journeyFastMode(import.meta.env.JOURNEY_FAST_MODE === 'true', journey);
 }
 
 // --- Scheduling ---
 
 /** When a step should run: its anchor + offset, kept inside the send window. */
-function scheduleAt(step: JourneyStep, anchors: AnchorTimes, now: number): string {
+function scheduleAt(
+  journey: Pick<JourneyRecord, 'testMode'>,
+  step: JourneyStep,
+  anchors: AnchorTimes,
+  now: number
+): string {
   if (step.sendImmediately) return new Date(now).toISOString();
-  const fastMode = isFastMode();
+  const fastMode = isFastMode(journey);
   // Unknown anchor (no intro offer): due now, and the due-time check skips it.
   const due = stepDueAt(step.timing, anchors, { fastMode }) ?? now;
   const at = Math.max(due, now);
@@ -252,7 +259,12 @@ export async function enrollMember(
       cycle,
       step: 0,
       current_step_key: steps[first].key,
-      next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, ...expiries }, now),
+      next_at: scheduleAt(
+        journey,
+        steps[first],
+        { triggerAt: anchor, previousAt: null, ...expiries },
+        now
+      ),
       status: 'active',
       anchor_at: new Date(anchor).toISOString(),
       context: fullContext,
@@ -769,6 +781,8 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
     due: due?.length ?? 0,
     ...counts,
     ...(ctx.dryRun && { wouldSend }),
+    // Make a left-on test flag visible in the tick's response.
+    ...(import.meta.env.JOURNEY_FAST_MODE === 'true' && { fastMode: 'test-mode journeys only' }),
   };
 }
 
@@ -833,13 +847,14 @@ async function runDueStep(
   const anchors = anchorsFor(row, await resolveExpiries([step], memberCtx));
 
   if (!step.sendImmediately && step.timing.anchor !== 'previous') {
-    const dueAt = stepDueAt(step.timing, anchors, { fastMode: isFastMode() });
+    const dueAt = stepDueAt(step.timing, anchors, { fastMode: isFastMode(journey) });
     if (dueAt === null) {
       if (!dryRun) await advance(journey, row, step, memberCtx, 'no-expiry-date');
       return { kind: 'advanced', reason: 'no-expiry-date' };
     }
     if (!immediate && dueAt > now + EARLY_TOLERANCE_MS) {
-      if (!dryRun) await reschedule(row, scheduleAt(step, anchors, now), step.key, 'not-yet-due');
+      if (!dryRun)
+        await reschedule(row, scheduleAt(journey, step, anchors, now), step.key, 'not-yet-due');
       return { kind: 'deferred', until: dueAt, reason: 'not-yet-due' };
     }
     if (!immediate && isStale(step.timing, dueAt, anchors, now)) {
@@ -874,7 +889,7 @@ async function runDueStep(
     if (!dryRun)
       await reschedule(
         row,
-        new Date(isFastMode() ? capUntil : clampToSendWindow(capUntil)).toISOString(),
+        new Date(isFastMode(journey) ? capUntil : clampToSendWindow(capUntil)).toISOString(),
         step.key,
         'frequency-cap'
       );
@@ -998,7 +1013,12 @@ async function advance(
     current_step_key: next.key,
     last_step_at: lastStepAt,
     context: context as Record<string, unknown>,
-    next_at: scheduleAt(next, anchorsFor({ ...row, last_step_at: lastStepAt }, expiries), now),
+    next_at: scheduleAt(
+      journey,
+      next,
+      anchorsFor({ ...row, last_step_at: lastStepAt }, expiries),
+      now
+    ),
   });
 }
 
@@ -1161,7 +1181,7 @@ export async function rescheduleWaiting(
     const step = journey.definition.steps.find((s) => s.key === row.current_step_key);
     if (!step) continue;
     const anchors = anchorsFor(row, rememberedExpiries(row.context as EnrollmentContext));
-    await transition(row, { next_at: scheduleAt(step, anchors, now) });
+    await transition(row, { next_at: scheduleAt(journey, step, anchors, now) });
     updated += 1;
   }
   return updated;

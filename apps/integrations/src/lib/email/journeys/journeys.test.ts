@@ -8,6 +8,7 @@ import {
   currentStepIndex,
   frequencyCapUntil,
   isStale,
+  journeyFastMode,
   nextStepIndex,
   sendKeyFor,
   stepDueAt,
@@ -60,6 +61,30 @@ describe('stepDueAt', () => {
     expect(stepDueAt({ anchor: 'trigger', offsetHours: 60 }, anchors, { fastMode: true })).toBe(
       anchors.triggerAt + 60 * 60_000
     );
+  });
+});
+
+describe('journeyFastMode', () => {
+  it('only speeds up journeys in test mode', () => {
+    expect(journeyFastMode(true, { testMode: true })).toBe(true);
+    expect(journeyFastMode(true, { testMode: false })).toBe(false);
+    expect(journeyFastMode(false, { testMode: true })).toBe(false);
+  });
+
+  it('keeps a live journey\'s "7 days after" step 7 days out with the flag on', () => {
+    // Intro to membership: step 1 sends at enrollment, step 2 is trigger + 168h.
+    const enrolledAt = Date.parse('2026-11-02T18:42:22Z');
+    const anchors = { triggerAt: enrolledAt, previousAt: enrolledAt + 1000, introExpiresAt: null };
+    const timing = { anchor: 'trigger', offsetHours: 168 } as const;
+    const live = stepDueAt(timing, anchors, {
+      fastMode: journeyFastMode(true, { testMode: false }),
+    });
+    expect(live).toBe(enrolledAt + 7 * DAY);
+    // What happened on Nov 2: fast mode made it due 2.8 hours in, so the 5pm tick picked it up.
+    const fast = stepDueAt(timing, anchors, {
+      fastMode: journeyFastMode(true, { testMode: true }),
+    });
+    expect(fast).toBe(enrolledAt + 2.8 * HOUR);
   });
 });
 

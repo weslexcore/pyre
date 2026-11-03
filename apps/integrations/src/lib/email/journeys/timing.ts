@@ -44,6 +44,16 @@ export function anchorTime(timing: StepTiming, anchors: AnchorTimes): number | n
 }
 
 /**
+ * Whether a journey runs on fast-mode time. JOURNEY_FAST_MODE is for walking
+ * a test-mode journey end to end on whitelisted addresses; it never touches a
+ * live journey, so a test flag left on in production can't send real guests
+ * a "7 days later" email three hours in, outside the 9am-8pm window.
+ */
+export function journeyFastMode(envFlag: boolean, journey: { testMode: boolean }): boolean {
+  return envFlag && journey.testMode;
+}
+
+/**
  * When a step is due, or null when its anchor is unknown (no intro offer).
  * Fast mode (JOURNEY_FAST_MODE) compresses everything after the trigger 60x —
  * hours become minutes — so a whitelist test walks a multi-week journey in
