@@ -1,0 +1,368 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import heroImg from '../assets/images/837A0206.webp';
+import introImg from '../assets/images/837A0269.webp';
+import closingImg from '../assets/images/plunging.webp';
+import Button from '../components/Button.astro';
+import CtaTracking from '../components/CtaTracking.astro';
+import SectionDivider from '../components/SectionDivider.astro';
+import Layout from '../layouts/main.astro';
+import membership from '../lib/membership';
+import testimonials from '../lib/testimonials';
+import unlimited from '../lib/unlimited';
+
+const { hero, stats, included, math, founding, intro, faqs, closing } = unlimited;
+const quotes = testimonials.items.filter((t) => t.highlight).slice(0, 3);
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.items.map((faq) => ({
+    '@type': 'Question',
+    name: faq.question,
+    acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+  })),
+};
+---
+
+<Layout
+  title={unlimited.meta.title}
+  description={unlimited.meta.description}
+  ogImage={heroImg.src}
+  ogImageWidth={heroImg.width}
+  ogImageHeight={heroImg.height}
+  hidePromos={true}
+>
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-[90dvh] flex items-center justify-center overflow-hidden">
+      <Image
+        src={heroImg}
+        alt="Pyre sauna"
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center sm:object-[20%_20%]"
+        loading="eager"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/45"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/10 to-[var(--pyre-black)]/40"></div>
+
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <p class="font-mono-bold text-sm md:text-base tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4">
+          {hero.eyebrow}
+        </p>
+        <h1 class="font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4 md:mb-6">
+          {hero.title}
+        </h1>
+        <p class="text-base md:text-lg opacity-85 max-w-xl mx-auto mb-6">{hero.subtitle}</p>
+        <p class="inline-block px-3 py-1 mb-8 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-xs font-mono-bold uppercase tracking-wide rounded-full">
+          {hero.pill}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button
+            href={hero.primaryCta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={hero.primaryCta.ariaLabel}
+            data-track-placement="unlimited_hero"
+          >
+            {hero.primaryCta.label}
+          </Button>
+          <Button href={hero.secondaryCta.href} variant="outline" size="lg" ariaLabel={hero.secondaryCta.ariaLabel}>
+            {hero.secondaryCta.label}
+          </Button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section aria-label="Membership at a glance" class="px-4 pb-12 md:pb-16">
+      <ul class="max-w-4xl mx-auto grid grid-cols-3 gap-2 md:gap-6 text-center">
+        {stats.map((stat) => (
+          <li class="border border-current/15 rounded-lg py-4 px-2 md:py-6">
+            <span class="block font-primary-semibold text-2xl md:text-4xl text-[var(--pyre-muted-gold)] leading-none mb-2">
+              {stat.value}
+            </span>
+            <span class="block text-[11px] md:text-sm opacity-70 leading-snug">{stat.label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <!-- What's included -->
+    <section id="included" aria-labelledby="included-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <h2
+            id="included-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {included.heading}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">{included.subtitle}</p>
+          <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-6" scrollAware={true} />
+        </div>
+
+        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+          {included.benefits.map((benefit) => (
+            <li class="border border-current/20 rounded-lg p-5 md:p-6 bg-[var(--pyre-creme)]/5">
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <div>
+                  <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-1.5">{benefit.title}</h3>
+                  <p class="text-sm opacity-75">{benefit.body}</p>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- The math -->
+    <section id="math" aria-labelledby="math-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
+      <div class="max-w-3xl mx-auto">
+        <div class="text-center mb-8 md:mb-10">
+          <h2 id="math-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3">
+            {math.heading}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">{math.subtitle}</p>
+        </div>
+
+        <div class="border border-current/20 rounded-lg overflow-hidden">
+          <table class="w-full text-left text-sm md:text-base">
+            <thead class="bg-[var(--pyre-creme)]/5">
+              <tr class="font-mono-bold text-[11px] md:text-xs uppercase tracking-wide opacity-70">
+                <th scope="col" class="p-3 md:p-4">You come</th>
+                <th scope="col" class="p-3 md:p-4">Drop-ins</th>
+                <th scope="col" class="p-3 md:p-4 text-[var(--pyre-muted-gold)]">Founding</th>
+                <th scope="col" class="p-3 md:p-4">Per visit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {math.rows.map((row) => (
+                <tr class="border-t border-current/10">
+                  <th scope="row" class="p-3 md:p-4 font-mono-bold uppercase tracking-wide text-xs md:text-sm">
+                    {row.label}
+                  </th>
+                  <td class="p-3 md:p-4 opacity-70">
+                    <s>${row.dropInTotal}</s>
+                  </td>
+                  <td class="p-3 md:p-4 text-[var(--pyre-muted-gold)] font-mono-bold">${founding.compare[0].price}</td>
+                  <td class="p-3 md:p-4">~${row.perVisit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-4 text-xs opacity-60 text-center">{math.footnote}</p>
+      </div>
+    </section>
+
+    <!-- Founding vs standard -->
+    <section id="founding" aria-labelledby="founding-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
+      <div class="max-w-4xl mx-auto md:grid md:grid-cols-2 md:gap-12 md:items-center">
+        <div class="mb-8 md:mb-0 text-center md:text-left">
+          <h2 id="founding-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4">
+            {founding.heading}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 mb-6">{founding.body}</p>
+          <Button
+            href={hero.primaryCta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={hero.primaryCta.ariaLabel}
+            data-track-placement="unlimited_founding"
+            class="w-full sm:w-auto"
+          >
+            {hero.primaryCta.label}
+          </Button>
+        </div>
+
+        <ul class="space-y-3">
+          {founding.compare.map((plan) => (
+            <li
+              class={`flex items-center justify-between gap-4 rounded-lg p-5 md:p-6 border ${
+                plan.highlighted
+                  ? 'border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5'
+                  : 'border-current/20 opacity-60'
+              }`}
+            >
+              <div>
+                <p class="font-mono-bold text-sm uppercase tracking-wide">{plan.label}</p>
+                <p class="text-xs opacity-70 mt-0.5">{plan.note}</p>
+              </div>
+              <p class="whitespace-nowrap">
+                <span class={`font-primary-semibold text-3xl md:text-4xl leading-none ${plan.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                  ${plan.price}
+                </span>
+                <span class="text-sm opacity-70">/mo</span>
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {membership.note && <p class="mt-8 text-xs md:text-sm opacity-60 text-center italic">{membership.note}</p>}
+    </section>
+
+    <!-- Intro funnel -->
+    <section id="intro" aria-labelledby="intro-heading" class="relative border-t border-current/10 py-16 md:py-24 px-4 overflow-hidden scroll-mt-20">
+      <Image
+        src={introImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div>
+
+      <div class="relative z-10 max-w-5xl mx-auto">
+        <div class="text-center mb-10 md:mb-12">
+          <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+            {intro.eyebrow}
+          </p>
+          <h2 id="intro-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3">
+            {intro.heading}
+          </h2>
+          <p class="text-base md:text-lg opacity-85 max-w-2xl mx-auto">{intro.body}</p>
+        </div>
+
+        <ol class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5 mb-10 md:mb-12">
+          {intro.steps.map((step, index) => (
+            <li class="border border-current/20 rounded-lg p-5 md:p-6 bg-[var(--pyre-black)]/40">
+              <span class="block font-primary-semibold text-3xl text-[var(--pyre-muted-gold)] leading-none mb-3">
+                {index + 1}
+              </span>
+              <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-1.5">{step.title}</h3>
+              <p class="text-sm opacity-75">{step.body}</p>
+            </li>
+          ))}
+        </ol>
+
+        <div class="max-w-md mx-auto border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-black)]/60 rounded-lg p-6 md:p-8 text-center">
+          <div class="flex items-baseline justify-center gap-2 mb-4">
+            <span class="font-primary-semibold text-5xl text-[var(--pyre-muted-gold)] leading-none">${intro.price}</span>
+            <span class="text-sm opacity-70">{intro.priceNote}</span>
+          </div>
+          <ul class="space-y-2 mb-6 text-left inline-block">
+            {intro.perks.map((perk) => (
+              <li class="flex items-start gap-2 text-sm">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{perk}</span>
+              </li>
+            ))}
+          </ul>
+          <Button
+            href={intro.cta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={intro.cta.ariaLabel}
+            data-track-placement="unlimited_intro"
+            class="w-full"
+          >
+            {intro.cta.label}
+          </Button>
+          <p class="mt-3 text-xs opacity-60">{intro.finePrint}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials -->
+    {quotes.length > 0 && (
+      <section aria-labelledby="quotes-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
+        <div class="max-w-5xl mx-auto">
+          <h2 id="quotes-heading" class="font-primary-semibold text-[clamp(1.5rem,3vw,2.25rem)] tracking-[-0.02em] uppercase text-center mb-8 md:mb-12">
+            {unlimited.testimonials.heading}
+          </h2>
+          <ul class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
+            {quotes.map((quote) => (
+              <li>
+                <figure class="h-full border border-current/20 rounded-lg p-5 md:p-6 flex flex-col">
+                  <blockquote class="text-sm md:text-base opacity-85 flex-grow">"{quote.quote}"</blockquote>
+                  <figcaption class="mt-4 font-mono-bold text-xs uppercase tracking-wide opacity-60">
+                    {quote.name} · {quote.sessionType}
+                  </figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )}
+
+    <!-- FAQ -->
+    <section id="faq" aria-labelledby="faq-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
+      <div class="max-w-3xl mx-auto">
+        <h2 id="faq-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase text-center mb-8">
+          {faqs.heading}
+        </h2>
+        <div class="space-y-1">
+          {faqs.items.map((faq) => (
+            <details class="group border-b border-current/20">
+              <summary class="flex items-center justify-between gap-4 py-5 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <span class="font-mono-bold text-base md:text-lg">{faq.question}</span>
+                <svg class="w-5 h-5 flex-shrink-0 transition-transform duration-200 group-open:rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12M6 12h12" />
+                </svg>
+              </summary>
+              <p class="pb-5 text-sm md:text-base opacity-80">{faq.answer}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Closing CTA -->
+    <section aria-labelledby="closing-heading" class="relative py-20 md:py-32 px-4 border-t border-current/10 text-center overflow-hidden">
+      <Image
+        src={closingImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/75"></div>
+      <div class="relative z-10 max-w-2xl mx-auto">
+        <h2 id="closing-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4">
+          {closing.heading}
+        </h2>
+        <p class="text-base md:text-lg opacity-90 mb-8">{closing.body}</p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button
+            href={hero.primaryCta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={hero.primaryCta.ariaLabel}
+            data-track-placement="unlimited_closing"
+          >
+            {hero.primaryCta.label}
+          </Button>
+          <Button
+            href={intro.cta.href}
+            variant="outline"
+            size="lg"
+            ariaLabel={intro.cta.ariaLabel}
+            data-track-placement="unlimited_closing_intro"
+          >
+            {intro.cta.label}
+          </Button>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<CtaTracking />

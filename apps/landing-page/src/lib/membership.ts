@@ -1,4 +1,4 @@
-import { introOffer } from './sessions';
+import { withBase } from './paths';
 import type { MembershipContent } from './types';
 
 // Founding-membership facts, in one place. Tier features, the site banner,
@@ -56,6 +56,8 @@ export const founding = {
   /** Monthly price: "$199/mo". */
   fromPrice: UNLIMITED.price,
   eyebrow: 'Founding Membership',
+  /** The /unlimited landing page with every membership detail. */
+  details: { label: "See everything that's included", href: withBase('/unlimited') },
   /** Availability line: "Only available through Dec 31". */
   availability: `Only available through ${FOUNDING_DEADLINE}`,
   /** One-line pitch, used on partner pages. */

@@ -98,7 +98,7 @@ const hi: HiContent = {
       id: 'membership',
       label: 'Memberships',
       sublabel: `$${founding.fromPrice}/mo unlimited, locked for life — through ${founding.deadline}`,
-      href: withBase('#membership'),
+      href: founding.details.href,
       ariaLabel: 'View Pyre membership options',
     },
     {
