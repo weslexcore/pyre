@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@pyre/schedule-core": "workspace:^",
-    "@supabase/supabase-js": "^2.110.5",
+    "@supabase/supabase-js": "^2.118.0",
     "ai": "7.0.105",
     "eve": "0.66.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
