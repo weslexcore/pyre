@@ -130,6 +130,10 @@ const unlimited = {
     heading: 'Membership questions',
     items: [
       {
+        question: "What do you mean by 'for life'?",
+        answer: `Your $${price}/mo founding rate never goes up for as long as you keep your membership. Standard Unlimited will be $${originalPrice}/mo, and even if that price rises over the years, yours stays at $${price}. Pausing your membership doesn't affect your rate. If you cancel, the founding rate ends, and rejoining later would be at the standard price.`,
+      },
+      {
         question: 'What counts as unlimited?',
         answer:
           'Unlimited monthly credits for sauna + cold plunge sessions. Book any session with open spots, as often as you like.',
@@ -137,10 +141,6 @@ const unlimited = {
       {
         question: 'How do guest passes work?',
         answer: `You get ${GUEST_PASSES} guest passes every month. Add a friend when you book your session and they come with you on us.`,
-      },
-      {
-        question: 'Will my price ever go up?',
-        answer: `No. Founding members keep $${price}/mo for life, as long as the membership stays active. Standard Unlimited will be $${originalPrice}/mo.`,
       },
       {
         question: 'Can I pause my membership?',
