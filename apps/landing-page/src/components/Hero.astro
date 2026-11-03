@@ -3,7 +3,6 @@ import location, { formatWindow } from '../lib/location';
 import GoogleRatingBadge from './GoogleRatingBadge.astro';
 import HeroOfferCta from './HeroOfferCta.astro';
 import HeroVideo from './HeroVideo.astro';
-import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
 <!-- MOBILE HERO: Fixed text layer (z-0) - stays in place while scrolling -->
@@ -31,26 +30,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
   </h3>
     </div>
 
-    <!-- Bottom group: offer CTAs, Google rating, contact info -->
+    <!-- Bottom group: offer CTAs, Google rating -->
     <div class="space-y-4 my-6">
       <HeroOfferCta role="mobile" />
       <GoogleRatingBadge placement="home_hero_google_rating_mobile" />
-      <div>
-        <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-        <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-base md:text-lg hover:underline underline-offset-4">{location.address}</a>
-      </div>
-      <div>
-        <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Instagram</h2>
-        <a
-          href={location.instagramUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 text-base md:text-lg hover:underline underline-offset-4"
-        >
-          <InstagramIcon class="size-[1.1em] shrink-0" />
-          {location.instagram}
-        </a>
-      </div>
     </div>
 
     <!-- Hours
