@@ -6,8 +6,9 @@ import type { PrivateEventNoticeContent } from './types';
 // rather than its own details the visitor gets an invitation to request one.
 const privateEventNotice: PrivateEventNoticeContent = {
   description: [
-    'This session is reserved for a private group.',
-    'Want the bathhouse to yourself? We host birthdays, team outings, bachelor and bachelorette parties, and other celebrations for up to 30 guests. Send us a private rental request and we will help you plan it.',
+    'This session is reserved for a private group. ',
+    'Have an event of your own in mind? We\'d love to help you plan it!', 
+    'We host birthdays, team outings, bachelor and bachelorette parties, and other celebrations for up to 30 guests.',
   ],
   cta: {
     label: 'Request a Private Rental',
