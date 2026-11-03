@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseInline, splitParagraphs } from './inline-markdown';
+import { isSafeHref } from './inline-markdown';
 import { fillContent, fillText, unknownTokens } from './merge-fields';
 import { type BlockContent, definitionSchema, type JourneyStep, stepSchema } from './schema';
 import { definitionProblems } from './store';
@@ -198,22 +198,12 @@ describe('merge fields', () => {
   });
 });
 
-describe('inline markdown', () => {
-  it('parses bold, italic and safe links only', () => {
-    expect(parseInline('a **b** *c* [d](https://x.com) [e](javascript:void)')).toEqual([
-      { kind: 'text', text: 'a ' },
-      { kind: 'bold', text: 'b' },
-      { kind: 'text', text: ' ' },
-      { kind: 'italic', text: 'c' },
-      { kind: 'text', text: ' ' },
-      { kind: 'link', text: 'd', href: 'https://x.com' },
-      { kind: 'text', text: ' ' },
-      { kind: 'text', text: 'e' },
-    ]);
-  });
-
-  it('splits paragraphs on blank lines', () => {
-    expect(splitParagraphs('one\n\n two \n\n\n')).toEqual(['one', 'two']);
+describe('isSafeHref', () => {
+  it('allows web and mailto links only', () => {
+    expect(isSafeHref('https://x.com')).toBe(true);
+    expect(isSafeHref('mailto:hi@pyresauna.com')).toBe(true);
+    expect(isSafeHref('javascript:void(0)')).toBe(false);
+    expect(isSafeHref('/events')).toBe(false);
   });
 });
 

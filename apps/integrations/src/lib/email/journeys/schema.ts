@@ -255,7 +255,7 @@ export const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
 
 export const blockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('heading'), text: z.string().max(200) }),
-  /** Markdown subset: **bold**, *italic*, [label](url). Blank lines split paragraphs. */
+  /** Markdown (GFM): headings, lists, quotes, bold/italic, links, images. */
   z.object({ type: z.literal('paragraph'), text: z.string().max(5000) }),
   z.object({ type: z.literal('list'), items: z.array(z.string().max(500)).max(20) }),
   z.object({

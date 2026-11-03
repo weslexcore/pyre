@@ -1,11 +1,8 @@
-import { Button, Hr, Img, Link, Section, Text } from '@react-email/components';
+import { Button, Hr, Img, Link, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
-import {
-  type InlineToken,
-  isSafeHref,
-  parseInline,
-  splitParagraphs,
-} from '@/lib/email/journeys/inline-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { isSafeHref } from '@/lib/email/journeys/inline-markdown';
 import { BUTTON_COLORS, type EmailBlockInput } from '@/lib/email/journeys/schema';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import { journeyLink, journeyLinkContent } from '../components/utm';
@@ -15,44 +12,112 @@ import type { JourneyEmailProps } from '../types';
 // of blocks (written in /admin/journeys, merge fields already filled) laid out
 // in the standard branded shell. Copy lives in the journey definition, not
 // here — this file only decides how each block type looks.
+//
+// Text is Markdown (react-markdown + GFM, as in AdminMessage): headings, lists,
+// quotes, code, rules, bold/italic/strikethrough, links and images. Each
+// element is drawn with inline styles, since email clients drop stylesheets.
+// Raw HTML is never rendered, links and images must be absolute https/mailto,
+// and every link is tagged for the journey and step it came from.
 
 const linkStyle = { color: COLORS.creme, textDecoration: 'underline' };
+const body = { ...text, whiteSpace: 'normal' };
+const subheading = { ...heading, fontSize: '18px', lineHeight: '26px', margin: '24px 0 12px' };
+const minorHeading = { ...subheading, fontSize: '16px', lineHeight: '24px', margin: '20px 0 8px' };
+const list = { ...body, margin: '0 0 16px', paddingLeft: '24px' };
+const listItem = { margin: '0 0 8px' };
+const quote = {
+  ...body,
+  borderLeft: `2px solid ${COLORS.sky}`,
+  fontStyle: 'italic',
+  margin: '0 0 16px',
+  opacity: 0.85,
+  paddingLeft: '12px',
+};
+const inlineCode = {
+  backgroundColor: COLORS.blackSoft,
+  borderRadius: '3px',
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+  fontSize: '14px',
+  padding: '1px 4px',
+};
 
-function Inline({
-  tokens,
-  campaign,
-  stepKey,
-}: {
-  tokens: InlineToken[];
-  campaign: string;
-  stepKey?: string;
-}): ReactNode {
-  return tokens.map((t, i) => {
-    switch (t.kind) {
-      case 'bold':
-        // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-        return <strong key={i}>{t.text}</strong>;
-      case 'italic':
-        // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-        return <em key={i}>{t.text}</em>;
-      case 'link':
-        return (
-          <Link
-            // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-            key={i}
-            href={journeyLink(t.href, campaign, journeyLinkContent(stepKey, t.text, t.href))}
-            style={linkStyle}
-          >
-            {t.text}
-          </Link>
-        );
-      default:
-        return t.text;
-    }
-  });
+type HastNode = { value?: unknown; children?: unknown[] };
+
+/** The visible text of a Markdown element, for naming a link in utm_content. */
+function plainText(node: HastNode | undefined): string {
+  if (!node) return '';
+  if (typeof node.value === 'string') return node.value;
+  return (node.children ?? []).map((c) => plainText(c as HastNode)).join('');
 }
 
-const listItem = { ...text, margin: '0 0 8px', paddingLeft: '4px' };
+function markdownComponents(campaign: string, stepKey?: string): Components {
+  return {
+    h1: ({ children }) => <Text style={heading}>{children}</Text>,
+    h2: ({ children }) => <Text style={subheading}>{children}</Text>,
+    h3: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    h4: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    h5: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    h6: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    // pre-line keeps a single line break the author typed, as plain text did.
+    p: ({ children }) => <Text style={text}>{children}</Text>,
+    ul: ({ children }) => <ul style={list}>{children}</ul>,
+    ol: ({ children, start }) => (
+      <ol style={list} start={start}>
+        {children}
+      </ol>
+    ),
+    li: ({ children }) => <li style={listItem}>{children}</li>,
+    // A checkbox input is stripped or drawn oddly by most mail clients.
+    input: ({ checked }) => <span>{checked ? '☑ ' : '☐ '}</span>,
+    blockquote: ({ children }) => <div style={quote}>{children}</div>,
+    code: ({ children }) => <code style={inlineCode}>{children}</code>,
+    hr: () => <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />,
+    a: ({ children, href, node }) => {
+      if (!href || !isSafeHref(href)) return <>{children}</>;
+      const label = plainText(node) || href;
+      return (
+        <Link
+          href={journeyLink(href, campaign, journeyLinkContent(stepKey, label, href))}
+          style={linkStyle}
+        >
+          {children}
+        </Link>
+      );
+    },
+    img: ({ src, alt }) =>
+      typeof src === 'string' && isSafeHref(src) ? (
+        <Img
+          src={src}
+          alt={alt ?? ''}
+          width="100%"
+          style={{ borderRadius: '8px', margin: '0 0 20px', maxWidth: '100%' }}
+        />
+      ) : null,
+  };
+}
+
+function Markdown({
+  source,
+  campaign,
+  stepKey,
+  inline = false,
+}: {
+  source: string;
+  campaign: string;
+  stepKey?: string;
+  /** Inside an existing line (a bullet, the sign-off): no paragraph wrapper. */
+  inline?: boolean;
+}): ReactNode {
+  const components = markdownComponents(campaign, stepKey);
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={inline ? { ...components, p: ({ children }) => <>{children}</> } : components}
+    >
+      {source}
+    </ReactMarkdown>
+  );
+}
 
 function Block({
   block,
@@ -67,23 +132,17 @@ function Block({
     case 'heading':
       return <Text style={heading}>{block.text}</Text>;
     case 'paragraph':
-      return splitParagraphs(block.text).map((p, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-        <Text key={i} style={text}>
-          <Inline tokens={parseInline(p)} campaign={campaign} stepKey={stepKey} />
-        </Text>
-      ));
+      return <Markdown source={block.text} campaign={campaign} stepKey={stepKey} />;
     case 'list':
       return (
-        <Section style={{ margin: '0 0 16px' }}>
+        <ul style={list}>
           {block.items.map((item, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-            <Text key={i} style={listItem}>
-              {'• '}
-              <Inline tokens={parseInline(item)} campaign={campaign} stepKey={stepKey} />
-            </Text>
+            <li key={i} style={listItem}>
+              <Markdown source={item} campaign={campaign} stepKey={stepKey} inline />
+            </li>
           ))}
-        </Section>
+        </ul>
       );
     case 'button': {
       if (!block.label || !isSafeHref(block.url)) return null;
@@ -146,7 +205,11 @@ function Block({
       );
     }
     case 'signoff':
-      return <Text style={text}>{block.text}</Text>;
+      return (
+        <Text style={text}>
+          <Markdown source={block.text} campaign={campaign} stepKey={stepKey} inline />
+        </Text>
+      );
   }
 }
 

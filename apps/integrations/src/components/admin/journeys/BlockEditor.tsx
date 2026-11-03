@@ -36,7 +36,7 @@ const TIPS = {
     'The grey line most inboxes show after the subject. Use it to add the hook the subject leaves out. Leave empty to let the inbox pick text from the email.',
   mergeFields:
     'Fill in details from Momence for each person, like their name or when their credits expire. Add a fallback after a bar - {{firstName|friend}} - for people with no value; without one, the step is skipped for them rather than sending a broken sentence.',
-  body: 'The email is built from blocks, top to bottom. Drag a block by its handle to move it. Text supports **bold**, *italic* and [link text](https://...), and plain links are tracked automatically.',
+  body: 'The email is built from blocks, top to bottom. Drag a block by its handle to move it. Text supports Markdown: **bold**, *italic*, [link text](https://...), ## headings, - bullet lists, 1. numbered lists and > quotes. Plain links are tracked automatically.',
 } as const;
 
 const BACKGROUND_LABELS: Record<BlockContent['background'], string> = {
@@ -47,7 +47,7 @@ const BACKGROUND_LABELS: Record<BlockContent['background'], string> = {
 
 const BLOCK_HINTS: Record<EmailBlockType, string> = {
   heading: 'A large line of text to open the email or a section.',
-  paragraph: 'Body text. A blank line starts a new paragraph.',
+  paragraph: 'Body text in Markdown. A blank line starts a new paragraph.',
   list: 'Bullet points, one per line.',
   button: 'A tappable button or text link.',
   divider: 'A thin line between sections.',
