@@ -3,7 +3,6 @@ import location from '../lib/location';
 import GoogleRatingBadge from './GoogleRatingBadge.astro';
 import HeroOfferCta from './HeroOfferCta.astro';
 import HeroVideo from './HeroVideo.astro';
-import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
 <!-- DESKTOP HERO: Fixed background layer for desktop parallax effect -->
@@ -31,32 +30,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
       </div>
 
 
-      <!-- Offer CTAs + Contact Info -->
+      <!-- Offer CTAs + Google rating -->
       <div class="space-y-6">
         <HeroOfferCta role="desktop" />
         <GoogleRatingBadge placement="home_hero_google_rating_desktop" />
-
-        <!-- Address -->
-        <div>
-          <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-          <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-lg hover:underline underline-offset-4">{location.address}</a>
-        </div>
-
-        <!-- Instagram -->
-        <div>
-          <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Instagram</h2>
-          <a
-            href={location.instagramUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-lg hover:underline underline-offset-4"
-          >
-            <InstagramIcon class="size-[1.1em] shrink-0" />
-            {location.instagram}
-          </a>
-        </div>
-
-
       </div>
     </div>
 
