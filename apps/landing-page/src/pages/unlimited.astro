@@ -126,6 +126,30 @@ const faqSchema = {
       </div>
     </section>
 
+    <!-- Testimonials -->
+    {quotes.length > 0 && (
+      <section aria-labelledby="quotes-heading" class="border-t border-[var(--pyre-muted-gold)]/20 bg-[var(--pyre-black)] bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--pyre-muted-gold)_14%,transparent),transparent_65%)] py-16 md:py-24 px-4">
+        <div class="max-w-5xl mx-auto">
+          <h2 id="quotes-heading" class="font-primary-semibold text-[clamp(1.5rem,3vw,2.25rem)] tracking-[-0.02em] uppercase text-center mb-8 md:mb-12">
+            {unlimited.testimonials.heading}
+          </h2>
+          <ul class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
+            {quotes.map((quote) => (
+              <li>
+                <figure class="h-full rounded-lg p-6 md:p-8 flex flex-col border border-[var(--pyre-muted-gold)]/25 bg-[var(--pyre-creme)]/[0.03]">
+                  <span class="font-primary-semibold text-5xl leading-none text-[var(--pyre-muted-gold)] mb-2" aria-hidden="true">&ldquo;</span>
+                  <blockquote class="text-sm md:text-base opacity-85 leading-relaxed flex-grow">{quote.quote}</blockquote>
+                  <figcaption class="mt-6 pt-4 border-t border-[var(--pyre-muted-gold)]/20 font-mono-bold text-xs uppercase tracking-[0.15em] text-[var(--pyre-muted-gold)]">
+                    {quote.name} · {quote.sessionType}
+                  </figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )}
+
     <!-- Founding vs standard -->
     <section id="founding" aria-labelledby="founding-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
       <div class="max-w-4xl mx-auto md:grid md:grid-cols-2 md:gap-12 md:items-center">
@@ -237,30 +261,6 @@ const faqSchema = {
         </div>
       </div>
     </section>
-
-    <!-- Testimonials -->
-    {quotes.length > 0 && (
-      <section aria-labelledby="quotes-heading" class="border-t border-[var(--pyre-muted-gold)]/20 bg-[var(--pyre-black)] bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--pyre-muted-gold)_14%,transparent),transparent_65%)] py-16 md:py-24 px-4">
-        <div class="max-w-5xl mx-auto">
-          <h2 id="quotes-heading" class="font-primary-semibold text-[clamp(1.5rem,3vw,2.25rem)] tracking-[-0.02em] uppercase text-center mb-8 md:mb-12">
-            {unlimited.testimonials.heading}
-          </h2>
-          <ul class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
-            {quotes.map((quote) => (
-              <li>
-                <figure class="h-full rounded-lg p-6 md:p-8 flex flex-col border border-[var(--pyre-muted-gold)]/25 bg-[var(--pyre-creme)]/[0.03]">
-                  <span class="font-primary-semibold text-5xl leading-none text-[var(--pyre-muted-gold)] mb-2" aria-hidden="true">&ldquo;</span>
-                  <blockquote class="text-sm md:text-base opacity-85 leading-relaxed flex-grow">{quote.quote}</blockquote>
-                  <figcaption class="mt-6 pt-4 border-t border-[var(--pyre-muted-gold)]/20 font-mono-bold text-xs uppercase tracking-[0.15em] text-[var(--pyre-muted-gold)]">
-                    {quote.name} · {quote.sessionType}
-                  </figcaption>
-                </figure>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-    )}
 
     <!-- FAQ -->
     <section id="faq" aria-labelledby="faq-heading" class="border-t border-[var(--pyre-muted-gold)]/20 bg-[var(--pyre-black)] py-16 md:py-24 px-4">
