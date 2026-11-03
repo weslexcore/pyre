@@ -5,6 +5,8 @@ export interface BannerConfig {
   id: string;
   /** The announcement text displayed in the banner. */
   text: string;
+  /** Optional text shown after `text` on wider screens only (hidden on mobile to save space). */
+  desktopText?: string;
   /** Optional CTA link displayed alongside the text. */
   link?: {
     label: string;
@@ -25,6 +27,7 @@ export interface BannerConfig {
 const banner: BannerConfig = {
   id: 'founding-unlimited-through-dec-31',
   text: founding.announcement,
+  desktopText: founding.announcementDeadline,
   href: founding.unlimited.href,
   expiresAt: founding.endsAt,
   foundingCountdown: true,
