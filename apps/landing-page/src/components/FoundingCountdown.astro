@@ -7,17 +7,25 @@ import { founding } from '../lib/membership';
 
 interface Props {
   class?: string;
+  /** "pill": gold pill on dark cards. "banner": dark pill for the gold announcement bar, short wording. */
+  variant?: 'pill' | 'banner';
 }
 
-const { class: extraClass = '' } = Astro.props;
+const { class: extraClass = '', variant = 'pill' } = Astro.props;
+
+const variantClasses =
+  variant === 'banner'
+    ? 'bg-[var(--pyre-black)] text-[var(--pyre-gold)] px-2 py-0.5 text-xs'
+    : 'bg-[var(--pyre-muted-gold)]/15 text-[var(--pyre-muted-gold)] px-2.5 py-1 text-[10px] md:text-xs';
 ---
 
 <span
   data-founding-countdown
   data-ends-at={founding.endsAt}
-  class={`hidden items-center gap-1.5 rounded-full bg-[var(--pyre-muted-gold)]/15 px-2.5 py-1 font-mono-bold text-[10px] md:text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] ${extraClass}`}
+  data-format={variant === 'banner' ? 'short' : 'long'}
+  class={`hidden items-center gap-1.5 rounded-full font-mono-bold uppercase tracking-wide whitespace-nowrap ${variantClasses} ${extraClass}`}
 >
-  <span class="size-1.5 rounded-full bg-[var(--pyre-muted-gold)]" aria-hidden="true"></span>
+  <span class="size-1.5 rounded-full bg-current" aria-hidden="true"></span>
   <span data-founding-countdown-text>{founding.availability}</span>
 </span>
 
@@ -40,8 +48,12 @@ const { class: extraClass = '' } = Astro.props;
       const daysLeft = Math.ceil(msLeft / DAY_MS);
       const text = pill.querySelector<HTMLElement>('[data-founding-countdown-text]');
       if (text) {
-        text.textContent =
-          daysLeft === 1 ? 'Last day at the founding rate' : `${daysLeft} days left at the founding rate`;
+        const short = pill.dataset.format === 'short';
+        if (daysLeft === 1) {
+          text.textContent = short ? 'Last day' : 'Last day at the founding rate';
+        } else {
+          text.textContent = short ? `${daysLeft} days left` : `${daysLeft} days left at the founding rate`;
+        }
       }
       pill.classList.remove('hidden');
       pill.classList.add('inline-flex');

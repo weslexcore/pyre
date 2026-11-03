@@ -2,7 +2,6 @@
 import location from '../lib/location';
 import GoogleRatingBadge from './GoogleRatingBadge.astro';
 import HeroOfferCta from './HeroOfferCta.astro';
-import HeroTileCurtain from './HeroTileCurtain.astro';
 import HeroVideo from './HeroVideo.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
@@ -61,10 +60,9 @@ import InstagramIcon from './icons/InstagramIcon.astro';
       </div>
     </div>
 
-    <!-- Right: Video + sliding tile curtain -->
+    <!-- Right: Video (keeps playing behind the content cards as they scroll up) -->
     <div class="relative h-full overflow-hidden">
       <HeroVideo priority={true} role="desktop" class="absolute inset-0" />
-      <HeroTileCurtain role="desktop" priority={true} />
     </div>
   </div>
 </div>

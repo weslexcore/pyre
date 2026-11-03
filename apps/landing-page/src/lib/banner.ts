@@ -18,6 +18,8 @@ export interface BannerConfig {
   enabled: boolean;
   /** Optional ISO 8601 datetime string. Banner auto-hides client-side after this time. */
   expiresAt?: string;
+  /** Show a "N days left" founding-membership countdown after the text. */
+  foundingCountdown?: boolean;
 }
 
 const banner: BannerConfig = {
@@ -25,6 +27,7 @@ const banner: BannerConfig = {
   text: founding.announcement,
   href: founding.unlimited.href,
   expiresAt: founding.endsAt,
+  foundingCountdown: true,
   enabled: true,
 };
 

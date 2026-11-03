@@ -11,7 +11,6 @@ import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
-// import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import OfferSection from '../components/OfferSection.astro';
 import SessionSection from '../components/SessionSection.astro';
@@ -24,14 +23,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
 <Layout isHomePage={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
   <div class="dark bg-[var(--pyre-black)]">
-    <svg width="0" height="0" class="absolute" aria-hidden="true">
-      <defs>
-        <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
-          <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
-        </clipPath>
-      </defs>
-    </svg>
-
     <div class="lg:hidden">
       <Hero />
     </div>
@@ -100,15 +91,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
 
 <style>
-  .hero-wave-mask {
-    -webkit-clip-path: url(#hero-wave-clip);
-    clip-path: url(#hero-wave-clip);
-  }
-
-  .mobile-hero-background {
-    margin-bottom: -50dvh;
-  }
-
   [data-hero-video] {
     pointer-events: none;
   }
@@ -189,7 +171,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
 </style>
 
 <script>
-  import { initHeroCurtain } from '../lib/hero-curtain';
+  import { initHeroVideos } from '../lib/hero-video';
 
   function initSmoothScroll() {
     const lgBreakpoint = 1024;
@@ -296,24 +278,21 @@ import { heroGrainGradient } from '../lib/shader-configs';
     };
   }
 
-  let curtainCleanup: (() => void) | null = null;
+  let heroVideoCleanup: (() => void) | null = null;
 
-  function bootCurtain() {
-    if (curtainCleanup) {
-      curtainCleanup();
-      curtainCleanup = null;
-    }
-    curtainCleanup = initHeroCurtain();
+  function bootHeroVideos() {
+    heroVideoCleanup?.();
+    heroVideoCleanup = initHeroVideos();
   }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
     document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
-    document.addEventListener('DOMContentLoaded', bootCurtain, { once: true });
+    document.addEventListener('DOMContentLoaded', bootHeroVideos, { once: true });
   } else {
     initSmoothScroll();
     initAnimationPausing();
-    bootCurtain();
+    bootHeroVideos();
   }
 
   document.addEventListener('astro:page-load', initAnimationPausing);
