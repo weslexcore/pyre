@@ -52,6 +52,7 @@ import {
 } from '@/lib/momence';
 import { loadMomenceCalendar } from '@/lib/momence-cache';
 import { specialEventPractitioners } from '@/lib/practitioners';
+import privateEventNotice from '@/lib/private-events';
 import { durationRowLabel, spotsColor, spotsLabel } from '@/lib/spots';
 import type { EventItem, PooledBookingOption } from '@/lib/types';
 
@@ -196,7 +197,9 @@ Astro.response.headers.set(
 const MAX_META_DESCRIPTION = 155;
 
 function metaDescription(item: EventItem): string {
-  const raw = item.description.replace(/\s+/g, ' ').trim();
+  // A private session's own details belong to whoever booked it.
+  const source = item.isPrivate ? privateEventNotice.description.join(' ') : item.description;
+  const raw = source.replace(/\s+/g, ' ').trim();
   if (!raw) return `${item.title} at Pyre in Richmond, VA — ${item.date}, ${item.time}.`;
   if (raw.length <= MAX_META_DESCRIPTION) return raw;
   return `${raw.slice(0, MAX_META_DESCRIPTION).replace(/\s+\S*$/, '')}…`;
@@ -249,7 +252,7 @@ const eventSchema =
         '@context': 'https://schema.org',
         '@type': 'Event',
         name: event.title,
-        description: event.description || description,
+        description: event.isPrivate ? description : event.description || description,
         startDate: event.isoDate,
         ...(groupEnd ? { endDate: new Date(groupEnd).toISOString() } : {}),
         eventStatus: 'https://schema.org/EventScheduled',
@@ -470,10 +473,25 @@ const analyticsEvent = event
             </div>
           )}
 
-          {event.description && (
-            <p class="mt-8 whitespace-pre-line font-sans text-lg leading-relaxed text-[var(--pyre-creme)]/80">
-              {event.description}
-            </p>
+          {event.isPrivate ? (
+            <div class="mt-8 space-y-4 font-sans text-lg leading-relaxed text-[var(--pyre-creme)]/80">
+              {privateEventNotice.description.map((paragraph) => <p>{paragraph}</p>)}
+              <a
+                href={privateEventNotice.cta.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={privateEventNotice.cta.ariaLabel}
+                class="!mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+              >
+                {privateEventNotice.cta.label}
+              </a>
+            </div>
+          ) : (
+            event.description && (
+              <p class="mt-8 whitespace-pre-line font-sans text-lg leading-relaxed text-[var(--pyre-creme)]/80">
+                {event.description}
+              </p>
+            )
           )}
 
           {bookableSlots.length > 0 && (

@@ -586,6 +586,12 @@ export interface PrivateRentalsContent {
   cta: ActionRef;
 }
 
+// Notice shown when a visitor opens a private session on the schedule
+export interface PrivateEventNoticeContent {
+  description: string[];
+  cta: ActionRef;
+}
+
 // ------------------------------------------------------------
 // Gift Card section types
 // ------------------------------------------------------------

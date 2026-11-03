@@ -7,6 +7,7 @@ import { trackBookingLinkClicked } from '@/lib/analytics';
 import { creditsForPriceUsd } from '@/lib/credits';
 import { eventPath } from '@/lib/event-url';
 import { specialEventPractitioners } from '@/lib/practitioners';
+import privateEventNotice from '@/lib/private-events';
 import { durationRowLabel, spotsColor, spotsLabel } from '@/lib/spots';
 import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
 import PractitionerByline from './PractitionerByline';
@@ -307,6 +308,8 @@ export default function EventDetailModal({
   // True when the footer renders at least one booking row (pooled choices or
   // a single special-event CTA). Drives the footer and the grid spots fallback.
   const footerHasBookingRow = hasBookingOptions || (!event.isPrivate && !!event.cta);
+  // Private sessions swap the booking row for a private rental request link.
+  const showPrivateRequest = !!event.isPrivate && !hasBookingOptions;
 
   // Build a deep-link to this event (with UTM tags) and share via the native
   // share sheet when available, otherwise copy it to the clipboard.
@@ -474,14 +477,39 @@ export default function EventDetailModal({
               </div>
             )}
 
-            {/* Description */}
-            {event.description && (
-              <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
-                {event.description}
-              </p>
+            {/* Description — a private session shows the rental invitation
+                instead of its own details, which belong to whoever booked it. */}
+            {event.isPrivate ? (
+              <div className="mt-5 space-y-3 font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
+                {privateEventNotice.description.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            ) : (
+              event.description && (
+                <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
+                  {event.description}
+                </p>
+              )
             )}
           </div>
         </div>
+
+        {/* Private sessions: anchored request link in place of Book Now */}
+        {showPrivateRequest && (
+          <div className="relative z-20 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
+            <a
+              href={privateEventNotice.cta.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={privateEventNotice.cta.ariaLabel}
+              className="flex w-full items-center justify-center gap-1 rounded-full bg-[var(--pyre-red)] px-4 py-2.5 font-mono-bold text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+            >
+              {privateEventNotice.cta.label}
+              <ArrowIcon />
+            </a>
+          </div>
+        )}
 
         {/* Fixed footer — Book Now stays anchored at the bottom */}
         {footerHasBookingRow && (
