@@ -70,9 +70,14 @@ const BAR_COLORS: Record<FloorStatus, string> = {
   over: 'bg-[var(--pyre-red)]',
 };
 
+/** Past their end, even while a check-in is due (status is then 'due', not 'over'). */
+function isOver(timing: FloorTiming): boolean {
+  return timing.endsAt !== null && timing.remainingMs <= 0;
+}
+
 function remainingLabel(timing: FloorTiming): string {
   const minutes = Math.ceil(Math.abs(timing.remainingMs) / MINUTE_MS);
-  return timing.status === 'over' ? `Over by ${minutes} min` : `${minutes} min left`;
+  return isOver(timing) ? `Over by ${minutes} min` : `${minutes} min left`;
 }
 
 /** "Moved from Open Hours (120 min)". */
@@ -461,7 +466,7 @@ export function GuestCheckIns() {
                 <div className="shrink-0 text-right">
                   <span
                     className={`block font-mono text-sm ${
-                      timing.status === 'over'
+                      isOver(timing)
                         ? 'text-[var(--pyre-red)]'
                         : timing.status === 'due'
                           ? 'text-[var(--pyre-gold)]'
