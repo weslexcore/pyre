@@ -210,6 +210,8 @@ export interface ColdPlungeRow {
   id: string;
   name: string;
   gallons: number;
+  /** Grams of oxidizer per weekly shock; null scales the chart amount by gallons. */
+  shock_oxidizer_grams: number | null;
   sort_order: number;
   archived: boolean;
   created_by: string;

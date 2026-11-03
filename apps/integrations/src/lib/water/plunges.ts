@@ -6,7 +6,7 @@ import type { ColdPlungeRow } from '@/lib/db';
 
 export type Normalized<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export const PLUNGE_LIMITS = { name: 40, id: 40, maxGallons: 2000 } as const;
+export const PLUNGE_LIMITS = { name: 40, id: 40, maxGallons: 2000, maxShockGrams: 1000 } as const;
 
 export const PLUNGE_ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -58,6 +58,20 @@ function cleanGallons(value: unknown): number | null {
 
 const GALLONS_ERROR = `gallons must be a number above 0 and at most ${PLUNGE_LIMITS.maxGallons}`;
 
+/**
+ * A shock oxidizer amount to one decimal place; null (blank) means "use the
+ * scaled default". Undefined when the value is not a usable amount.
+ */
+function cleanShockGrams(value: unknown): number | null | undefined {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
+  const parsed = typeof value === 'string' ? Number(value) : value;
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed)) return undefined;
+  const rounded = Math.round(parsed * 10) / 10;
+  return rounded > 0 && rounded <= PLUNGE_LIMITS.maxShockGrams ? rounded : undefined;
+}
+
+const SHOCK_GRAMS_ERROR = `shock oxidizer must be blank or a number of grams above 0 and at most ${PLUNGE_LIMITS.maxShockGrams}`;
+
 export interface PlungeCreate {
   name: string;
   gallons: number;
@@ -71,7 +85,9 @@ export function normalizePlungeCreate(body: Record<string, unknown>): Normalized
   return { ok: true, value: { name, gallons } };
 }
 
-export type PlungePatch = Partial<Pick<ColdPlungeRow, 'name' | 'gallons' | 'archived'>>;
+export type PlungePatch = Partial<
+  Pick<ColdPlungeRow, 'name' | 'gallons' | 'shock_oxidizer_grams' | 'archived'>
+>;
 
 /** An edit to an existing plunge; only the keys present in the body are touched. */
 export function normalizePlungePatch(body: Record<string, unknown>): Normalized<PlungePatch> {
@@ -87,6 +103,12 @@ export function normalizePlungePatch(body: Record<string, unknown>): Normalized<
     const gallons = cleanGallons(body.gallons);
     if (gallons == null) return { ok: false, error: GALLONS_ERROR };
     patch.gallons = gallons;
+  }
+
+  if ('shock_oxidizer_grams' in body) {
+    const grams = cleanShockGrams(body.shock_oxidizer_grams);
+    if (grams === undefined) return { ok: false, error: SHOCK_GRAMS_ERROR };
+    patch.shock_oxidizer_grams = grams;
   }
 
   if ('archived' in body) {

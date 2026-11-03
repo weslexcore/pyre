@@ -2,7 +2,9 @@
 //   GET                          — every plunge, archived included, in order,
 //                                  with how many log entries each has
 //   POST   { name, gallons }     — add a plunge, placed last
-//   PATCH  { id, …changes }      — rename, resize, archive / restore
+//   PATCH  { id, …changes }      — rename, resize, set the shock oxidizer
+//                                  grams (null = scaled default), archive /
+//                                  restore
 //   PATCH  { order: [ids] }      — re-order
 //   DELETE ?id=                  — remove a plunge with no log entries
 //

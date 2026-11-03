@@ -328,6 +328,11 @@ describe('scaleGrams and shockDoses', () => {
     expect(shockDoses(60)).toEqual([{ chemical: PRODUCTS.oxidizer, grams: 12.5 }]);
   });
 
+  it("uses a plunge's own oxidizer amount as-is, whatever its size", () => {
+    expect(shockDoses(60, 20)).toEqual([{ chemical: PRODUCTS.oxidizer, grams: 20 }]);
+    expect(shockDoses(120, null)).toEqual([{ chemical: PRODUCTS.oxidizer, grams: 25 }]);
+  });
+
   it('is the identity at the chart volume', () => {
     expect(scaleGrams(2.5, 120)).toBe(2.5);
     expect(scaleGrams(920, 300)).toBe(2300);

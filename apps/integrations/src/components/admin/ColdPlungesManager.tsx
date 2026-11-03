@@ -2,7 +2,9 @@
 //
 // Each plunge has a name and the gallons it holds — the water log sizes every
 // recommended dose from that volume (the manual's charts are written for a
-// 120 gal tub). Plunges can be renamed, resized, re-ordered, and archived.
+// 120 gal tub). Each can also set its own weekly shock oxidizer amount in
+// place of the scaled one. Plunges can be renamed, resized, re-ordered, and
+// archived.
 // Archiving hides one from the entry form while its history stays in the log;
 // only a plunge with no log entries can be deleted outright.
 
@@ -20,7 +22,7 @@ import {
 import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { ColdPlungeRow } from '@/lib/db';
-import { CHART_GALLONS } from '@/lib/water/charts';
+import { CHART_GALLONS, PRODUCTS, shockDoses } from '@/lib/water/charts';
 import { formatGallons, PLUNGE_LIMITS } from '@/lib/water/plunges';
 
 const PLUNGES_URL = '/api/admin/cold-plunges';
@@ -34,12 +36,26 @@ interface PlungesResponse {
 interface Draft {
   name: string;
   gallons: string;
+  /** Blank uses the chart amount scaled to the gallons. */
+  shockGrams: string;
 }
 
 const draftFor = (plunge: ColdPlungeRow): Draft => ({
   name: plunge.name,
   gallons: formatGallons(plunge.gallons),
+  shockGrams: plunge.shock_oxidizer_grams == null ? '' : String(plunge.shock_oxidizer_grams),
 });
+
+/** Grams of oxidizer for a shock: the plunge's own amount, or the scaled one. */
+const oxidizerGrams = (gallons: number, own?: number | null): number | undefined =>
+  shockDoses(gallons, own).find((d) => d.chemical === PRODUCTS.oxidizer)?.grams;
+
+/** The scaled default for the gallons being typed, for the field's placeholder. */
+const defaultShockGrams = (gallonsInput: string): string => {
+  const gallons = Number(gallonsInput);
+  const grams = oxidizerGrams(gallons > 0 ? gallons : CHART_GALLONS);
+  return grams == null ? '' : String(grams);
+};
 
 export function ColdPlungesManager() {
   const { data, error, loading, setData, reload } = useCachedJson<PlungesResponse>(PLUNGES_URL);
@@ -52,8 +68,8 @@ export function ColdPlungesManager() {
   const [message, setMessage] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft>({ name: '', gallons: '' });
-  const [newPlunge, setNewPlunge] = useState<Draft>({ name: '', gallons: String(CHART_GALLONS) });
+  const [draft, setDraft] = useState<Draft>({ name: '', gallons: '', shockGrams: '' });
+  const [newPlunge, setNewPlunge] = useState({ name: '', gallons: String(CHART_GALLONS) });
 
   // Every change goes through here: run it, refresh the list, and drop the
   // water log's cached copy so it picks up the new names and volumes.
@@ -87,6 +103,7 @@ export function ColdPlungesManager() {
         id: plunge.id,
         name: draft.name,
         gallons: draft.gallons,
+        shock_oxidizer_grams: draft.shockGrams.trim() || null,
       });
     });
     if (ok) setEditingId(null);
@@ -138,7 +155,7 @@ export function ColdPlungesManager() {
     if (editing) {
       return (
         <li key={plunge.id} className={cardClass}>
-          <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+          <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem]">
             <label>
               <span className={labelClass}>Name</span>
               <input
@@ -157,10 +174,21 @@ export function ColdPlungesManager() {
                 className={`${inputClass} w-full`}
               />
             </label>
+            <label>
+              <span className={labelClass}>Shock oxidizer (g)</span>
+              <input
+                value={draft.shockGrams}
+                inputMode="decimal"
+                placeholder={defaultShockGrams(draft.gallons)}
+                onChange={(e) => setDraft((d) => ({ ...d, shockGrams: e.target.value }))}
+                className={`${inputClass} w-full`}
+              />
+            </label>
           </div>
           <p className="mt-2 text-xs text-white/40">
-            Changing the gallons changes the doses recommended from now on. Entries already logged
-            keep the amounts that were added.
+            Leave the shock oxidizer blank to use the chart amount sized for the gallons. Changes
+            apply to doses recommended from now on. Entries already logged keep the amounts that
+            were added.
           </p>
           <div className="mt-3 flex gap-2">
             <button
@@ -189,7 +217,10 @@ export function ColdPlungesManager() {
         <div className="min-w-0 flex-1">
           <div className="font-primary-semibold">{plunge.name}</div>
           <div className="font-mono text-xs text-white/40">
-            {formatGallons(plunge.gallons)} gal · {count} log {count === 1 ? 'entry' : 'entries'}
+            {formatGallons(plunge.gallons)} gal · shock{' '}
+            {oxidizerGrams(plunge.gallons, plunge.shock_oxidizer_grams)} g oxidizer
+            {plunge.shock_oxidizer_grams == null ? '' : ' (custom)'} · {count} log{' '}
+            {count === 1 ? 'entry' : 'entries'}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

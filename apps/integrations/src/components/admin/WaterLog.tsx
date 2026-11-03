@@ -864,8 +864,8 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const SHOCK_NOTE = 'Tub closed for shock. Cover off 20+ min, retest before reopening.';
 
-  const shockDrafts = (forGallons: number): DoseDraft[] =>
-    shockDoses(forGallons).map((d) => ({
+  const shockDrafts = (plunge: ColdPlungeRow | null): DoseDraft[] =>
+    shockDoses(plunge?.gallons ?? CHART_GALLONS, plunge?.shock_oxidizer_grams).map((d) => ({
       chemical: d.chemical,
       gramsStr: String(d.grams),
       recommendedGrams: d.grams,
@@ -878,7 +878,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const selectTub = (id: string) => {
     setTub(id);
     if (entryType !== 'shock') return;
-    const resized = shockDrafts(plunges.find((p) => p.id === id)?.gallons ?? CHART_GALLONS);
+    const resized = shockDrafts(plunges.find((p) => p.id === id) ?? null);
     setDoseDrafts((prev) =>
       prev.map((draft) => {
         const next = resized.find((d) => d.chemical === draft.chemical);
@@ -894,7 +894,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     setRecommendations([]);
     setFormError('');
     if (type === 'shock') {
-      setDoseDrafts(shockDrafts(gallons));
+      setDoseDrafts(shockDrafts(selectedPlunge));
       setNotes((prev) => prev.trim() || SHOCK_NOTE);
     } else {
       setDoseDrafts([]);

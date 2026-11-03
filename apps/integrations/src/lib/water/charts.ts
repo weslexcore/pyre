@@ -178,6 +178,18 @@ export const FRESH_FILL_SALT_GRAMS = 920;
 // reading is topped up by the test that comes first, sized to ~2 ppm.
 export const SHOCK_DOSES = [{ chemical: PRODUCTS.oxidizer, grams: 25 }] as const;
 
-/** The shock dose sized for a plunge's volume. */
-export const shockDoses = (gallons: number): { chemical: string; grams: number }[] =>
-  SHOCK_DOSES.map((dose) => ({ chemical: dose.chemical, grams: scaleGrams(dose.grams, gallons) }));
+/**
+ * The shock dose for a plunge: its own oxidizer amount when one is set on
+ * /admin/water/plunges, otherwise the chart amount sized for its volume.
+ */
+export const shockDoses = (
+  gallons: number,
+  oxidizerGrams?: number | null
+): { chemical: string; grams: number }[] =>
+  SHOCK_DOSES.map((dose) => ({
+    chemical: dose.chemical,
+    grams:
+      dose.chemical === PRODUCTS.oxidizer && oxidizerGrams != null
+        ? oxidizerGrams
+        : scaleGrams(dose.grams, gallons),
+  }));

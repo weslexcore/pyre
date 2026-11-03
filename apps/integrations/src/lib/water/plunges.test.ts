@@ -49,6 +49,24 @@ describe('normalizePlungePatch', () => {
     });
   });
 
+  it('sets a shock oxidizer amount, and clears it back to the default when blank', () => {
+    expect(normalizePlungePatch({ shock_oxidizer_grams: '22.54' })).toEqual({
+      ok: true,
+      value: { shock_oxidizer_grams: 22.5 },
+    });
+    expect(normalizePlungePatch({ shock_oxidizer_grams: ' ' })).toEqual({
+      ok: true,
+      value: { shock_oxidizer_grams: null },
+    });
+    expect(normalizePlungePatch({ shock_oxidizer_grams: null })).toEqual({
+      ok: true,
+      value: { shock_oxidizer_grams: null },
+    });
+    expect(normalizePlungePatch({ shock_oxidizer_grams: 0 }).ok).toBe(false);
+    expect(normalizePlungePatch({ shock_oxidizer_grams: 'lots' }).ok).toBe(false);
+    expect(normalizePlungePatch({ shock_oxidizer_grams: 1001 }).ok).toBe(false);
+  });
+
   it('rejects blank names, bad volumes, and empty edits', () => {
     expect(normalizePlungePatch({ name: ' ' }).ok).toBe(false);
     expect(normalizePlungePatch({ gallons: 'x' }).ok).toBe(false);
