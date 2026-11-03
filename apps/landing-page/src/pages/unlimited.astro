@@ -4,6 +4,7 @@ export const prerender = true;
 import { Image } from 'astro:assets';
 import heroImg from '../assets/images/837A0206.webp';
 import introImg from '../assets/images/837A0269.webp';
+import communityImg from '../assets/images/community_2.webp';
 import closingImg from '../assets/images/plunging.webp';
 import Button from '../components/Button.astro';
 import CtaTracking from '../components/CtaTracking.astro';
@@ -15,6 +16,7 @@ import unlimited from '../lib/unlimited';
 
 const { hero, stats, included, founding, intro, faqs, closing } = unlimited;
 const quotes = testimonials.items.filter((t) => t.highlight).slice(0, 3);
+const [featuredQuote, ...otherQuotes] = quotes;
 
 const faqSchema = {
   '@context': 'https://schema.org',
@@ -128,24 +130,51 @@ const faqSchema = {
 
     <!-- Testimonials -->
     {quotes.length > 0 && (
-      <section aria-labelledby="quotes-heading" class="border-t border-[var(--pyre-muted-gold)]/20 bg-[var(--pyre-black)] bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--pyre-muted-gold)_14%,transparent),transparent_65%)] py-16 md:py-24 px-4">
-        <div class="max-w-5xl mx-auto">
-          <h2 id="quotes-heading" class="font-primary-semibold text-[clamp(1.5rem,3vw,2.25rem)] tracking-[-0.02em] uppercase text-center mb-8 md:mb-12">
+      <section aria-labelledby="quotes-heading" class="relative py-20 md:py-32 px-4 overflow-hidden">
+        <Image
+          src={communityImg}
+          alt=""
+          widths={[768, 1280, 1920]}
+          sizes="100vw"
+          class="absolute inset-0 w-full h-full object-cover grayscale"
+          loading="lazy"
+          decoding="async"
+        />
+        <div class="absolute inset-0 bg-[var(--pyre-black)]/85"></div>
+
+        <div class="relative z-10 max-w-4xl mx-auto text-center">
+          <h2 id="quotes-heading" class="font-mono-bold text-xs md:text-sm tracking-[0.3em] uppercase text-[var(--pyre-muted-gold)] mb-10 md:mb-14">
             {unlimited.testimonials.heading}
           </h2>
-          <ul class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
-            {quotes.map((quote) => (
-              <li>
-                <figure class="h-full rounded-lg p-6 md:p-8 flex flex-col border border-[var(--pyre-muted-gold)]/25 bg-[var(--pyre-creme)]/[0.03]">
-                  <span class="font-primary-semibold text-5xl leading-none text-[var(--pyre-muted-gold)] mb-2" aria-hidden="true">&ldquo;</span>
-                  <blockquote class="text-sm md:text-base opacity-85 leading-relaxed flex-grow">{quote.quote}</blockquote>
-                  <figcaption class="mt-6 pt-4 border-t border-[var(--pyre-muted-gold)]/20 font-mono-bold text-xs uppercase tracking-[0.15em] text-[var(--pyre-muted-gold)]">
-                    {quote.name} · {quote.sessionType}
-                  </figcaption>
-                </figure>
-              </li>
-            ))}
-          </ul>
+
+          <!-- Featured quote -->
+          <figure class="mb-14 md:mb-20">
+            <blockquote class="font-primary-semibold text-[clamp(1.375rem,3.2vw,2.25rem)] leading-[1.3] tracking-[-0.01em]">
+              &ldquo;{featuredQuote.quote}&rdquo;
+            </blockquote>
+            <figcaption class="mt-6 flex items-center justify-center gap-3 font-mono-bold text-xs uppercase tracking-[0.2em] text-[var(--pyre-muted-gold)]">
+              <span class="h-px w-8 bg-[var(--pyre-muted-gold)]/60" aria-hidden="true"></span>
+              {featuredQuote.name}
+              <span class="h-px w-8 bg-[var(--pyre-muted-gold)]/60" aria-hidden="true"></span>
+            </figcaption>
+          </figure>
+
+          {otherQuotes.length > 0 && (
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-12 text-left">
+              {otherQuotes.map((quote) => (
+                <li>
+                  <figure class="border-l border-[var(--pyre-muted-gold)]/50 pl-5 md:pl-6">
+                    <blockquote class="text-sm md:text-base italic opacity-80 leading-relaxed">
+                      &ldquo;{quote.quote}&rdquo;
+                    </blockquote>
+                    <figcaption class="mt-4 font-mono-bold text-[11px] uppercase tracking-[0.2em] opacity-60">
+                      {quote.name} · {quote.sessionType}
+                    </figcaption>
+                  </figure>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
     )}
