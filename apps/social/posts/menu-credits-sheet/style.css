@@ -115,3 +115,37 @@
 .menu-sheet--black .tpl-menu-sheet__pine::after {
   content: "PYRE";
 }
+
+/* Pages 1–2: "best value" sits on the savings line, set like the note but in gold. The item
+   wraps as a row so the full-width name/price row stays on top and the two lines share one. */
+.tpl-menu-sheet__item:has(.tpl-menu-sheet__description--accent) {
+  flex-flow: row wrap;
+  align-items: baseline;
+  column-gap: 0;
+}
+
+.tpl-menu-sheet__item:has(.tpl-menu-sheet__description--accent) .tpl-menu-sheet__row {
+  flex-basis: 100%;
+}
+
+.tpl-menu-sheet__description--accent {
+  font-size: 16px;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Muted dot between the savings and "best value", like the category notes' separator. */
+.tpl-menu-sheet__description--accent::before {
+  content: "\00a0·\00a0";
+  color: color-mix(in srgb, var(--pyre-black) 55%, transparent);
+}
+
+@media (min-width: 2000px) {
+  .tpl-menu-sheet__description--accent {
+    font-size: 32px;
+  }
+  .menu-sheet--black .tpl-menu-sheet__description--accent {
+    font-size: 36px;
+  }
+}

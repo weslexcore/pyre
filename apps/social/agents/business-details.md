@@ -66,7 +66,7 @@ Lead with the membership and the intro offer. Credit packs and subscriptions are
 | 1 | $25 | Drop-in |
 | 2 | $45 | Saves $5 |
 | 4 | $85 | Saves $15 |
-| 8 | $165 | $20.62 a session, saves $35 |
+| 8 | $165 | saves $35 |
 
 **Subscriptions** (renew monthly, credits expire monthly)
 
