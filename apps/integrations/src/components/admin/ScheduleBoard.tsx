@@ -62,6 +62,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass } from '@/components/admin/ui';
+import { clearBackup, readBackup, writeBackup } from '@/lib/client/autosave';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
   HoursChangeRequestRow,
@@ -390,6 +391,20 @@ async function api(
   }
 }
 
+/** Where a draft or refine run in flight is kept, so a reload resumes the wait. */
+const PENDING_DRAFT_KEY = 'schedule-draft-run';
+/** How long to wait on the agent before giving up on a run. */
+const DRAFT_WAIT_MS = 180_000;
+
+interface PendingDraftRun {
+  kind: 'draft' | 'refine';
+  weeks: string[];
+  withNote: boolean;
+  /** Proposal ids on the board when the run started; the run's are new ones. */
+  beforeIds: string[];
+  startedAt: number;
+}
+
 export function ScheduleBoard() {
   // Opens on the Set view (the locked schedule); a link that names a date
   // without a view lands on that date's week.
@@ -416,6 +431,12 @@ export function ScheduleBoard() {
   const [form, setForm] = useState<ShiftFormState>(emptyShiftForm);
   // Agent drafting: set while waiting for a new proposal to appear.
   const [drafting, setDrafting] = useState(false);
+  // The weeks the draft run in flight covers, and whether it carries a note
+  // (for the progress line, which also shows for a run resumed after a reload).
+  const [draftingRun, setDraftingRun] = useState<{ weeks: number; withNote: boolean }>({
+    weeks: 1,
+    withNote: false,
+  });
   // Week whose draft is being revised via the banner's refine composer (the
   // poll is shared with draft runs, so one agent run at a time either way).
   const [refiningWeek, setRefiningWeek] = useState<string | null>(null);
@@ -977,42 +998,78 @@ export function ScheduleBoard() {
   // Poll until every target week has a draft proposal that wasn't there when
   // the run started (the agent sessions run async; a refinement's superseding
   // proposal is a new id just like a fresh draft's); ~3min budget. Shared by
-  // draft runs and refinements — one agent run at a time.
-  const pollForNewProposals = (targetWeeks: string[], onSettle: (ok: boolean) => void) => {
-    const beforeIds = new Set((data?.proposals ?? []).map((p) => p.id));
-    const startedAt = Date.now();
-    const pollUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}&includeDrafts=1`;
+  // draft runs and refinements — one agent run at a time. The run is kept on
+  // this device (PENDING_DRAFT_KEY) so a reload mid-run picks the wait back
+  // up instead of losing track of the draft on its way.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const pollForNewProposals = (pending: PendingDraftRun, onSettle: (ok: boolean) => void) => {
+    writeBackup(PENDING_DRAFT_KEY, pending, null);
+    const beforeIds = new Set(pending.beforeIds);
+    const sorted = [...pending.weeks].sort();
+    const pollUrl = `/api/admin/schedule-board?start=${sorted[0]}&end=${addDays(sorted[sorted.length - 1] ?? sorted[0], 6)}&includeDrafts=1`;
+    const settle = (ok: boolean) => {
+      if (draftPollRef.current) clearInterval(draftPollRef.current);
+      draftPollRef.current = null;
+      clearBackup(PENDING_DRAFT_KEY);
+      onSettle(ok);
+    };
     if (draftPollRef.current) clearInterval(draftPollRef.current);
     draftPollRef.current = setInterval(async () => {
-      const boardRes = await fetch(pollUrl);
-      if (boardRes.ok) {
+      const boardRes = await fetch(pollUrl).catch(() => null);
+      if (boardRes?.ok) {
         const board = (await boardRes.json()) as BoardData;
         const freshWeeks = new Set(
           (board.proposals ?? []).filter((p) => !beforeIds.has(p.id)).map((p) => p.week_start)
         );
-        if (targetWeeks.every((w) => freshWeeks.has(w))) {
-          if (draftPollRef.current) clearInterval(draftPollRef.current);
-          draftPollRef.current = null;
-          setData(board);
-          onSettle(true);
+        if (pending.weeks.every((w) => freshWeeks.has(w))) {
+          settle(true);
+          // Reload whatever is in view (the poll's range may not be it).
+          void loadRef.current();
           return;
         }
       }
-      if (Date.now() - startedAt > 180_000) {
-        if (draftPollRef.current) clearInterval(draftPollRef.current);
-        draftPollRef.current = null;
+      if (Date.now() - pending.startedAt > DRAFT_WAIT_MS) {
         setError(
           'The agent is taking longer than expected — refresh in a minute or check the agent logs.'
         );
-        onSettle(false);
+        settle(false);
       }
     }, 5000);
   };
+
+  const newPendingRun = (kind: PendingDraftRun['kind'], weeks: string[], withNote: boolean) => ({
+    kind,
+    weeks,
+    withNote,
+    beforeIds: (data?.proposals ?? []).map((p) => p.id),
+    startedAt: Date.now(),
+  });
+
+  // A run started before a reload: wait for it again while its budget lasts.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on mount
+  useEffect(() => {
+    const pending = readBackup<PendingDraftRun>(PENDING_DRAFT_KEY)?.value;
+    if (!pending || !Array.isArray(pending.weeks) || pending.weeks.length === 0) return;
+    if (Date.now() - pending.startedAt > DRAFT_WAIT_MS) {
+      clearBackup(PENDING_DRAFT_KEY);
+      return;
+    }
+    if (pending.kind === 'refine') {
+      setRefiningWeek(pending.weeks[0] ?? null);
+      pollForNewProposals(pending, () => setRefiningWeek(null));
+    } else {
+      setDrafting(true);
+      setDraftingRun({ weeks: pending.weeks.length, withNote: pending.withNote });
+      pollForNewProposals(pending, () => setDrafting(false));
+    }
+  }, []);
 
   const draftSchedule = async () => {
     const targetWeeks = draftTargetWeeks;
     if (targetWeeks.length === 0) return;
     setDrafting(true);
+    setDraftingRun({ weeks: targetWeeks.length, withNote: Boolean(draftNote.trim()) });
     setDraftComposerOpen(false);
     setError(null);
     const res = await fetch('/api/admin/schedule-draft', {
@@ -1030,7 +1087,7 @@ export function ScheduleBoard() {
       setDrafting(false);
       return;
     }
-    pollForNewProposals(targetWeeks, (ok) => {
+    pollForNewProposals(newPendingRun('draft', targetWeeks, Boolean(draftNote.trim())), (ok) => {
       setDrafting(false);
       if (ok) setDraftNote('');
     });
@@ -1056,7 +1113,7 @@ export function ScheduleBoard() {
       return false;
     }
     setRefiningWeek(week);
-    pollForNewProposals([week], () => setRefiningWeek(null));
+    pollForNewProposals(newPendingRun('refine', [week], true), () => setRefiningWeek(null));
     return true;
   };
 
@@ -1474,8 +1531,8 @@ export function ScheduleBoard() {
           {drafting && (
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
               Syncing Momence and drafting{' '}
-              {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'}
-              {draftNote.trim() ? ' with your note' : ''} — proposals will appear here (usually
+              {draftingRun.weeks > 1 ? `${draftingRun.weeks} weeks` : 'the week'}
+              {draftingRun.withNote ? ' with your note' : ''} — proposals will appear here (usually
               under a minute)…
             </p>
           )}

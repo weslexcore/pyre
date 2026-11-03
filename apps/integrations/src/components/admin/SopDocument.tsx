@@ -18,6 +18,11 @@
 // proposal into the editor before saving. The sparkle Review button opens the editor
 // with a review already running.
 //
+// AI drafts outlive the page (lib/sops/assist-store): an open proposal, and
+// the editor once a proposal is in it, are kept on this device until Save or
+// Discard. Coming back to the document with one waiting shows a banner, and
+// opening the editor (Edit, Review, or the banner's Continue) restores it.
+//
 // The page arrives with the document and its open run already rendered
 // (`initial`, assembled server-side by lib/sops/document.ts), so nothing is
 // fetched on mount. The run itself — optimistic taps, the serialized queue,
@@ -30,6 +35,14 @@ import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStampWithYear } from '@/lib/client/format';
 import type { SopRow, SopVersionRow } from '@/lib/db';
+import {
+  clearSopDrafts,
+  readStoredAiEdit,
+  readStoredAssist,
+  sopDraftKeys,
+  storedDraftAt,
+  writeStoredAiEdit,
+} from '@/lib/sops/assist-store';
 import { countTasks } from '@/lib/sops/checklist';
 import { diffSummary } from '@/lib/sops/diff';
 import type { SopDocumentPayload } from '@/lib/sops/document';
@@ -173,6 +186,36 @@ export function SopDocument({
   // The writing assistant panel, and whether it opened to review right away.
   const [showAssist, setShowAssist] = useState(false);
   const [autoReview, setAutoReview] = useState(false);
+  // An assistant proposal has been put into the editor this edit, so the
+  // editor is kept on this device until Save or Discard.
+  const [aiEdited, setAiEdited] = useState(false);
+  // The version the edit started from (a restored draft keeps its own), which
+  // the save is locked against.
+  const [editBaseVersion, setEditBaseVersion] = useState<number | null>(null);
+  // When this viewer's waiting AI draft for the document was last touched
+  // (read after hydration; refreshed on the way back to view mode).
+  const [waitingDraftAt, setWaitingDraftAt] = useState<string | null>(null);
+
+  const draftKeys = useMemo(
+    () => (data ? sopDraftKeys(data.viewerEmail, data.sop.id) : null),
+    [data]
+  );
+
+  useEffect(() => {
+    if (mode !== 'view' || !draftKeys) return;
+    setWaitingDraftAt(storedDraftAt(draftKeys));
+  }, [mode, draftKeys]);
+
+  // Mirror the editor while it holds an AI proposal.
+  useEffect(() => {
+    if (mode !== 'edit' || !aiEdited || !draftKeys || editBaseVersion === null) return;
+    writeStoredAiEdit(draftKeys.edit, {
+      title: draftTitle,
+      content: draftContent,
+      note: draftNote,
+      baseVersion: editBaseVersion,
+    });
+  }, [mode, aiEdited, draftKeys, editBaseVersion, draftTitle, draftContent, draftNote]);
 
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
 
@@ -246,18 +289,40 @@ export function SopDocument({
   }, [slug, run.resetRun]);
 
   const startEdit = useCallback((doc: DocResponse, opts: { review?: boolean } = {}) => {
-    setDraftTitle(doc.sop.title);
-    setDraftContent(doc.sop.content_md);
-    setDraftNote('');
+    // An AI draft waiting on this device comes back as it was left.
+    const keys = sopDraftKeys(doc.viewerEmail, doc.sop.id);
+    const storedEdit = readStoredAiEdit(keys.edit)?.value ?? null;
+    const storedAssist = doc.assistEnabled && readStoredAssist(keys.assist) !== null;
+    setDraftTitle(storedEdit?.title ?? doc.sop.title);
+    setDraftContent(storedEdit?.content ?? doc.sop.content_md);
+    setDraftNote(storedEdit?.note ?? '');
+    setEditBaseVersion(storedEdit?.baseVersion ?? doc.sop.current_version);
+    setAiEdited(storedEdit !== null);
     setPreview(false);
     // A new document (only the create form's stub heading) opens with the
     // assistant ready to draft, which is also where the create form's rough
     // notes land.
     const isStub = doc.sop.content_md.replace(/^\s*#[^\n]*\n?/, '').trim() === '';
-    setShowAssist(doc.assistEnabled && (Boolean(opts.review) || isStub));
+    setShowAssist(doc.assistEnabled && (Boolean(opts.review) || isStub || storedAssist));
     setAutoReview(Boolean(opts.review));
     setMode('edit');
   }, []);
+
+  const discardWaitingDraft = async () => {
+    if (!draftKeys) return;
+    if (
+      !(await confirmAction({
+        title: 'Discard the AI draft?',
+        body: 'The assistant’s proposal and any edits made to it are removed from this device.',
+        confirmLabel: 'Discard',
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    clearSopDrafts(draftKeys);
+    setWaitingDraftAt(null);
+  };
 
   // ?edit=1 (used by the create flow) drops straight into the editor. The
   // param is stripped after the first trigger, so re-runs are no-ops.
@@ -297,10 +362,12 @@ export function SopDocument({
           title,
           content,
           changeNote: note,
-          baseVersion: data.sop.current_version,
+          baseVersion: editBaseVersion ?? data.sop.current_version,
         }),
       });
       if (!res.ok) throw new Error(await readError(res));
+      // Saved: nothing of the AI draft is left to keep.
+      if (draftKeys) clearSopDrafts(draftKeys);
       invalidateJson(`/api/admin/sops?slug=${encodeURIComponent(slug)}`);
       // Full reload keeps the SSR page header in sync after a rename.
       window.location.href = window.location.pathname;
@@ -667,6 +734,24 @@ export function SopDocument({
 
       {mode === 'view' ? (
         <>
+          {waitingDraftAt && canEdit && !sop.archived && (
+            <div className="flex flex-wrap items-center gap-3 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2">
+              <p className="flex-1 text-sm text-[var(--pyre-creme)]">
+                You have an unsaved AI draft of this document from {etStampWithYear(waitingDraftAt)}
+                .
+              </p>
+              <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
+                Continue
+              </button>
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => void discardWaitingDraft()}
+              >
+                Discard
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <input
               type="search"
@@ -725,7 +810,9 @@ export function SopDocument({
               content={draftContent}
               disabled={busy}
               autoReview={autoReview}
+              storageKey={sopDraftKeys(viewerEmail, sop.id).assist}
               onApply={(proposal) => {
+                setAiEdited(true);
                 setDraftTitle(proposal.title);
                 setDraftContent(proposal.contentMd);
                 setDraftNote((note) => note || proposal.changeNote);

@@ -16,6 +16,13 @@
 // Rough notes typed on the library's create form arrive through
 // sessionStorage (see assistNotesKey) and start a draft as soon as the new
 // document's editor opens.
+//
+// An open proposal (with its chat) is kept on this device under storageKey
+// (lib/sops/assist-store) and comes back when the panel opens again, after a
+// reload or Cancel, until it is discarded or put into the editor. A run in
+// flight is not stored: a reload mid-run brings back the proposal it was
+// replacing, and a reload mid-refine brings back the answers unsent, with
+// "Send answers again".
 
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { buttonClass, inputClass } from '@/components/admin/ui';
@@ -32,6 +39,12 @@ import {
 } from '@/lib/sops/assist-chat';
 import { assistStructureWarnings } from '@/lib/sops/assist-checks';
 import { MAX_ASSIST_CHAT_TEXT, MAX_ASSIST_NOTES } from '@/lib/sops/assist-limits';
+import {
+  clearStoredAssist,
+  readStoredAssist,
+  type StoredAssistResult,
+  writeStoredAssist,
+} from '@/lib/sops/assist-store';
 import { SopDiff } from './SopDiff';
 
 /** Where the create form leaves its rough notes for the new document's editor. */
@@ -63,6 +76,7 @@ const tabClass = (active: boolean) =>
 export function SopAssist({
   sopId,
   slug,
+  storageKey,
   title,
   content,
   disabled,
@@ -71,6 +85,8 @@ export function SopAssist({
 }: {
   sopId: string;
   slug: string;
+  /** Where this viewer's open proposal for the document is kept (sopDraftKeys().assist). */
+  storageKey: string;
   /** The editor's current title and body; what the assistant works on. */
   title: string;
   content: string;
@@ -82,23 +98,41 @@ export function SopAssist({
   // A document that is only its stub heading has nothing to review yet, so
   // the panel opens on drafting.
   const isEmpty = content.replace(/^\s*#[^\n]*\n?/, '').trim() === '';
-  const [tab, setTab] = useState<AssistMode>(isEmpty ? 'draft' : 'review');
-  const [notes, setNotes] = useState('');
+  // A proposal left open earlier (reload, Cancel) picks up where it was. The
+  // panel only mounts in the editor, after hydration, so storage is readable.
+  const [restored] = useState(() => readStoredAssist(storageKey)?.value ?? null);
+  const [tab, setTab] = useState<AssistMode>(restored?.tab ?? (isEmpty ? 'draft' : 'review'));
+  const [notes, setNotes] = useState(restored?.notes ?? '');
   const [busy, setBusy] = useState<AssistMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The proposal (refined in place by the chat), the text it was made
   // against (the diff's "before"), and the first answer's summary and
   // findings, which stay put while the chat refines.
-  const [result, setResult] = useState<{
-    proposal: AssistProposal;
-    before: string;
-    beforeTitle: string;
-    summary: string;
-    findings: AssistFinding[];
-  } | null>(null);
-  const [chat, setChat] = useState<ChatState>(EMPTY_CHAT);
+  const [result, setResult] = useState<StoredAssistResult | null>(restored?.result ?? null);
+  const [chat, setChat] = useState<ChatState>(restored?.chat ?? EMPTY_CHAT);
   // How many chat messages the assistant has seen.
-  const [sentThrough, setSentThrough] = useState(0);
+  const [sentThrough, setSentThrough] = useState(restored?.sentThrough ?? 0);
+  // What sentThrough was before the refine in flight: stored instead, so a
+  // reload mid-refine offers to send the answers again.
+  const sentBeforeRefine = useRef(0);
+
+  // Keep the open proposal on this device. Skipped while a draft or review
+  // runs (it cleared the result, and the stored one should survive a reload
+  // until the new one lands); dismissing it clears the record.
+  useEffect(() => {
+    if (busy === 'draft' || busy === 'review') return;
+    if (!result) {
+      clearStoredAssist(storageKey);
+      return;
+    }
+    writeStoredAssist(storageKey, {
+      tab: tab === 'refine' ? 'review' : tab,
+      notes,
+      result,
+      chat,
+      sentThrough: busy === 'refine' ? sentBeforeRefine.current : sentThrough,
+    });
+  }, [storageKey, busy, result, chat, sentThrough, tab, notes]);
 
   const post = async (body: Record<string, unknown>): Promise<AssistProposal> => {
     const res = await fetch('/api/admin/sop-assist', {
@@ -143,6 +177,7 @@ export function SopAssist({
   const refine = async (next: ChatState) => {
     if (!result) return;
     const previouslySent = sentThrough;
+    sentBeforeRefine.current = previouslySent;
     setChat(next);
     setSentThrough(next.messages.length);
     setBusy('refine');
@@ -177,6 +212,8 @@ export function SopAssist({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    // A restored proposal is never overwritten by a run nobody asked for.
+    if (restored) return;
     const handoff = takeHandoffNotes(slug);
     if (handoff) {
       setTab('draft');
