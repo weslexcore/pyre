@@ -13,7 +13,7 @@ import membership from '../lib/membership';
 import testimonials from '../lib/testimonials';
 import unlimited from '../lib/unlimited';
 
-const { hero, stats, included, math, founding, intro, faqs, closing } = unlimited;
+const { hero, stats, included, founding, intro, faqs, closing } = unlimited;
 const quotes = testimonials.items.filter((t) => t.highlight).slice(0, 3);
 
 const faqSchema = {
@@ -123,46 +123,6 @@ const faqSchema = {
             </li>
           ))}
         </ul>
-      </div>
-    </section>
-
-    <!-- The math -->
-    <section id="math" aria-labelledby="math-heading" class="bg-[var(--pyre-blue)] py-16 md:py-24 px-4">
-      <div class="max-w-3xl mx-auto">
-        <div class="text-center mb-8 md:mb-10">
-          <h2 id="math-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3">
-            {math.heading}
-          </h2>
-          <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">{math.subtitle}</p>
-        </div>
-
-        <div class="border border-current/25 rounded-lg overflow-hidden bg-[var(--pyre-black)]/15">
-          <table class="w-full text-left text-sm md:text-base">
-            <thead class="bg-[var(--pyre-black)]/30">
-              <tr class="font-mono-bold text-[11px] md:text-xs uppercase tracking-wide opacity-70">
-                <th scope="col" class="p-3 md:p-4">You come</th>
-                <th scope="col" class="p-3 md:p-4">Drop-ins</th>
-                <th scope="col" class="p-3 md:p-4 text-[var(--pyre-gold)]">Founding</th>
-                <th scope="col" class="p-3 md:p-4">Per visit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {math.rows.map((row) => (
-                <tr class="border-t border-current/10">
-                  <th scope="row" class="p-3 md:p-4 font-mono-bold uppercase tracking-wide text-xs md:text-sm">
-                    {row.label}
-                  </th>
-                  <td class="p-3 md:p-4 opacity-70">
-                    <s>${row.dropInTotal}</s>
-                  </td>
-                  <td class="p-3 md:p-4 text-[var(--pyre-gold)] font-mono-bold">${founding.compare[0].price}</td>
-                  <td class="p-3 md:p-4">~${row.perVisit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p class="mt-4 text-xs opacity-60 text-center">{math.footnote}</p>
       </div>
     </section>
 

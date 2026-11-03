@@ -8,35 +8,12 @@ import { introOffer, SINGLE_CREDIT_PRICE } from './sessions';
 
 const { price, originalPrice, href } = founding.unlimited;
 
-/** Average weeks in a month, for per-visit math. */
-const WEEKS_PER_MONTH = 52 / 12;
-
 const GUEST_PASSES = 4;
 
 export interface UnlimitedBenefit {
   title: string;
   body: string;
 }
-
-export interface UnlimitedVisitRow {
-  label: string;
-  visitsPerMonth: number;
-  perVisit: number;
-  dropInTotal: number;
-}
-
-const visitRow = (perWeek: number): UnlimitedVisitRow => {
-  const visitsPerMonth = Math.round(perWeek * WEEKS_PER_MONTH);
-  return {
-    label: `${perWeek}x a week`,
-    visitsPerMonth,
-    perVisit: Math.round(price / visitsPerMonth),
-    dropInTotal: visitsPerMonth * SINGLE_CREDIT_PRICE,
-  };
-};
-
-/** Visits per month at which unlimited costs less than drop-ins. */
-const breakEvenVisits = Math.ceil(price / SINGLE_CREDIT_PRICE);
 
 const unlimited = {
   meta: {
@@ -97,13 +74,6 @@ const unlimited = {
         body: `Your $${price}/mo never goes up, as long as you stay a member. Standard Unlimited will be $${originalPrice}/mo.`,
       },
     ] satisfies UnlimitedBenefit[],
-  },
-
-  math: {
-    heading: 'The math',
-    subtitle: `A drop-in session is $${SINGLE_CREDIT_PRICE}. Unlimited pays for itself at ${breakEvenVisits} visits a month — about twice a week.`,
-    rows: [visitRow(2), visitRow(3), visitRow(4)],
-    footnote: `Per-visit cost assumes ${WEEKS_PER_MONTH.toFixed(1)} weeks per month, before counting guest passes or member discounts.`,
   },
 
   founding: {
