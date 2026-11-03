@@ -63,7 +63,9 @@ export const founding = {
   /** One-line pitch, used on partner pages. */
   pitch: `Unlimited access at $${UNLIMITED.price}/mo, locked in for life. The founding rate is only available through ${FOUNDING_DEADLINE}.`,
   /** Announcement used by the site banner. */
-  announcement: `Founding Unlimited Membership — $${UNLIMITED.price}/mo for life (normally $${UNLIMITED.originalPrice}). Only available through ${FOUNDING_DEADLINE}.`,
+  announcement: `Founding Unlimited Membership — $${UNLIMITED.price}/mo for life (normally $${UNLIMITED.originalPrice}).`,
+  /** Deadline sentence after the banner announcement; hidden on mobile, where the day countdown covers it. */
+  announcementDeadline: `Only available through ${FOUNDING_DEADLINE}.`,
 };
 
 export default membership;
