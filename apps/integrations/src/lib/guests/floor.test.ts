@@ -196,6 +196,24 @@ describe('floorTiming', () => {
     ]);
   });
 
+  it('marks a due check-in overdue once the next one comes due', () => {
+    const points: Checkpoint[] = [
+      { id: 'water', label: 'Water', minutes: 20, from: 'after_arrival' },
+      { id: 'warn', label: 'Warning', minutes: 15, from: 'before_end' },
+    ];
+    const inFor = (mins: number) => floorTiming(guestAt(-mins), points, NOW).checkpoints;
+    expect(inFor(30).map((c) => [c.due, c.overdue])).toEqual([
+      [true, false],
+      [false, false],
+    ]);
+    expect(inFor(45).map((c) => [c.due, c.overdue])).toEqual([
+      [true, true],
+      [true, false],
+    ]);
+    const done = { warn: { at: at(-1), by: 'staff@pyresauna.com' } };
+    expect(floorTiming(guestAt(-50, done), points, NOW).checkpoints[0].overdue).toBe(true);
+  });
+
   it('is over once their time is up with nothing due, capped at a full bar', () => {
     const t = floorTiming(guestAt(-70), [], NOW);
     expect(t.status).toBe('over');

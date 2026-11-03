@@ -96,6 +96,8 @@ const badgeBase =
   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide';
 const goldBadge = `${badgeBase} border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`;
 const sageBadge = `${badgeBase} border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]`;
+const redButtonClass =
+  'rounded border border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/20 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-[var(--pyre-red)] disabled:opacity-40';
 const redBadge = `${badgeBase} border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]`;
 const quietBadge = `${badgeBase} border-white/10 bg-white/5 text-white/50`;
 
@@ -438,7 +440,11 @@ export function GuestCheckIns() {
               key={guest.bookingId}
               className={`${cardClass} ${
                 unlimitedClass(memberOf(guest)) ||
-                (timing.status === 'due' ? 'border-[var(--pyre-gold)]/60' : '')
+                (timing.checkpoints.some((c) => c.overdue)
+                  ? 'border-[var(--pyre-red)]/70'
+                  : timing.status === 'due'
+                    ? 'border-[var(--pyre-gold)]/60'
+                    : '')
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -647,7 +653,7 @@ export function GuestCheckIns() {
 
 /**
  * One check-in on a guest's card: due ones are the gold button that marks
- * them done; done ones say when, and tap again to un-mark; upcoming ones say
+ * them done, red once the next check-in has come due too; done ones say when, and tap again to un-mark; upcoming ones say
  * when they're due.
  */
 function CheckpointChip({
@@ -659,10 +665,15 @@ function CheckpointChip({
   busy: boolean;
   onToggle: () => void;
 }) {
-  const { checkpoint, done, due, dueAt } = timing;
+  const { checkpoint, done, due, overdue, dueAt } = timing;
   if (due) {
     return (
-      <button type="button" className={goldButtonClass} disabled={busy} onClick={onToggle}>
+      <button
+        type="button"
+        className={overdue ? redButtonClass : goldButtonClass}
+        disabled={busy}
+        onClick={onToggle}
+      >
         {checkpoint.label} · Mark done
       </button>
     );

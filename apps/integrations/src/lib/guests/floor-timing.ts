@@ -197,6 +197,8 @@ export interface CheckpointTiming {
   done: CheckpointDone | null;
   /** Due and not done. */
   due: boolean;
+  /** Due, not done, and the next check-in has come due too. */
+  overdue: boolean;
 }
 
 export interface FloorTiming {
@@ -240,9 +242,13 @@ export function floorTiming(
     .map((checkpoint) => {
       const at = dueAt(checkpoint, start, endsAt);
       const done = guest.checkpointsDone[checkpoint.id] ?? null;
-      return { checkpoint, dueAt: at, done, due: !done && at <= nowMs };
+      return { checkpoint, dueAt: at, done, due: !done && at <= nowMs, overdue: false };
     })
     .sort((a, b) => a.dueAt - b.dueAt);
+  timings.forEach((t, i) => {
+    const next = timings[i + 1];
+    t.overdue = t.due && next !== undefined && next.dueAt <= nowMs;
+  });
   const status: FloorStatus = timings.some((t) => t.due) ? 'due' : remainingMs <= 0 ? 'over' : 'in';
   return { status, progress, remainingMs, endsAt, checkpoints: timings };
 }
