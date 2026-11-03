@@ -4,15 +4,24 @@
 // hides while the homepage offer section is on screen, and switches from the
 // intro offer to the founding membership once the visitor has scrolled past
 // the membership section. The founding variant is dropped after the founding
-// offer ends.
+// offer ends. With `mode="founding"` (the /unlimited page) it leads with the
+// founding membership the whole way and falls back to the intro after it ends.
 import stickyOfferBar from '../lib/stickyOfferBar';
 
+interface Props {
+  mode?: 'intro-then-founding' | 'founding';
+  /** Tracking placement prefix: "<prefix>_intro" / "<prefix>_founding". */
+  placementPrefix?: string;
+}
+
+const { mode = 'intro-then-founding', placementPrefix = 'sticky_bar' } = Astro.props;
 const { intro, founding, endsAt } = stickyOfferBar;
 ---
 
 <div
   data-sticky-offer-bar
   data-ends-at={endsAt}
+  data-mode={mode}
   class="fixed inset-x-0 bottom-0 z-40 translate-y-full border-t border-[var(--pyre-muted-gold)]/40 bg-[var(--pyre-black)]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-[var(--pyre-creme)] backdrop-blur transition-transform duration-300 motion-reduce:transition-none md:hidden"
   aria-hidden="true"
 >
@@ -27,7 +36,7 @@ const { intro, founding, endsAt } = stickyOfferBar;
       tabindex="-1"
       aria-label={option.ariaLabel}
       data-sticky-variant={option.variant}
-      data-track-placement={option.placement}
+      data-track-placement={`${placementPrefix}_${option.variant}`}
       class={`${option.variant === 'intro' ? 'flex' : 'hidden'} items-center justify-between gap-3`}
     >
       <span class="min-w-0">
@@ -55,13 +64,16 @@ const { intro, founding, endsAt } = stickyOfferBar;
     let offerInView = false;
     let visible = false;
 
+    const foundingFirst = bar.dataset.mode === 'founding';
+
     function setVariant() {
-      const pastMembership =
-        foundingLive && !!membership && membership.getBoundingClientRect().top < 0;
-      introLink?.classList.toggle('hidden', pastMembership);
-      introLink?.classList.toggle('flex', !pastMembership);
-      foundingLink?.classList.toggle('hidden', !pastMembership);
-      foundingLink?.classList.toggle('flex', pastMembership);
+      const showFounding =
+        foundingLive &&
+        (foundingFirst || (!!membership && membership.getBoundingClientRect().top < 0));
+      introLink?.classList.toggle('hidden', showFounding);
+      introLink?.classList.toggle('flex', !showFounding);
+      foundingLink?.classList.toggle('hidden', !showFounding);
+      foundingLink?.classList.toggle('flex', showFounding);
     }
 
     function setVisible(next: boolean) {

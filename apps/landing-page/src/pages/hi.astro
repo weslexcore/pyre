@@ -3,12 +3,15 @@ export const prerender = true;
 
 import { Image } from 'astro:assets';
 import EventsCarousel from '../components/events/EventsCarousel';
+import FoundingCountdown from '../components/FoundingCountdown.astro';
+import GoogleRatingBadge from '../components/GoogleRatingBadge.astro';
 import InstagramIcon from '../components/icons/InstagramIcon.astro';
 import SignupForm from '../components/SignupForm.astro';
 import Layout from '../layouts/main.astro';
 import { SPECIAL_EVENT_TAG } from '../lib/events-config';
 import hi from '../lib/hi';
 import location, { formatWindow } from '../lib/location';
+import { introMembershipPerk } from '../lib/sessions';
 ---
 
 <Layout
@@ -55,6 +58,9 @@ import location, { formatWindow } from '../lib/location';
             </span>
           ))}
         </div>
+        <div class="mt-4">
+          <GoogleRatingBadge placement="hi_google_rating" />
+        </div>
       </header>
 
       <!-- Hero CTA: intro offer -->
@@ -89,6 +95,7 @@ import location, { formatWindow } from '../lib/location';
           >
             {hi.hero.cta.label}
           </a>
+          <p class="mt-3 text-xs text-[var(--pyre-muted-gold)]">{introMembershipPerk}</p>
         </div>
       </section>
 
@@ -112,6 +119,7 @@ import location, { formatWindow } from '../lib/location';
                   {link.sublabel && (
                     <span class="block text-xs opacity-60 mt-0.5 truncate">{link.sublabel}</span>
                   )}
+                  {link.id === 'membership' && <FoundingCountdown class="mt-2" />}
                 </span>
                 <svg
                   class="w-4 h-4 flex-shrink-0 opacity-40 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:opacity-70"

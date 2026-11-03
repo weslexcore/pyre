@@ -11,7 +11,6 @@ const stickyOfferBar = {
     action: 'Claim',
     href: introOffer.href,
     ariaLabel: `Buy the intro offer: ${introOffer.sentence.toLowerCase()}`,
-    placement: 'sticky_bar_intro',
   },
   founding: {
     eyebrow: `Founding rate ends ${founding.deadline}`,
@@ -19,7 +18,6 @@ const stickyOfferBar = {
     action: 'Join',
     href: founding.unlimited.href,
     ariaLabel: `Claim the Founding Unlimited membership: $${founding.unlimited.price} per month for life`,
-    placement: 'sticky_bar_founding',
   },
 };
 
