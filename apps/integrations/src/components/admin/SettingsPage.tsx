@@ -22,6 +22,8 @@ import {
 } from '@/lib/guests/floor-timing';
 import {
   type AnySettingValue,
+  MAX_MEMBERSHIP_IDS,
+  membershipIdFrom,
   SETTING_SECTIONS,
   SETTINGS,
   type SettingDefinition,
@@ -60,6 +62,10 @@ function describeValue(def: SettingDefinition, value: AnySettingValue): string {
   if (def.type === 'due_days') return 'the default days';
   if (def.type === 'checkpoints') return 'the default check-ins';
   if (def.type === 'minutes_list') return (value as number[]).map((m) => `${m} min`).join(', ');
+  if (def.type === 'membership_ids') {
+    const ids = value as number[];
+    return ids.length > 0 ? ids.join(', ') : 'none';
+  }
   const labels = def.options
     .filter((o) => (value as string[]).includes(o.value))
     .map((o) => o.label);
@@ -370,6 +376,83 @@ function MinutesList({
   );
 }
 
+/** Momence membership ids as chips that open their checkout, plus a box to add one by id or link. */
+function MembershipIdsList({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number[];
+  disabled: boolean;
+  onChange: (next: number[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const next = membershipIdFrom(draft);
+  const valid = next !== null && !value.includes(next);
+  const add = () => {
+    if (!valid || next === null) return;
+    onChange([...value, next]);
+    setDraft('');
+  };
+  return (
+    <div className="space-y-2">
+      {value.length === 0 && (
+        <p className="text-xs text-[var(--pyre-gold)]">
+          None set: no purchase counts as an intro offer, so the intro journeys won’t start.
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {value.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1.5 rounded border border-white/15 px-2 py-1 font-mono text-xs text-[var(--pyre-creme)]"
+          >
+            <a
+              href={`https://momence.com/m/${id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-white"
+              aria-label={`Open the Momence checkout for ${id}`}
+            >
+              {id}
+            </a>
+            <button
+              type="button"
+              aria-label={`Remove ${id}`}
+              disabled={disabled}
+              onClick={() => onChange(value.filter((v) => v !== id))}
+              className="text-white/40 hover:text-white disabled:opacity-30"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          inputMode="url"
+          aria-label="Add a Momence product by id or checkout link"
+          placeholder="id or momence.com/m/… link"
+          disabled={disabled || value.length >= MAX_MEMBERSHIP_IDS}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') add();
+          }}
+          className={`${checkpointFieldClass} w-56 font-mono`}
+        />
+        <button
+          type="button"
+          disabled={disabled || !valid}
+          onClick={add}
+          className="rounded border border-white/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+        >
+          Add product
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SettingRow({
   view,
   people,
@@ -462,6 +545,13 @@ function SettingRow({
       )}
       {def.type === 'minutes_list' && (
         <MinutesList
+          value={view.value as number[]}
+          disabled={busy}
+          onChange={(next) => onSave(view.key, next)}
+        />
+      )}
+      {def.type === 'membership_ids' && (
+        <MembershipIdsList
           value={view.value as number[]}
           disabled={busy}
           onChange={(next) => onSave(view.key, next)}

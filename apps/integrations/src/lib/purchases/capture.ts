@@ -153,7 +153,7 @@ export async function handlePaymentTransaction(
     return { ...summary, skipped: 'not-a-purchase' };
   }
 
-  const introOfferIds = getIntroOfferMembershipIds();
+  const introOfferIds = await getIntroOfferMembershipIds();
   let allCaptured = true;
 
   for (const { sale, item } of lines) {

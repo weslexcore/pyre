@@ -130,7 +130,7 @@ function latestEnd(packs: BoughtMembership[]): number | null {
  * active list), else what enrollment last saw.
  */
 export async function resolveIntroExpiry(ctx: JourneyContext): Promise<number | null> {
-  const introIds = getIntroOfferMembershipIds();
+  const introIds = await getIntroOfferMembershipIds();
   const active = latestEnd((await ctx.activePacks()).filter((p) => isIntro(p, introIds)));
   if (active !== null) return active;
   const history = await ctx.boughtMemberships();
@@ -146,23 +146,23 @@ type ConditionCheck = (ctx: JourneyContext, condition: Condition) => Promise<boo
 
 const CHECKS: Record<ConditionType, ConditionCheck> = {
   async 'has-active-membership'(ctx) {
-    const introIds = getIntroOfferMembershipIds();
+    const introIds = await getIntroOfferMembershipIds();
     return (await ctx.activePacks()).some((p) => isRecurringMembership(p, introIds));
   },
   async 'has-active-intro'(ctx) {
-    const introIds = getIntroOfferMembershipIds();
+    const introIds = await getIntroOfferMembershipIds();
     const now = Date.now();
     return (await ctx.activePacks()).some(
       (p) => isIntro(p, introIds) && (!p.endDate || Date.parse(p.endDate) > now)
     );
   },
   async 'ever-bought-intro'(ctx) {
-    const introIds = getIntroOfferMembershipIds();
+    const introIds = await getIntroOfferMembershipIds();
     const history = (await ctx.boughtMemberships()) ?? (await ctx.activePacks());
     return history.some((p) => isIntro(p, introIds));
   },
   async 'has-non-intro-purchase'(ctx) {
-    const introIds = getIntroOfferMembershipIds();
+    const introIds = await getIntroOfferMembershipIds();
     // Null-origin packs count — they own something (imported packs).
     return (await ctx.activePacks()).some(
       (p) => !p.membership || !introIds.includes(p.membership.id)

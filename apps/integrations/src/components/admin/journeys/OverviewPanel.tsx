@@ -24,7 +24,7 @@ const TIPS = {
   trigger:
     'What puts someone into this journey. A booking or purchase enrolls them the moment Momence reports it; an audience is checked every hour against your Momence customers; "added by hand" only enrolls people you add on the People tab.',
   purchaseKinds:
-    'Which purchases enroll someone. Leave all unticked for any intro offer, membership or credit pack. Which membership counts as the intro offer is set by MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS.',
+    'Which purchases enroll someone. Leave all unticked for any intro offer, membership or credit pack. Which products count as the intro offer is set on the Settings page, under Momence.',
   firstBooking:
     "Only a customer's first-ever booking at Pyre enrolls them - use this for welcome and intro-offer journeys.",
   activePurchase:
