@@ -11,7 +11,7 @@ const DAY_MS = 24 * 60 * 60_000;
 
 /**
  *   unlimited   a recurring membership with no credit limit
- *   intro       the intro offer (MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS)
+ *   intro       the intro offer (Settings → Momence → Intro offer products)
  *   membership  a recurring membership that comes with credits
  *   credits     a credit or money pack
  *   none        nothing active: paying per visit

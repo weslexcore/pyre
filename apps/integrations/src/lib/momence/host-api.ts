@@ -1,4 +1,5 @@
 import { createWebhookLogger, getRedis } from '@pyre/webhook-core';
+import { getSetting } from '@/lib/settings/store';
 import { getHostAccessToken, MOMENCE_API_V2 } from './host-token';
 
 const log = createWebhookLogger('Momence Host API');
@@ -505,11 +506,13 @@ export async function invalidateTagCache(): Promise<void> {
 
 // --- Intro-offer identification ---
 
-export function getIntroOfferMembershipIds(): number[] {
-  return (import.meta.env.MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS ?? '')
-    .split(',')
-    .map((s) => Number.parseInt(s.trim(), 10))
-    .filter((n) => Number.isFinite(n));
+/**
+ * The Momence catalog memberships that count as the intro offer. Set on
+ * /admin/settings (Momence → Intro offer products); falls back to the
+ * MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS env var when nothing is saved there.
+ */
+export async function getIntroOfferMembershipIds(): Promise<number[]> {
+  return getSetting('momence.introOfferIds');
 }
 
 // --- Schedule feed for the staff-scheduling sync (sessions + appointments) ---

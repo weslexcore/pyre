@@ -16,8 +16,10 @@
 // or backfilled) are skipped, so re-running is safe.
 //
 // Run (from apps/integrations, needs SUPABASE_URL + SUPABASE_SECRET_KEY (or
-// SUPABASE_SERVICE_ROLE_KEY), POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID, and
-// MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS in .env; POSTHOG_API_KEY too when executing):
+// SUPABASE_SERVICE_ROLE_KEY) and POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID in
+// .env; POSTHOG_API_KEY too when executing. The intro offer ids come from
+// /admin/settings (Momence → Intro offer products), else
+// MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS):
 //   tsx scripts/backfill-purchases.mts            # dry run (default)
 //   tsx scripts/backfill-purchases.mts --execute  # actually emit events
 
@@ -40,7 +42,7 @@ const PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
 const CAPTURE_API_KEY = process.env.POSTHOG_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-const INTRO_OFFER_IDS = (process.env.MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS ?? '')
+const ENV_INTRO_OFFER_IDS = (process.env.MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS ?? '')
   .split(',')
   .map((s) => Number.parseInt(s.trim(), 10))
   .filter((n) => Number.isFinite(n));
@@ -57,9 +59,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 if (execute && !CAPTURE_API_KEY) {
   console.error('Missing POSTHOG_API_KEY (required with --execute)');
   process.exit(1);
-}
-if (INTRO_OFFER_IDS.length === 0) {
-  console.warn('MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS is empty — intro offers will count as credit packs');
 }
 
 // Local HogQL client on process.env — the app's queryHogQL reads import.meta.env,
@@ -105,6 +104,21 @@ interface SalesRow {
 const db = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+// Same resolution as the app (lib/settings/store): a value saved on the
+// settings page wins over the env var.
+const { data: introSetting } = await db
+  .from('app_settings')
+  .select('value')
+  .eq('key', 'momence.introOfferIds')
+  .maybeSingle();
+const savedIntroIds = Array.isArray(introSetting?.value)
+  ? (introSetting.value as unknown[]).filter((n): n is number => Number.isSafeInteger(n))
+  : null;
+const INTRO_OFFER_IDS = savedIntroIds ?? ENV_INTRO_OFFER_IDS;
+if (INTRO_OFFER_IDS.length === 0) {
+  console.warn('No intro offer ids (settings page or env) — intro offers will count as credit packs');
+}
 const { data: snapshot, error } = await db
   .from('momence_report_snapshots')
   .select('snapshot_date, range_from, range_to, item_count, raw_items')

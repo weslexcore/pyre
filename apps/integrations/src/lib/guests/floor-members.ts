@@ -24,12 +24,13 @@ const CONCURRENCY = 4;
 
 async function lookUp(memberId: string, checkedIn: boolean, nowMs: number): Promise<FloorMember> {
   const id = Number(memberId);
-  const [member, packs] = await Promise.all([
+  const [member, packs, introIds] = await Promise.all([
     fetchHostMember(id),
     fetchMemberActivePacks(id, { fresh: true }),
+    getIntroOfferMembershipIds(),
   ]);
   return {
-    plan: guestPlan(packs, getIntroOfferMembershipIds(), nowMs),
+    plan: guestPlan(packs, introIds, nowMs),
     firstVisit: isFirstVisit(member.visits?.totalVisits ?? 0, checkedIn),
   };
 }

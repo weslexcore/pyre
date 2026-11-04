@@ -29,6 +29,7 @@ import {
  */
 const ENV_READERS: Partial<Record<SettingKey, () => string | undefined>> = {
   'suggestions.auto': () => import.meta.env.SUGGESTIONS_AUTO,
+  'momence.introOfferIds': () => import.meta.env.MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS,
 };
 
 interface Row {
