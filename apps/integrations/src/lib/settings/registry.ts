@@ -20,7 +20,7 @@ import {
 } from '@/lib/guests/floor-timing';
 import { DEFAULT_DUE_DAYS, type DueDays, parseDueDays } from '@/lib/suggestions/priority';
 
-export type SettingSection = 'suggestions' | 'sops' | 'navigation' | 'guests';
+export type SettingSection = 'suggestions' | 'sops' | 'navigation' | 'guests' | 'momence';
 
 export const SETTING_SECTIONS: { key: SettingSection; label: string; description: string }[] = [
   {
@@ -34,6 +34,12 @@ export const SETTING_SECTIONS: { key: SettingSection; label: string; description
     label: 'Guests',
     description:
       'The Guests pages: Check Ins, the check-ins staff make with each guest during their session, and the session lengths staff can pick.',
+  },
+  {
+    key: 'momence',
+    label: 'Momence',
+    description:
+      'How the app reads what guests buy in Momence: which products are the intro offer, for email journeys, purchase reports, Check Ins and member counts.',
   },
   {
     key: 'suggestions',
@@ -88,8 +94,27 @@ export interface MinutesListSetting extends Base {
   default: readonly number[];
 }
 
+/** Momence catalog membership ids (the number in a momence.com/m/<id> checkout link). */
+export interface MembershipIdsSetting extends Base {
+  type: 'membership_ids';
+  default: readonly number[];
+}
+
+export const MAX_MEMBERSHIP_IDS = 20;
+
+/** The id in a Momence checkout link (momence.com/m/966626, or …/membership/Name/966626), or the bare id. */
+export function membershipIdFrom(text: string): number | null {
+  const trimmed = text.trim();
+  const match = /^\d+$/.test(trimmed)
+    ? trimmed
+    : /momence\.com\/.*?(\d+)\/?(?:[?#].*)?$/.exec(trimmed)?.[1];
+  const id = match ? Number(match) : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 export type SettingDefinition =
   | BooleanSetting
+  | MembershipIdsSetting
   | MultiChoiceSetting
   | DueDaysSetting
   | CheckpointsSetting
@@ -131,6 +156,15 @@ export const SETTINGS = {
     description:
       'The lengths staff can give a guest under Adjust on Check Ins. A guest starts on their Momence session’s own length, which is always offered too.',
     default: DEFAULT_SESSION_LENGTHS,
+  },
+  'momence.introOfferIds': {
+    type: 'membership_ids',
+    section: 'momence',
+    label: 'Intro offer products',
+    description:
+      'The Momence products that count as the intro offer. Buying one starts the intro journeys, and the intro conditions, reports and Check Ins look for these. Add the number at the end of the product’s checkout link (momence.com/m/…). Keep a retired intro listed while guests who bought it are still on it.',
+    default: [],
+    env: 'MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS',
   },
   'suggestions.enabled': {
     type: 'boolean',
@@ -194,7 +228,9 @@ export type SettingValue<K extends SettingKey> = (typeof SETTINGS)[K] extends { 
       ? Checkpoint[]
       : (typeof SETTINGS)[K] extends { type: 'minutes_list' }
         ? number[]
-        : string[];
+        : (typeof SETTINGS)[K] extends { type: 'membership_ids' }
+          ? number[]
+          : string[];
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
@@ -220,6 +256,7 @@ export function parseSettingValue(
   if (def.type === 'due_days') return parseDueDays(raw);
   if (def.type === 'checkpoints') return parseCheckpoints(raw);
   if (def.type === 'minutes_list') return parseSessionLengths(raw);
+  if (def.type === 'membership_ids') return parseMembershipIds(def.label, raw);
   if (!Array.isArray(raw) || !raw.every((v) => typeof v === 'string')) {
     return { ok: false, error: `${def.label} must be a list of choices` };
   }
@@ -230,6 +267,23 @@ export function parseSettingValue(
   const value = def.options.map((o) => o.value).filter((v) => raw.includes(v));
   if (value.length < (def.min ?? 0)) {
     return { ok: false, error: `Choose at least ${def.min} for ${def.label}` };
+  }
+  return { ok: true, value };
+}
+
+/** A list of Momence membership ids: whole positive numbers, without repeats, in the order given. */
+export function parseMembershipIds(
+  label: string,
+  raw: unknown
+): { ok: true; value: number[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: `${label} must be a list of Momence ids` };
+  const bad = raw.find((n) => typeof n !== 'number' || !Number.isSafeInteger(n) || n <= 0);
+  if (bad !== undefined) {
+    return { ok: false, error: `${label}: ${String(bad)} is not a Momence id` };
+  }
+  const value = [...new Set(raw as number[])];
+  if (value.length > MAX_MEMBERSHIP_IDS) {
+    return { ok: false, error: `At most ${MAX_MEMBERSHIP_IDS} ids for ${label}` };
   }
   return { ok: true, value };
 }
@@ -246,6 +300,16 @@ export function parseEnvValue(
     return undefined;
   }
   const text = raw.trim().toLowerCase();
+  if (def.type === 'membership_ids') {
+    // Comma-separated ids, as the env var always held them. Anything that
+    // isn't a whole number is skipped, the way the old reader skipped it.
+    const ids = text
+      .split(',')
+      .map((v) => Number(v.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    const parsed = parseMembershipIds(def.label, ids);
+    return parsed.ok ? parsed.value : undefined;
+  }
   if (def.type === 'boolean') {
     if (['on', 'true', '1', 'yes'].includes(text)) return true;
     if (['off', 'false', '0', 'no'].includes(text)) return false;

@@ -190,7 +190,7 @@ export async function runActivityMetricsSync(
   // and the week loop already resumes cleanly if it gets squeezed.
   if (cursor.members) {
     const scan = cursor.members;
-    const introOfferIds = getIntroOfferMembershipIds();
+    const introOfferIds = await getIntroOfferMembershipIds();
 
     while (scan.pending.length > 0 && ctx.timeRemainingMs() > TIME_FLOOR_MS) {
       const memberId = scan.pending[0];

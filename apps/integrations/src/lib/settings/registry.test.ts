@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isSettingKey, parseEnvValue, parseSettingValue, SETTINGS } from './registry';
+import {
+  isSettingKey,
+  membershipIdFrom,
+  parseEnvValue,
+  parseSettingValue,
+  SETTINGS,
+} from './registry';
 
 describe('parseSettingValue', () => {
   it('takes only true or false for a switch', () => {
@@ -49,6 +55,40 @@ describe('the due-days grid', () => {
     expect(parseSettingValue('suggestions.dueDays', grid)).toEqual({ ok: true, value: grid });
     expect(parseSettingValue('suggestions.dueDays', true).ok).toBe(false);
     expect(parseEnvValue('suggestions.dueDays', '3')).toBeUndefined();
+  });
+});
+
+describe('intro offer products', () => {
+  it('saves Momence ids without repeats, in the order given', () => {
+    expect(parseSettingValue('momence.introOfferIds', [966626, 630918, 966626])).toEqual({
+      ok: true,
+      value: [966626, 630918],
+    });
+    expect(parseSettingValue('momence.introOfferIds', [])).toEqual({ ok: true, value: [] });
+  });
+
+  it('refuses anything that is not a whole positive id', () => {
+    expect(parseSettingValue('momence.introOfferIds', ['966626']).ok).toBe(false);
+    expect(parseSettingValue('momence.introOfferIds', [0]).ok).toBe(false);
+    expect(parseSettingValue('momence.introOfferIds', [12.5]).ok).toBe(false);
+    expect(parseSettingValue('momence.introOfferIds', '966626').ok).toBe(false);
+  });
+
+  it('takes an id or a Momence checkout link', () => {
+    expect(membershipIdFrom(' 966626 ')).toBe(966626);
+    expect(membershipIdFrom('https://momence.com/m/966626')).toBe(966626);
+    expect(membershipIdFrom('https://momence.com/Pyre/membership/Unlimited-Intro/966626?x=1')).toBe(
+      966626
+    );
+    expect(membershipIdFrom('momence.com/m/')).toBeNull();
+    expect(membershipIdFrom('intro')).toBeNull();
+    expect(membershipIdFrom('0')).toBeNull();
+  });
+
+  it('reads the env var’s comma list, skipping what is not an id', () => {
+    expect(parseEnvValue('momence.introOfferIds', '630918, 966626')).toEqual([630918, 966626]);
+    expect(parseEnvValue('momence.introOfferIds', '630918,,abc')).toEqual([630918]);
+    expect(parseEnvValue('momence.introOfferIds', '')).toBeUndefined();
   });
 });
 
