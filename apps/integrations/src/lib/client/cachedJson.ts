@@ -8,12 +8,18 @@
 // The cache lives in module scope, which survives ClientRouter navigations:
 // the router swaps the document without re-evaluating already-loaded modules,
 // so returning to a page paints the last-known data immediately and
-// revalidates behind it. A hard reload starts cold, which is what we want —
-// this is a perceived-latency cache, never a source of truth.
+// revalidates behind it. A hard reload starts cold, which is usually what we
+// want — this is a perceived-latency cache, never a source of truth.
+//
+// A page that is kept open all shift and refreshed when something looks
+// stuck (Check Ins) can opt in to `persist`: its last response is mirrored
+// into localStorage too, so a reload paints it at once and revalidates
+// behind it, and a Momence outage leaves the last-known floor on screen
+// rather than nothing. The mirror keeps its own, longer, age limit.
 //
 // The /api/admin routes stay the security boundary. Entries live only in the
-// visitor's own tab and are keyed by full URL, so two different queries can
-// never collide.
+// visitor's own browser and are keyed by full URL, so two different queries
+// can never collide.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -30,6 +36,88 @@ const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
 
 /** Pages key by query string (week, window, filters) — keep the map bounded. */
 const MAX_ENTRIES = 50;
+
+/** localStorage keys of persisted entries: the prefix plus the URL. */
+const STORAGE_PREFIX = 'pyre-json:';
+
+interface StoredEntry extends Entry {
+  /** How long the entry stays good for, so a sweep can drop it unread. */
+  ttl: number;
+}
+
+function storage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    // Storage access can throw (privacy settings); the page works without it.
+    return null;
+  }
+}
+
+/** The persisted entry for `key` (a URL), or null when none is fresh enough. */
+export function readPersistedJson<T>(key: string, maxAgeMs: number): T | null {
+  const store = storage();
+  if (!store) return null;
+  try {
+    const raw = store.getItem(STORAGE_PREFIX + key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as Partial<StoredEntry>;
+    if (typeof entry.at !== 'number' || entry.data === undefined) return null;
+    if (Date.now() - entry.at > maxAgeMs) {
+      store.removeItem(STORAGE_PREFIX + key);
+      return null;
+    }
+    return entry.data as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop every persisted entry that has outlived its own age limit. */
+function sweepStored(store: Storage): void {
+  const stale: string[] = [];
+  for (let i = 0; i < store.length; i++) {
+    const key = store.key(i);
+    if (!key?.startsWith(STORAGE_PREFIX)) continue;
+    try {
+      const entry = JSON.parse(store.getItem(key) ?? '') as Partial<StoredEntry>;
+      if (typeof entry.at !== 'number' || Date.now() - entry.at > (entry.ttl ?? 0)) {
+        stale.push(key);
+      }
+    } catch {
+      stale.push(key);
+    }
+  }
+  for (const key of stale) store.removeItem(key);
+}
+
+/** Persist `data` for `key` (a URL), good for `ttl` ms, dropping expired entries. */
+export function writePersistedJson(key: string, data: unknown, ttl: number): void {
+  const store = storage();
+  if (!store) return;
+  try {
+    sweepStored(store);
+    const entry: StoredEntry = { data, at: Date.now(), ttl };
+    store.setItem(STORAGE_PREFIX + key, JSON.stringify(entry));
+  } catch {
+    // Quota or private mode — the in-memory cache still works.
+  }
+}
+
+function removeStored(prefix: string): void {
+  const store = storage();
+  if (!store) return;
+  try {
+    const gone: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const key = store.key(i);
+      if (key?.startsWith(STORAGE_PREFIX + prefix)) gone.push(key);
+    }
+    for (const key of gone) store.removeItem(key);
+  } catch {
+    // Nothing to drop.
+  }
+}
 
 function readCache<T>(key: string, maxAgeMs: number): T | null {
   const hit = cache.get(key);
@@ -61,11 +149,13 @@ function writeCache(key: string, data: unknown): void {
 export function invalidateJson(prefix?: string): void {
   if (prefix === undefined) {
     cache.clear();
+    removeStored('');
     return;
   }
   for (const key of [...cache.keys()]) {
     if (key.startsWith(prefix)) cache.delete(key);
   }
+  removeStored(prefix);
 }
 
 export interface CachedJson<T> {
@@ -86,6 +176,13 @@ export interface CachedJson<T> {
 
 export interface CachedJsonOptions {
   maxAgeMs?: number;
+  /**
+   * Mirror the last response into localStorage, so a hard reload paints it
+   * and revalidates behind it. Entries older than `persistMaxAgeMs` (default
+   * `maxAgeMs`) are dropped rather than painted.
+   */
+  persist?: boolean;
+  persistMaxAgeMs?: number;
 }
 
 /**
@@ -97,7 +194,7 @@ export function useCachedJson<T>(
   url: string | null,
   options: CachedJsonOptions = {}
 ): CachedJson<T> {
-  const { maxAgeMs = DEFAULT_MAX_AGE_MS } = options;
+  const { maxAgeMs = DEFAULT_MAX_AGE_MS, persist = false, persistMaxAgeMs = maxAgeMs } = options;
 
   const [data, setDataState] = useState<T | null>(() => (url ? readCache<T>(url, maxAgeMs) : null));
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +222,9 @@ export function useCachedJson<T>(
       if (force) {
         setPending(true);
       } else {
-        const cached = readCache<T>(target, maxAgeMs);
+        const cached =
+          readCache<T>(target, maxAgeMs) ??
+          (persist ? readPersistedJson<T>(target, persistMaxAgeMs) : null);
         if (cached !== null) setDataState(cached);
         setPending(true);
       }
@@ -137,6 +236,7 @@ export function useCachedJson<T>(
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = (await res.json()) as T;
         writeCache(target, body);
+        if (persist) writePersistedJson(target, body, persistMaxAgeMs);
         // A newer request, an unmount, or a key change superseded this one.
         if (id !== requestId.current || !mounted.current || urlRef.current !== target) return;
         setDataState(body);
@@ -147,7 +247,7 @@ export function useCachedJson<T>(
         if (id === requestId.current && mounted.current) setPending(false);
       }
     },
-    [maxAgeMs]
+    [maxAgeMs, persist, persistMaxAgeMs]
   );
 
   useEffect(() => {
@@ -164,18 +264,26 @@ export function useCachedJson<T>(
     await run(target, true);
   }, [run]);
 
-  const setData = useCallback((next: T | null | ((prev: T | null) => T | null)) => {
-    setDataState((prev) => {
-      const resolved =
-        typeof next === 'function' ? (next as (p: T | null) => T | null)(prev) : next;
-      const target = urlRef.current;
-      if (target) {
-        if (resolved === null) cache.delete(target);
-        else writeCache(target, resolved);
-      }
-      return resolved;
-    });
-  }, []);
+  const setData = useCallback(
+    (next: T | null | ((prev: T | null) => T | null)) => {
+      setDataState((prev) => {
+        const resolved =
+          typeof next === 'function' ? (next as (p: T | null) => T | null)(prev) : next;
+        const target = urlRef.current;
+        if (target) {
+          if (resolved === null) {
+            cache.delete(target);
+            if (persist) removeStored(target);
+          } else {
+            writeCache(target, resolved);
+            if (persist) writePersistedJson(target, resolved, persistMaxAgeMs);
+          }
+        }
+        return resolved;
+      });
+    },
+    [persist, persistMaxAgeMs]
+  );
 
   return {
     data,

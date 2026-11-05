@@ -27,16 +27,18 @@ import {
 } from '@/lib/momence/host-api';
 import {
   type CheckpointDone,
+  DEFAULT_FLOOR_VIEW,
   type Floor,
   type FloorGuest,
   type FloorMove,
   type FloorSession,
-  LOOKAHEAD_MINUTES,
-  LOOKBACK_MINUTES,
+  type FloorView,
+  floorWindow,
   MINUTE_MS,
+  viewSessions,
 } from './floor-timing';
 
-export type { Floor, FloorGuest, FloorSession } from './floor-timing';
+export type { Floor, FloorGuest, FloorSession, FloorView } from './floor-timing';
 
 /** Who a check-in recorded from Momence's webhook is attributed to. */
 export const MOMENCE_ACTOR = 'momence';
@@ -48,15 +50,17 @@ function sessionMinutes(session: Pick<HostSession, 'startsAt' | 'endsAt'>): numb
   return Number.isFinite(ms) && ms > 0 ? Math.round(ms / MINUTE_MS) : 60;
 }
 
-/** Sessions whose guests could be on the floor at `nowMs`, earliest first. */
-export function floorSessions(sessions: HostSession[], nowMs: number): FloorSession[] {
-  const earliest = nowMs - LOOKBACK_MINUTES * MINUTE_MS;
-  const latest = nowMs + LOOKAHEAD_MINUTES * MINUTE_MS;
-  return sessions
-    .filter((s) => {
-      const start = Date.parse(s.startsAt);
-      return start >= earliest && start <= latest;
-    })
+/**
+ * The sessions the view shows at `nowMs`, earliest first: by default those
+ * whose guests could be on the floor (floor-timing.ts LOOKBACK_MINUTES and
+ * LOOKAHEAD_MINUTES).
+ */
+export function floorSessions(
+  sessions: HostSession[],
+  nowMs: number,
+  view: FloorView = DEFAULT_FLOOR_VIEW
+): FloorSession[] {
+  return viewSessions(view, sessions, nowMs)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .map((s) => ({
       id: String(s.id),
@@ -287,27 +291,35 @@ export function floorGuests(
 }
 
 /**
- * The sessions in the floor window, asked of Momence each time. Not the
+ * The sessions in the view's window, asked of Momence each time. Not the
  * schedule feed: that is cached for five minutes, so a session added or moved
  * at the desk would be missing from the floor for up to that long. The window
- * is a single small page, and crossing midnight needs no special case.
+ * is at most a couple of days, and crossing midnight needs no special case.
  */
-export async function loadFloorSessions(nowMs: number): Promise<FloorSession[]> {
+export async function loadFloorSessions(
+  nowMs: number,
+  view: FloorView = DEFAULT_FLOOR_VIEW
+): Promise<FloorSession[]> {
+  const { from, to } = floorWindow(view, nowMs);
   const sessions = await fetchHostSessions({
-    startAfter: new Date(nowMs - LOOKBACK_MINUTES * MINUTE_MS).toISOString(),
-    startBefore: new Date(nowMs + LOOKAHEAD_MINUTES * MINUTE_MS).toISOString(),
+    startAfter: new Date(from).toISOString(),
+    startBefore: new Date(to).toISOString(),
   });
-  return floorSessions(sessions, nowMs);
+  return floorSessions(sessions, nowMs, view);
 }
 
 /**
- * Everyone booked into the window's sessions, with their check-in times.
+ * Everyone booked into the view's sessions, with their check-in times.
  * A move into a booking that is now checked in is written through here, the
  * first time the floor sees it, so its carried time is an ordinary row from
  * then on (edits, the webhook, undo all treat it like any other).
  */
-export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floor> {
-  const sessions = await loadFloorSessions(nowMs);
+export async function loadFloor(
+  db: SupabaseClient,
+  nowMs: number,
+  view: FloorView = DEFAULT_FLOOR_VIEW
+): Promise<Floor> {
+  const sessions = await loadFloorSessions(nowMs, view);
   if (sessions.length === 0) return { sessions, guests: [], complete: true };
 
   const bookingResults = await Promise.allSettled(
@@ -370,14 +382,15 @@ export async function loadFloor(db: SupabaseClient, nowMs: number): Promise<Floo
 
 /**
  * The booking a floor mutation names, checked against Momence: it must be a
- * live booking on a session in today's window. Null when it isn't.
+ * live booking on a session the view shows. Null when it isn't.
  */
 export async function findFloorBooking(
   sessionId: string,
   bookingId: string,
-  nowMs: number
+  nowMs: number,
+  view: FloorView = DEFAULT_FLOOR_VIEW
 ): Promise<{ session: FloorSession; booking: SessionBooking } | null> {
-  const sessions = await loadFloorSessions(nowMs);
+  const sessions = await loadFloorSessions(nowMs, view);
   const session = sessions.find((s) => s.id === sessionId);
   if (!session) return null;
   const bookings = await fetchSessionBookings(Number(sessionId));
