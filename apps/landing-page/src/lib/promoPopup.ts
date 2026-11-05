@@ -1,6 +1,3 @@
-import { withBase } from './paths';
-import { introOffer } from './sessions';
-
 export interface PromoPopupConfig {
   /** Unique ID used as the localStorage key. Change this to re-show the popup. */
   id: string;
@@ -40,7 +37,7 @@ export interface PromoPopupConfig {
       delayMs?: number;
     };
   };
-  /** Short text shown on the floating tab when popup is dismissed (e.g. "2 Weeks Unlimited"). */
+  /** Short text shown on the floating tab when popup is dismissed (e.g. "Join the List"). */
   promoText?: string;
   /** Optional dismiss link text. */
   dismiss?: {
@@ -62,42 +59,14 @@ export interface PromoPopupConfig {
  */
 const promoPopups: PromoPopupConfig[] = [
   {
-    // Labor Day 2026 — Fri Sept 4 at noon through end of Mon Sept 7 (Eastern).
-    id: 'labor-day-2026',
+    id: 'mailing-list-2026-11',
     enabled: true,
-    headline: 'Labor Day Sale!',
-    body: 'Take 25% off credits, credit packs, and your first month of membership. Enter the code at checkout.',
-    finePrint: 'Offer ends Monday, September 7.',
-    code: {
-      value: 'WORKIT25',
-      label: 'Use code',
-    },
-    promoText: '25% Off',
-    cta: {
-      label: 'Shop the Sale',
-      href: withBase('/#membership'),
-      ariaLabel: 'Shop credits, credit packs, and memberships',
-    },
-    dismiss: {
-      label: 'Maybe later',
-    },
-    starts: '2026-09-04T12:00:00-04:00',
-    expires: '2026-09-07T23:59:59-04:00',
-    delayMs: 1500,
-  },
-  {
-    id: 'intro-unlimited-offer-email',
-    enabled: true,
-    headline: `New Here? ${introOffer.headline}`,
-    body: `Join our mailing list and claim our intro offer: 2 weeks of unlimited sauna + cold plunge for $${introOffer.price}. Available once per customer.`,
-    promoText: introOffer.shortLabel,
+    headline: 'Stay in the Loop',
+    body: 'Join our mailing list for the latest on upcoming events, news, and discounts.',
+    promoText: 'Join the List',
     form: {
-      submitLabel: 'Claim My Intro',
-      successMessage: "You're in! Taking you to your intro offer…",
-      redirect: {
-        href: introOffer.href,
-        label: 'Continue to checkout',
-      },
+      submitLabel: 'Join the Mailing List',
+      successMessage: "You're on the list! Watch your inbox for what's next.",
     },
     dismiss: {
       label: 'No thanks',
