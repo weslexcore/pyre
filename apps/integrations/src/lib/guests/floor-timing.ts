@@ -4,6 +4,8 @@
 // island re-runs every few seconds between fetches so the bars move without
 // a round trip.
 
+import { easternToUtc } from '@pyre/schedule-core';
+
 /** Sessions that started up to this long ago may still have guests in. */
 export const LOOKBACK_MINUTES = 4 * 60;
 /** Sessions starting this soon are listed, so arrivals can be checked in. */
@@ -275,4 +277,162 @@ export function compareFloor(a: FloorTiming, b: FloorTiming): number {
   return (
     rank(a) - rank(b) || (firstDue(a) ?? 0) - (firstDue(b) ?? 0) || a.remainingMs - b.remainingMs
   );
+}
+
+// --- The view: which sessions' guests the page shows ---
+
+/**
+ *   floor    sessions that started in the last few hours or start within the
+ *            hour — who could be on the floor right now (the default)
+ *   current  the session(s) running now, or the next to start when none is
+ *   next     the next session(s) to start
+ *   day      every session on one day of the studio's calendar
+ *   custom   every session starting between two instants
+ */
+export type FloorView =
+  | { kind: 'floor' }
+  | { kind: 'current' }
+  | { kind: 'next' }
+  | { kind: 'day'; date: string }
+  | { kind: 'custom'; from: string; to: string };
+
+export const FLOOR_VIEW_KINDS = ['floor', 'current', 'next', 'day', 'custom'] as const;
+export const DEFAULT_FLOOR_VIEW: FloorView = { kind: 'floor' };
+/** A custom range can span at most this long: each session costs a Momence call. */
+export const MAX_CUSTOM_RANGE_HOURS = 48;
+/** How far ahead the current or next session is looked for. */
+export const SESSION_LOOKAHEAD_MINUTES = 24 * 60;
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const validDate = (date: string): boolean =>
+  DATE_RE.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`));
+
+/**
+ * A view from a query string or a request body (`view`, with `date` for a
+ * day and `from`/`to` for a custom range); no `view` is the floor.
+ */
+export function parseFloorView(
+  source: URLSearchParams | Record<string, unknown>
+): { ok: true; value: FloorView } | { ok: false; error: string } {
+  const get = (key: string): string | null => {
+    const raw = source instanceof URLSearchParams ? source.get(key) : source[key];
+    return typeof raw === 'string' ? raw : null;
+  };
+  const kind = get('view') ?? 'floor';
+  switch (kind) {
+    case 'floor':
+    case 'current':
+    case 'next':
+      return { ok: true, value: { kind } };
+    case 'day': {
+      const date = get('date') ?? '';
+      if (!validDate(date)) return { ok: false, error: 'date must be YYYY-MM-DD' };
+      return { ok: true, value: { kind, date } };
+    }
+    case 'custom': {
+      const from = Date.parse(get('from') ?? '');
+      const to = Date.parse(get('to') ?? '');
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        return { ok: false, error: 'from and to must be ISO 8601 times' };
+      }
+      if (to <= from) return { ok: false, error: 'to must be after from' };
+      if (to - from > MAX_CUSTOM_RANGE_HOURS * 60 * MINUTE_MS) {
+        return {
+          ok: false,
+          error: `A custom range can cover at most ${MAX_CUSTOM_RANGE_HOURS} hours`,
+        };
+      }
+      return {
+        ok: true,
+        value: { kind, from: new Date(from).toISOString(), to: new Date(to).toISOString() },
+      };
+    }
+    default:
+      return { ok: false, error: `view must be one of ${FLOOR_VIEW_KINDS.join(', ')}` };
+  }
+}
+
+/** The view as the query fields parseFloorView reads; the floor is empty. */
+export function floorViewFields(view: FloorView): Record<string, string> {
+  switch (view.kind) {
+    case 'floor':
+      return {};
+    case 'day':
+      return { view: 'day', date: view.date };
+    case 'custom':
+      return { view: 'custom', from: view.from, to: view.to };
+    default:
+      return { view: view.kind };
+  }
+}
+
+/** The day after a YYYY-MM-DD. */
+function nextDate(date: string): string {
+  return new Date(Date.parse(`${date}T12:00:00Z`) + 24 * 60 * MINUTE_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * The instants (epoch ms) a session must start between to be in the view.
+ * For the current and next session this is the span they are looked for in;
+ * currentSessions / nextSessions then pick them out.
+ */
+export function floorWindow(view: FloorView, nowMs: number): { from: number; to: number } {
+  switch (view.kind) {
+    case 'floor':
+      return {
+        from: nowMs - LOOKBACK_MINUTES * MINUTE_MS,
+        to: nowMs + LOOKAHEAD_MINUTES * MINUTE_MS,
+      };
+    case 'current':
+    case 'next':
+      return {
+        from: nowMs - LOOKBACK_MINUTES * MINUTE_MS,
+        to: nowMs + SESSION_LOOKAHEAD_MINUTES * MINUTE_MS,
+      };
+    case 'day':
+      return {
+        from: Date.parse(easternToUtc(view.date, '00:00')),
+        to: Date.parse(easternToUtc(nextDate(view.date), '00:00')) - 1,
+      };
+    case 'custom':
+      return { from: Date.parse(view.from), to: Date.parse(view.to) };
+  }
+}
+
+interface Timed {
+  startsAt: string;
+  endsAt: string;
+}
+
+/** The session(s) running at `nowMs`: started, not yet ended. */
+export function runningSessions<T extends Timed>(sessions: T[], nowMs: number): T[] {
+  return sessions.filter((s) => Date.parse(s.startsAt) <= nowMs && Date.parse(s.endsAt) > nowMs);
+}
+
+/** The next session(s) to start after `nowMs` — every one sharing that start. */
+export function nextSessions<T extends Timed>(sessions: T[], nowMs: number): T[] {
+  const upcoming = sessions
+    .filter((s) => Date.parse(s.startsAt) > nowMs)
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const first = upcoming[0];
+  return first ? upcoming.filter((s) => s.startsAt === first.startsAt) : [];
+}
+
+/** The session(s) running now, else the next to start. */
+export function currentSessions<T extends Timed>(sessions: T[], nowMs: number): T[] {
+  const running = runningSessions(sessions, nowMs);
+  return running.length > 0 ? running : nextSessions(sessions, nowMs);
+}
+
+/** The sessions in the window that the view shows. */
+export function viewSessions<T extends Timed>(view: FloorView, sessions: T[], nowMs: number): T[] {
+  const { from, to } = floorWindow(view, nowMs);
+  const inWindow = sessions.filter((s) => {
+    const start = Date.parse(s.startsAt);
+    return start >= from && start <= to;
+  });
+  if (view.kind === 'current') return currentSessions(inWindow, nowMs);
+  if (view.kind === 'next') return nextSessions(inWindow, nowMs);
+  return inWindow;
 }

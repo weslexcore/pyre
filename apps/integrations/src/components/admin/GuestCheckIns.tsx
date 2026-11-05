@@ -19,13 +19,22 @@
 // The list refetches every half minute; the bars re-run the timing locally
 // every few seconds in between. Check out (and its undo) moves the guest at
 // once and saves behind it, putting them back if the save fails.
+//
+// A picker at the top chooses which sessions' guests are shown
+// (floor-timing.ts FloorView): the floor as described above, the session
+// running now or the next one, a whole day, or a range on the studio clock.
+// Guests whose session is behind them — checked out, never checked out, or
+// never arrived — are listed under Earlier. The view and the last floor
+// loaded are kept in localStorage (floorViewPref.ts, cachedJson's persist),
+// so a reload opens where it was left and paints at once, and a Momence
+// outage leaves the last-known floor on screen.
 
 import { easternToUtc, todayEastern, utcToEastern } from '@pyre/schedule-core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buttonClass, cardClass, compactSelectClass, goldButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { etTime } from '@/lib/client/format';
+import { etStamp, etTime } from '@/lib/client/format';
 import { timeAgo } from '@/lib/client/relativeTime';
 import { useDebounced } from '@/lib/client/useDebounced';
 import {
@@ -37,16 +46,25 @@ import {
   type FloorSession,
   type FloorStatus,
   type FloorTiming,
+  type FloorView,
   floorTiming,
+  floorViewFields,
+  LOOKAHEAD_MINUTES,
+  LOOKBACK_MINUTES,
   MINUTE_MS,
   onFloor,
 } from '@/lib/guests/floor-timing';
 import type { FloorMember, GuestPlan } from '@/lib/guests/plan';
-import { FirstVisitBadge, QuietBadge } from './guestUi';
+import { FloorViewPicker } from './FloorViewPicker';
+import { readFloorViewPref, writeFloorViewPref } from './floorViewPref';
+import { FirstVisitBadge, formatDateLabel, formatTimeRange, QuietBadge } from './guestUi';
 
 interface FloorResponse {
   available: boolean;
   now: string;
+  view: FloorView;
+  /** The instants the view's sessions start between. */
+  window: { from: string; to: string };
   checkpoints: Checkpoint[];
   sessionLengths: number[];
   /** What each guest is on, by member id; a guest not looked up yet is missing. */
@@ -60,6 +78,8 @@ interface FloorResponse {
 const FLOOR_URL = '/api/admin/guest-checkins';
 const REFETCH_MS = 30_000;
 const TICK_MS = 5_000;
+/** How old a floor kept in localStorage may be and still paint on a reload. */
+const PERSIST_MS = 12 * 60 * 60_000;
 /** A typed check-in time saves once it has sat this long (or on blur). */
 const TIME_AUTOSAVE_MS = 800;
 
@@ -236,8 +256,53 @@ function useNow(): number {
   return now;
 }
 
+/** The route URL for a view; the floor is the bare route. */
+function floorUrl(view: FloorView): string {
+  const query = new URLSearchParams(floorViewFields(view)).toString();
+  return query ? `${FLOOR_URL}?${query}` : FLOOR_URL;
+}
+
+/** "Open Hours 6:00 – 8:00 PM" for each of a view's sessions. */
+function sessionsLabel(sessions: FloorSession[]): string {
+  return sessions.map((s) => `${s.name} ${formatTimeRange(s.startsAt, s.endsAt)}`).join(' · ');
+}
+
+/** One line on what the view covers, from what was loaded for it. */
+function describeView(view: FloorView, data: FloorResponse | null): string {
+  const sessions = data?.sessions ?? [];
+  switch (view.kind) {
+    case 'floor':
+      return `Sessions from the last ${LOOKBACK_MINUTES / 60} hours and the next ${
+        LOOKAHEAD_MINUTES === 60 ? 'hour' : `${LOOKAHEAD_MINUTES} minutes`
+      }`;
+    case 'current':
+      if (!data?.available) return 'The session running now, or the next to start';
+      if (sessions.length === 0) return 'No session running or coming up';
+      return `${Date.parse(sessions[0].startsAt) > Date.now() ? 'Nothing running — next up: ' : ''}${sessionsLabel(sessions)}`;
+    case 'next':
+      if (!data?.available) return 'The next session to start';
+      return sessions.length === 0 ? 'No session coming up' : `Next up: ${sessionsLabel(sessions)}`;
+    case 'day':
+      return `${formatDateLabel(view.date)}${data?.available ? ` · ${plural(sessions.length, 'session')}` : ''}`;
+    case 'custom':
+      return `${etStamp(view.from)} – ${etStamp(view.to)}${data?.available ? ` · ${plural(sessions.length, 'session')}` : ''}`;
+  }
+}
+
 export function GuestCheckIns() {
-  const floor = useCachedJson<FloorResponse>(FLOOR_URL, { maxAgeMs: 60_000 });
+  const today = useMemo(() => todayEastern(), []);
+  // Null until the saved view is read after mount: the island is
+  // server-rendered, where there is no storage, and the first fetch should
+  // be for the view that will be shown.
+  const [view, setView] = useState<FloorView | null>(null);
+  useEffect(() => {
+    setView(readFloorViewPref());
+  }, []);
+  const floor = useCachedJson<FloorResponse>(view ? floorUrl(view) : null, {
+    maxAgeMs: 60_000,
+    persist: true,
+    persistMaxAgeMs: PERSIST_MS,
+  });
   const now = useNow();
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'warn' } | null>(null);
@@ -279,10 +344,25 @@ export function GuestCheckIns() {
           sessions.get(b.sessionId)?.startsAt ?? ''
         ) || a.name.localeCompare(b.name)
     );
-  const checkedOut = guests
-    .filter((g) => g.checkedOutAt)
-    .sort((a, b) => (b.checkedOutAt ?? '').localeCompare(a.checkedOutAt ?? ''));
+  // Everyone else: checked out, time long up and never checked out, or
+  // never arrived for a session that has ended. Latest first.
+  const listed = new Set([
+    ...inside.map(({ guest }) => guest.bookingId),
+    ...waiting.map((g) => g.bookingId),
+  ]);
+  const lastSeen = (g: FloorGuest) =>
+    g.checkedOutAt ?? g.checkedInAt ?? sessions.get(g.sessionId)?.startsAt ?? '';
+  const earlier = guests
+    .filter((g) => !listed.has(g.bookingId))
+    .sort((a, b) => lastSeen(b).localeCompare(lastSeen(a)) || a.name.localeCompare(b.name));
   const dueNow = inside.filter(({ timing }) => timing.status === 'due');
+
+  const changeView = (next: FloorView) => {
+    setView(next);
+    writeFloorViewPref(next);
+    setEditing(null);
+    setNotice(null);
+  };
 
   /** Run one change for a guest; resolves true when it saved. */
   async function act(
@@ -309,7 +389,13 @@ export function GuestCheckIns() {
     }
   }
 
-  const ids = (guest: FloorGuest) => ({ sessionId: guest.sessionId, bookingId: guest.bookingId });
+  // Every change names the view, so the route checks the booking against the
+  // same sessions the page is showing.
+  const ids = (guest: FloorGuest) => ({
+    sessionId: guest.sessionId,
+    bookingId: guest.bookingId,
+    ...(view ? floorViewFields(view) : {}),
+  });
 
   const checkIn = (guest: FloorGuest) =>
     act(guest, () => sendJson<{ momenceSynced: boolean }>(FLOOR_URL, 'POST', ids(guest)));
@@ -384,6 +470,9 @@ export function GuestCheckIns() {
 
   return (
     <div className="space-y-6">
+      {view && <FloorViewPicker view={view} today={today} onChange={changeView} />}
+      {view && <p className="font-mono text-xs text-white/45">{describeView(view, floor.data)}</p>}
+
       <div className="flex flex-wrap items-center gap-3">
         {checkpoints.length > 0 && (
           <p className="text-sm text-[var(--pyre-creme)]">
@@ -414,7 +503,11 @@ export function GuestCheckIns() {
       )}
       {floor.loading && <p className="font-mono text-xs text-white/40">Asking Momence…</p>}
       {floor.error && (
-        <p className="text-sm text-[var(--pyre-red)]">Couldn't load the floor: {floor.error}</p>
+        <p className="text-sm text-[var(--pyre-red)]">
+          {floor.data
+            ? `Couldn't refresh the floor: ${floor.error}. Showing it as of ${etTime(floor.data.now)}.`
+            : `Couldn't load the floor: ${floor.error}`}
+        </p>
       )}
       {floor.data && !floor.data.available && (
         <p className="text-sm text-[var(--pyre-gold)]">{floor.data.error}</p>
@@ -431,7 +524,11 @@ export function GuestCheckIns() {
         </h2>
         {floor.data?.available && inside.length === 0 && (
           <div className={cardClass}>
-            <p className="text-sm text-white/60">Nobody is checked in right now.</p>
+            <p className="text-sm text-white/60">
+              {view?.kind === 'floor' || view?.kind === 'current'
+                ? 'Nobody is checked in right now.'
+                : 'Nobody from these sessions is checked in right now.'}
+            </p>
           </div>
         )}
         <ul className="space-y-2">
@@ -562,7 +659,9 @@ export function GuestCheckIns() {
         </h2>
         {floor.data?.available && waiting.length === 0 && (
           <p className="text-sm text-white/50">
-            No one else is booked into a current or upcoming session.
+            {view?.kind === 'floor'
+              ? 'No one else is booked into a current or upcoming session.'
+              : 'No one else is booked into a session still to come.'}
           </p>
         )}
         <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
@@ -604,13 +703,15 @@ export function GuestCheckIns() {
         </ul>
       </section>
 
-      {checkedOut.length > 0 && (
+      {earlier.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-mono text-xs uppercase tracking-wide text-white/50">
-            Checked out · {checkedOut.length}
+            Earlier · {earlier.length}
           </h2>
           <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
-            {checkedOut.map((guest) => {
+            {earlier.map((guest) => {
+              const session = sessions.get(guest.sessionId);
+              const where = session ? `${session.name} · ${etTime(session.startsAt)}` : 'Session';
               const stayed =
                 guest.checkedInAt && guest.checkedOutAt
                   ? Math.round(
@@ -626,21 +727,34 @@ export function GuestCheckIns() {
                       className="text-sm text-white/70"
                     />
                     <span className="mt-0.5 block font-mono text-xs text-white/40">
-                      {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'} –{' '}
-                      {guest.checkedOutAt ? etTime(guest.checkedOutAt) : '—'}
-                      {stayed !== null ? ` · ${stayed} of ${guest.minutes} min` : ''}
+                      {guest.checkedOutAt ? (
+                        <>
+                          {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'} –{' '}
+                          {etTime(guest.checkedOutAt)}
+                          {stayed !== null ? ` · ${stayed} of ${guest.minutes} min` : ''}
+                        </>
+                      ) : guest.checkedIn ? (
+                        <>
+                          In {guest.checkedInAt ? etTime(guest.checkedInAt) : '—'}
+                          {guest.estimated ? ' (est.)' : ''} · {guest.minutes} min · not checked out
+                        </>
+                      ) : (
+                        <>Didn't check in</>
+                      )}
                       {' · '}
-                      {sessions.get(guest.sessionId)?.name ?? 'Session'}
+                      {where}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className={buttonClass}
-                    disabled={busy === guest.bookingId || guest.bookingId in leaving}
-                    onClick={() => void setCheckedOut(guest, false)}
-                  >
-                    Undo check-out
-                  </button>
+                  {guest.checkedOutAt && (
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy === guest.bookingId || guest.bookingId in leaving}
+                      onClick={() => void setCheckedOut(guest, false)}
+                    >
+                      Undo check-out
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -728,7 +842,11 @@ function AdjustGuest({
 
   const saveTime = (value: string) => {
     if (!/^\d{2}:\d{2}$/.test(value) || value === sent.current) return;
-    const at = easternToUtc(todayEastern(), value);
+    // On the day they checked in, which is today unless a past day is open.
+    const at = easternToUtc(
+      guest.checkedInAt ? utcToEastern(guest.checkedInAt).date : todayEastern(),
+      value
+    );
     if (Date.parse(at) > Date.now()) {
       setTimeState('future');
       return;

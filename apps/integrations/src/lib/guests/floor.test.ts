@@ -15,10 +15,18 @@ import {
   type Checkpoint,
   compareFloor,
   DEFAULT_CHECKPOINTS,
+  type FloorView,
   floorTiming,
+  floorViewFields,
+  floorWindow,
+  LOOKAHEAD_MINUTES,
+  LOOKBACK_MINUTES,
+  MAX_CUSTOM_RANGE_HOURS,
   onFloor,
   parseCheckpoints,
+  parseFloorView,
   parseSessionLengths,
+  viewSessions,
 } from './floor-timing';
 
 const NOW = Date.parse('2026-10-27T22:30:00.000Z');
@@ -476,5 +484,111 @@ describe('parseSessionLengths', () => {
     expect(parseSessionLengths([2]).ok).toBe(false);
     expect(parseSessionLengths([601]).ok).toBe(false);
     expect(parseSessionLengths('60').ok).toBe(false);
+  });
+});
+
+describe('floor views', () => {
+  it('parses each view from a query string or a body, the floor by default', () => {
+    expect(parseFloorView(new URLSearchParams(''))).toEqual({ ok: true, value: { kind: 'floor' } });
+    expect(parseFloorView({})).toEqual({ ok: true, value: { kind: 'floor' } });
+    expect(parseFloorView({ view: 'current' })).toEqual({
+      ok: true,
+      value: { kind: 'current' },
+    });
+    expect(parseFloorView(new URLSearchParams('view=next'))).toEqual({
+      ok: true,
+      value: { kind: 'next' },
+    });
+    expect(parseFloorView({ view: 'day', date: '2026-10-27' })).toEqual({
+      ok: true,
+      value: { kind: 'day', date: '2026-10-27' },
+    });
+    expect(parseFloorView({ view: 'custom', from: at(-60), to: at(120) })).toEqual({
+      ok: true,
+      value: { kind: 'custom', from: at(-60), to: at(120) },
+    });
+  });
+
+  it('refuses a view it cannot show', () => {
+    expect(parseFloorView({ view: 'week' }).ok).toBe(false);
+    expect(parseFloorView({ view: 'day' }).ok).toBe(false);
+    expect(parseFloorView({ view: 'day', date: '27/10/2026' }).ok).toBe(false);
+    expect(parseFloorView({ view: 'custom', from: at(0) }).ok).toBe(false);
+    expect(parseFloorView({ view: 'custom', from: at(60), to: at(0) }).ok).toBe(false);
+    expect(
+      parseFloorView({ view: 'custom', from: at(0), to: at(MAX_CUSTOM_RANGE_HOURS * 60 + 1) }).ok
+    ).toBe(false);
+    expect(
+      parseFloorView({ view: 'custom', from: at(0), to: at(MAX_CUSTOM_RANGE_HOURS * 60) }).ok
+    ).toBe(true);
+  });
+
+  it('round-trips through the query fields the page sends', () => {
+    const views: FloorView[] = [
+      { kind: 'floor' },
+      { kind: 'current' },
+      { kind: 'next' },
+      { kind: 'day', date: '2026-10-27' },
+      { kind: 'custom', from: at(-60), to: at(120) },
+    ];
+    for (const view of views) {
+      const fields = floorViewFields(view);
+      expect(parseFloorView(fields)).toEqual({ ok: true, value: view });
+      expect(parseFloorView(new URLSearchParams(fields))).toEqual({ ok: true, value: view });
+    }
+    expect(floorViewFields({ kind: 'floor' })).toEqual({});
+  });
+
+  it('windows the floor by the lookback and lookahead, and a day by the studio clock', () => {
+    expect(floorWindow({ kind: 'floor' }, NOW)).toEqual({
+      from: NOW - min(LOOKBACK_MINUTES),
+      to: NOW + min(LOOKAHEAD_MINUTES),
+    });
+    // 2026-10-27 in New York is EDT: midnight is 04:00Z.
+    const day = floorWindow({ kind: 'day', date: '2026-10-27' }, NOW);
+    expect(new Date(day.from).toISOString()).toBe('2026-10-27T04:00:00.000Z');
+    expect(new Date(day.to + 1).toISOString()).toBe('2026-10-28T04:00:00.000Z');
+    expect(floorWindow({ kind: 'custom', from: at(-60), to: at(120) }, NOW)).toEqual({
+      from: NOW - min(60),
+      to: NOW + min(120),
+    });
+  });
+
+  const schedule = [
+    session(1, -180, 60), // long over
+    session(2, -30, 60), // running
+    session(3, -30, 120), // running too, longer
+    session(4, 60, 60), // next
+    session(5, 60, 90), // next, same start
+    session(6, 180, 60), // later
+  ];
+
+  it('shows the running session(s) as the current view, else the next to start', () => {
+    expect(viewSessions({ kind: 'current' }, schedule, NOW).map((s) => s.id)).toEqual([2, 3]);
+    // The hour-long one has ended; the two-hour one is still running.
+    expect(viewSessions({ kind: 'current' }, schedule, NOW + min(45)).map((s) => s.id)).toEqual([
+      3,
+    ]);
+    // Nothing running: the next to start, both of them.
+    expect(viewSessions({ kind: 'current' }, schedule, NOW + min(95)).map((s) => s.id)).toEqual([
+      4, 5,
+    ]);
+    expect(viewSessions({ kind: 'current' }, schedule, NOW + min(300))).toEqual([]);
+  });
+
+  it('shows every session sharing the next start as the next view', () => {
+    expect(viewSessions({ kind: 'next' }, schedule, NOW).map((s) => s.id)).toEqual([4, 5]);
+    expect(viewSessions({ kind: 'next' }, schedule, NOW + min(100)).map((s) => s.id)).toEqual([6]);
+    expect(viewSessions({ kind: 'next' }, schedule, NOW + min(200))).toEqual([]);
+  });
+
+  it('keeps a custom range to sessions starting inside it', () => {
+    const view: FloorView = { kind: 'custom', from: at(-60), to: at(90) };
+    expect(viewSessions(view, schedule, NOW).map((s) => s.id)).toEqual([2, 3, 4, 5]);
+  });
+
+  it('floorSessions takes the view, keeping the floor as its default', () => {
+    expect(floorSessions(schedule, NOW).map((s) => s.id)).toEqual(['1', '2', '3', '4', '5']);
+    expect(floorSessions(schedule, NOW, { kind: 'next' }).map((s) => s.id)).toEqual(['4', '5']);
   });
 });

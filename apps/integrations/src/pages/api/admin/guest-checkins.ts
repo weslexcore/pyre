@@ -1,30 +1,32 @@
 // Check Ins — check-in times behind /admin/guests/check-ins.
-//   GET                                          — today's sessions in the
-//                                                  window, everyone booked
-//                                                  into them with check-in
-//                                                  times (lib/guests/floor.ts),
-//                                                  the configured check-ins
+//   GET    ?view=&date=&from=&to=                — the view's sessions (the
+//                                                  floor by default; see
+//                                                  floor-timing.ts FloorView),
+//                                                  everyone booked into them
+//                                                  with check-in times
+//                                                  (lib/guests/floor.ts), the
+//                                                  configured check-ins
 //                                                  (floor.checkpoints) and
 //                                                  session lengths
 //                                                  (floor.sessionLengths),
 //                                                  and what each guest is on
 //                                                  (lib/guests/floor-members.ts)
-//   POST   { sessionId, bookingId }              — check in now: Momence's
+//   POST   { sessionId, bookingId, ...view }     — check in now: Momence's
 //                                                  check-in, plus the time
 //   PATCH  { sessionId, bookingId, checkedInAt?,
 //            minutes?, checkpoint?: { id, done },
-//            checkedOut? }                       — correct the time, set a
+//            checkedOut?, ...view }             — correct the time, set a
 //                                                  different length, mark a
 //                                                  check-in done or not,
 //                                                  check out (or undo it)
-//   DELETE ?sessionId=&bookingId=                — undo a check-in, in
+//   DELETE ?sessionId=&bookingId=&view=...       — undo a check-in, in
 //                                                  Momence and here
 //
 // Gated on the guests page, like Who's coming. Every mutation re-reads the
 // booking from Momence, so a request can only touch a live booking on a
-// session in today's window. Momence refusing the check-in still starts the
-// timer: the guest is here either way, and the response says to check them
-// in there by hand.
+// session in the view it names (the floor when it names none). Momence
+// refusing the check-in still starts the timer: the guest is here either
+// way, and the response says to check them in there by hand.
 
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
@@ -32,6 +34,7 @@ import type { GuestFloorCheckinRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { findFloorBooking, loadFloor } from '@/lib/guests/floor';
 import { loadFloorMembers } from '@/lib/guests/floor-members';
+import { type FloorView, floorWindow, parseFloorView } from '@/lib/guests/floor-timing';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { beginDelete, beginMutation, dbError, json } from '@/lib/http/route';
 import { bookingMember, setSessionBookingCheckIn } from '@/lib/momence/host-api';
@@ -53,26 +56,39 @@ function ids(source: Record<string, unknown> | URLSearchParams) {
 
 const unreachable = () =>
   json({ error: "Momence is unreachable — can't confirm that booking." }, 502);
-const notOnFloor = () => json({ error: "That booking isn't on today's floor." }, 404);
+const notOnFloor = () => json({ error: "That booking isn't on the floor you're looking at." }, 404);
 
-export const GET: APIRoute = async ({ cookies }) => {
+/** The view a request names, or the 400 for one it names badly. */
+function viewOf(source: Record<string, unknown> | URLSearchParams): FloorView | Response {
+  const parsed = parseFloorView(source);
+  return parsed.ok ? parsed.value : json({ error: parsed.error }, 400);
+}
+
+export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, GUESTS_PAGE);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
+  const view = viewOf(url.searchParams);
+  if (view instanceof Response) return view;
+
   const now = Date.now();
+  const { from, to } = floorWindow(view, now);
+  const window = { from: new Date(from).toISOString(), to: new Date(to).toISOString() };
   const [checkpoints, sessionLengths] = await Promise.all([
     getSetting('floor.checkpoints'),
     getSetting('floor.sessionLengths'),
   ]);
   try {
-    const floor = await loadFloor(db, now);
+    const floor = await loadFloor(db, now, view);
     const members = await loadFloorMembers(floor.guests, now);
     return json({
       available: true,
       now: new Date(now).toISOString(),
+      view,
+      window,
       checkpoints,
       sessionLengths,
       members,
@@ -83,6 +99,8 @@ export const GET: APIRoute = async ({ cookies }) => {
     return json({
       available: false,
       now: new Date(now).toISOString(),
+      view,
+      window,
       checkpoints,
       sessionLengths,
       members: {},
@@ -101,11 +119,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const target = ids(body);
   if (!target) return json({ error: 'sessionId and bookingId must be numeric' }, 400);
+  const view = viewOf(body);
+  if (view instanceof Response) return view;
 
   const now = Date.now();
   let found: Awaited<ReturnType<typeof findFloorBooking>>;
   try {
-    found = await findFloorBooking(target.sessionId, target.bookingId, now);
+    found = await findFloorBooking(target.sessionId, target.bookingId, now, view);
   } catch {
     return unreachable();
   }
@@ -153,6 +173,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const target = ids(body);
   if (!target) return json({ error: 'sessionId and bookingId must be numeric' }, 400);
+  const view = viewOf(body);
+  if (view instanceof Response) return view;
 
   const now = Date.now();
   const changes: Partial<GuestFloorCheckinRow> = {};
@@ -201,7 +223,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   let found: Awaited<ReturnType<typeof findFloorBooking>>;
   try {
-    found = await findFloorBooking(target.sessionId, target.bookingId, now);
+    found = await findFloorBooking(target.sessionId, target.bookingId, now, view);
   } catch {
     return unreachable();
   }
@@ -265,10 +287,12 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const target = ids(url.searchParams);
   if (!target) return json({ error: 'sessionId and bookingId must be numeric' }, 400);
+  const view = viewOf(url.searchParams);
+  if (view instanceof Response) return view;
 
   let found: Awaited<ReturnType<typeof findFloorBooking>>;
   try {
-    found = await findFloorBooking(target.sessionId, target.bookingId, Date.now());
+    found = await findFloorBooking(target.sessionId, target.bookingId, Date.now(), view);
   } catch {
     return unreachable();
   }
