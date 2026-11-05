@@ -88,6 +88,10 @@ const RULES: Array<[RegExp, Rule]> = [
   [/^\/admin\/guests\/fields$/, () => [`${API}/guest-fields`]],
   [/^\/admin\/guests\/sessions$/, () => [`${API}/guest-sessions?date=${todayEastern()}`]],
   [/^\/admin\/lost-found$/, () => [`${API}/lost-found?status=on_hand`]],
+  [
+    /^\/admin\/incidents\/([^/]+)$/,
+    (m) => (m[1] === 'new' ? [] : [`${API}/incidents?id=${encodeURIComponent(m[1])}`]),
+  ],
   [/^\/admin\/shift-notes$/, () => [`${API}/shift-notes`]],
   [/^\/admin\/messages$/, () => [`${API}/messages`]],
   [/^\/admin\/messages\/templates$/, () => [`${API}/message-templates`, `${API}/messages`]],

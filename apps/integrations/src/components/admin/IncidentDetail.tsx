@@ -12,15 +12,19 @@
 // The API is the security boundary; this island mirrors its rules so the UI
 // doesn't offer buttons that would come back 403.
 //
-// This page mutates, so it fetches directly rather than through the shared
-// JSON cache — but every successful change drops the cached /admin/incidents
-// entries, so the log can never repaint a pre-edit snapshot of this report.
+// The report is read through the shared JSON cache, so coming back to it
+// paints at once; every change shows the moment it is made (the record's
+// fields are guessed from what was sent, the trail entry the server writes
+// for it arrives with the revalidation behind the paint), and every
+// successful change drops the cached /admin/incidents entries, so the log
+// can never repaint a pre-edit snapshot of this report.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { formButtonClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { IncidentAttachmentRow, IncidentEventRow, IncidentRow } from '@/lib/db';
 import {
   ACCEPT_ATTRIBUTE,
@@ -75,6 +79,33 @@ const NEXT_STATUSES: { value: IncidentStatus; label: string }[] = [
   { value: 'closed', label: 'Closed' },
 ];
 
+/** The body's camelCase keys are the record's snake_case columns (lib/incidents/validate). */
+function columnOf(key: string): string {
+  return key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`);
+}
+
+/**
+ * What the record will read once `body` is saved: the fields it names, in
+ * column form, plus the status for a status change. Keys the record does
+ * not have (the action word, say) are left out.
+ */
+function guessIncident(incident: IncidentRow, body: Record<string, unknown>): IncidentRow {
+  const next: Record<string, unknown> = { ...incident };
+  for (const [key, value] of Object.entries(body)) {
+    if (key === 'action' || key === 'note') continue;
+    const column = key === 'status' ? 'status' : columnOf(key);
+    if (column in incident) next[column] = value;
+  }
+  return next as unknown as IncidentRow;
+}
+
+/** Where the trail puts a new entry: it keeps the server's order, whichever way that runs. */
+function withEvent(events: IncidentEventRow[], event: IncidentEventRow): IncidentEventRow[] {
+  const newestFirst =
+    events.length > 1 && events[0].created_at > events[events.length - 1].created_at;
+  return newestFirst ? [event, ...events] : [...events, event];
+}
+
 export function IncidentDetail({
   incidentId,
   uploadsFailed,
@@ -82,60 +113,63 @@ export function IncidentDetail({
   incidentId: string;
   uploadsFailed: boolean;
 }) {
-  const [data, setData] = useState<DetailResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const {
+    data,
+    error: loadError,
+    loading,
+    reload,
+    setData,
+  } = useCachedJson<DetailResponse>(`/api/admin/incidents?id=${encodeURIComponent(incidentId)}`);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const [note, setNote] = useState('');
   const [editing, setEditing] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/incidents?id=${encodeURIComponent(incidentId)}`);
-      if (!res.ok) {
-        setError(await readError(res));
-        return;
-      }
-      setData((await res.json()) as DetailResponse);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load this report');
-    } finally {
-      setLoading(false);
-    }
-  }, [incidentId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  /**
+   * Save a change the page already shows. The record's fields are guessed
+   * from the body; a follow-up note joins the trail under a temporary entry.
+   * The trail entry the server writes for the change comes with the
+   * revalidation after the save (the log's cached pages are dropped at the
+   * same time, so it can never repaint a pre-edit snapshot). A refusal puts
+   * the record back and says why.
+   */
   const mutate = async (body: Record<string, unknown>) => {
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch('/api/admin/incidents', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: incidentId, ...body }),
-      });
-      if (!res.ok) {
-        setError(await readError(res));
-        return false;
-      }
-      // The log lists this report; drop its cached pages before reloading.
-      invalidateJson('/api/admin/incidents');
-      await load();
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not save');
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    const ok = await optimistic(
+      setData,
+      (prev) => {
+        if (!prev) return prev;
+        const events =
+          body.action === 'note' && typeof body.note === 'string'
+            ? withEvent(prev.events, {
+                id: tempId(),
+                incident_id: incidentId,
+                action: 'note_added',
+                actor: prev.self,
+                detail: {},
+                note: body.note,
+                created_at: new Date().toISOString(),
+              })
+            : prev.events;
+        return { ...prev, incident: guessIncident(prev.incident, body), events };
+      },
+      async () => {
+        const res = await fetch('/api/admin/incidents', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: incidentId, ...body }),
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        invalidateJson('/api/admin/incidents');
+        void reload();
+        return true;
+      },
+      { onError: (message) => setError(message || 'That did not save') }
+    );
+    return ok === true;
   };
 
-  if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
 
   if (!data) {
     return (
@@ -205,7 +239,7 @@ export function IncidentDetail({
               <button
                 key={s.value}
                 type="button"
-                disabled={busy || incident.status === s.value}
+                disabled={incident.status === s.value}
                 className={`${formButtonClass} ${incident.status === s.value ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
                 onClick={() => void mutate({ action: 'status', status: s.value })}
               >
@@ -214,7 +248,7 @@ export function IncidentDetail({
             ))}
             <button
               type="button"
-              disabled={busy || incident.status === 'voided'}
+              disabled={incident.status === 'voided'}
               className={`${formButtonClass} ml-auto`}
               title="Retire a duplicate or mistaken report. The text stays readable in the record."
               onClick={async () => {
@@ -240,11 +274,12 @@ export function IncidentDetail({
         <EditPanel
           incident={incident}
           canManage={canManage}
-          busy={busy}
           onCancel={() => setEditing(false)}
           onSave={async (changes) => {
+            // The corrections show at once; a refusal reopens the form.
+            setEditing(false);
             const ok = await mutate(changes);
-            if (ok) setEditing(false);
+            if (!ok) setEditing(true);
           }}
         />
       ) : (
@@ -395,7 +430,12 @@ export function IncidentDetail({
         canManage={canManage}
         self={data.self}
         people={people}
-        onChanged={load}
+        onChanged={reload}
+        onRemoved={(id) =>
+          setData((prev) =>
+            prev ? { ...prev, attachments: prev.attachments.filter((a) => a.id !== id) } : prev
+          )
+        }
       />
 
       {(incident.follow_up_required ||
@@ -410,7 +450,7 @@ export function IncidentDetail({
             Follow-up
           </SectionTitle>
           {canManage ? (
-            <ReviewFields incident={incident} busy={busy} onSave={mutate} />
+            <ReviewFields incident={incident} onSave={mutate} />
           ) : (
             <dl className="grid grid-cols-1 gap-y-1.5">
               <Row label="Follow-up needed">{incident.follow_up_required ? 'Yes' : 'No'}</Row>
@@ -458,10 +498,13 @@ export function IncidentDetail({
           <button
             type="button"
             className={`${primaryButtonClass} mt-2`}
-            disabled={busy || !note.trim()}
+            disabled={!note.trim()}
             onClick={async () => {
-              const ok = await mutate({ action: 'note', note });
-              if (ok) setNote('');
+              // The note joins the trail at once; a refusal hands it back.
+              const text = note;
+              setNote('');
+              const ok = await mutate({ action: 'note', note: text });
+              if (!ok) setNote(text);
             }}
           >
             Add note
@@ -537,11 +580,9 @@ const humanizeField = (column: string): string => column.replace(/_/g, ' ');
 /** Reviewer-owned fields, saved together. */
 function ReviewFields({
   incident,
-  busy,
   onSave,
 }: {
   incident: IncidentRow;
-  busy: boolean;
   onSave: (body: Record<string, unknown>) => Promise<boolean>;
 }) {
   const [followUpRequired, setFollowUpRequired] = useState(incident.follow_up_required);
@@ -603,7 +644,7 @@ function ReviewFields({
       <button
         type="button"
         className={primaryButtonClass}
-        disabled={busy || !dirty}
+        disabled={!dirty}
         onClick={() =>
           void onSave({
             followUpRequired,
@@ -627,13 +668,11 @@ function ReviewFields({
 function EditPanel({
   incident,
   canManage,
-  busy,
   onCancel,
   onSave,
 }: {
   incident: IncidentRow;
   canManage: boolean;
-  busy: boolean;
   onCancel: () => void;
   onSave: (changes: Record<string, unknown>) => Promise<void>;
 }) {
@@ -754,7 +793,6 @@ function EditPanel({
         <button
           type="button"
           className={primaryButtonClass}
-          disabled={busy}
           onClick={() =>
             void onSave({
               category,
@@ -769,7 +807,7 @@ function EditPanel({
         >
           Save corrections
         </button>
-        <button type="button" className={formButtonClass} disabled={busy} onClick={onCancel}>
+        <button type="button" className={formButtonClass} onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -785,6 +823,7 @@ function AttachmentPanel({
   self,
   people,
   onChanged,
+  onRemoved,
 }: {
   incidentId: string;
   attachments: IncidentAttachmentRow[];
@@ -793,6 +832,8 @@ function AttachmentPanel({
   self: string;
   people: PeopleNames;
   onChanged: () => Promise<void>;
+  /** Take an attachment off the page before the server confirms. */
+  onRemoved: (id: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -841,13 +882,13 @@ function AttachmentPanel({
     )
       return;
     setError(null);
+    // Gone from the grid at once; a refusal brings it back with the reload.
+    onRemoved(attachment.id);
     const res = await fetch(`/api/admin/incident-media?id=${encodeURIComponent(attachment.id)}`, {
       method: 'DELETE',
     });
-    if (!res.ok) {
-      setError(await readError(res));
-      return;
-    }
+    if (!res.ok) setError(await readError(res));
+    // The trail records the removal (and the log counts attachments).
     invalidateJson('/api/admin/incidents');
     await onChanged();
   };

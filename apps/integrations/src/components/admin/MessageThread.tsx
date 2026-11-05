@@ -4,9 +4,12 @@
 // editing and deleting your own, and for admins the message itself — edit,
 // pin, archive, delete. A draft shows no thread: its author and the admins
 // it's shared with edit it, send it, or delete it. Editing is MessageEditor,
-// which autosaves; edits someone left unsaved reopen when they come back. Every mutation goes through the two API routes,
-// which re-check access; the predicates in lib/messages/access decide
-// which controls to draw.
+// which autosaves; edits someone left unsaved reopen when they come back.
+// Every change shows the moment it is made — a reply joins the thread
+// under a temporary id the server's row replaces, a pin or an archive flips
+// at once — and is put back if the server refuses. Every mutation goes
+// through the two API routes, which re-check access; the predicates in
+// lib/messages/access decide which controls to draw.
 import { useEffect, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
@@ -15,6 +18,7 @@ import { readError } from '@/lib/client/api';
 import { type Backup, clearBackup, readBackup } from '@/lib/client/autosave';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
 import {
   canChangeMessage,
@@ -71,6 +75,8 @@ export function MessageThread({
   const emailedTo = initial?.emailedTo ?? [];
   const [staff, setStaff] = useState<GrantablePerson[]>([]);
   const [error, setError] = useState<string | null>(initialError);
+  // Only the two confirmations wait on the server: sending reloads the
+  // page, deleting leaves it. Everything else shows at once.
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const [editingReply, setEditingReply] = useState<{ id: string; body: string } | null>(null);
@@ -94,54 +100,71 @@ export function MessageThread({
       .catch(() => undefined);
   }, [editingMessage, unsent, isAdmin, staff.length]);
 
-  const mergeReply = (reply: AdminMessageReplyRow, names: PeopleNames) => {
-    setPeople((prev) => ({ ...prev, ...names }));
-    setReplies((prev) =>
-      [...prev.filter((r) => r.id !== reply.id), reply].sort((a, b) =>
-        a.created_at.localeCompare(b.created_at)
-      )
+  /** The thread with `reply` in place of the row it replaces (or added), in writing order. */
+  const withReply = (
+    prev: AdminMessageReplyRow[],
+    reply: AdminMessageReplyRow,
+    replacing: string = reply.id
+  ) =>
+    [...prev.filter((r) => r.id !== replacing && r.id !== reply.id), reply].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at)
     );
+
+  /** A reply's route call: the row and the names it introduces, folded in as it lands. */
+  const sendReply = async (init: RequestInit) => {
+    const data = await requestJson<{ reply: AdminMessageReplyRow; people: PeopleNames }>(
+      '/api/admin/message-replies',
+      init
+    );
+    setPeople((prev) => ({ ...prev, ...data.people }));
     invalidateJson('/api/admin/messages');
+    return data;
   };
 
   const postReply = async () => {
     const bodyMd = draft.trim();
     if (!bodyMd || !message) return;
-    setBusy(true);
     setError(null);
-    try {
-      const data = await requestJson<{ reply: AdminMessageReplyRow; people: PeopleNames }>(
-        '/api/admin/message-replies',
-        { method: 'POST', body: JSON.stringify({ messageId: message.id, bodyMd }) }
-      );
-      mergeReply(data.reply, data.people);
-      setDraft('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to post the reply');
-    } finally {
-      setBusy(false);
-    }
+    setDraft('');
+    const now = new Date().toISOString();
+    const pending: AdminMessageReplyRow = {
+      id: tempId(),
+      message_id: message.id,
+      author_email: viewer.email ?? '',
+      body_md: bodyMd,
+      updated_by: null,
+      created_at: now,
+      updated_at: now,
+    };
+    await optimistic(
+      setReplies,
+      (prev) => withReply(prev, pending),
+      () => sendReply({ method: 'POST', body: JSON.stringify({ messageId: message.id, bodyMd }) }),
+      {
+        reconcile: (prev, data) => withReply(prev, data.reply, pending.id),
+        onError: (message) => {
+          setError(message || 'Failed to post the reply');
+          // Hand the words back so they are not lost.
+          setDraft((current) => current || bodyMd);
+        },
+      }
+    );
   };
 
   const saveReplyEdit = async () => {
     if (!editingReply) return;
-    setBusy(true);
+    const { id, body } = editingReply;
     setError(null);
-    try {
-      const data = await requestJson<{ reply: AdminMessageReplyRow; people: PeopleNames }>(
-        '/api/admin/message-replies',
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ id: editingReply.id, bodyMd: editingReply.body }),
-        }
-      );
-      mergeReply(data.reply, data.people);
-      setEditingReply(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save the reply');
-    } finally {
-      setBusy(false);
-    }
+    setEditingReply(null);
+    await optimistic(
+      setReplies,
+      (prev) => prev.map((r) => (r.id === id ? { ...r, body_md: body } : r)),
+      () => sendReply({ method: 'PATCH', body: JSON.stringify({ id, bodyMd: body }) }),
+      {
+        reconcile: (prev, data) => withReply(prev, data.reply),
+        onError: (message) => setError(message || 'Failed to save the reply'),
+      }
+    );
   };
 
   const deleteReply = async (reply: AdminMessageReplyRow) => {
@@ -149,20 +172,19 @@ export function MessageThread({
       !(await confirmAction({ title: 'Delete this reply?', confirmLabel: 'Delete', danger: true }))
     )
       return;
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/admin/message-replies?id=${encodeURIComponent(reply.id)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      setReplies((prev) => prev.filter((r) => r.id !== reply.id));
-      invalidateJson('/api/admin/messages');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete the reply');
-    } finally {
-      setBusy(false);
-    }
+    await optimistic(
+      setReplies,
+      (prev) => prev.filter((r) => r.id !== reply.id),
+      async () => {
+        const res = await fetch(`/api/admin/message-replies?id=${encodeURIComponent(reply.id)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        invalidateJson('/api/admin/messages');
+      },
+      { onError: (message) => setError(message || 'Failed to delete the reply') }
+    );
   };
 
   // An edit left unsaved last time (on this device) reopens the editor with
@@ -183,32 +205,50 @@ export function MessageThread({
 
   const patchMessage = async (patch: Record<string, unknown>) => {
     if (!message) return;
-    setBusy(true);
     setError(null);
-    try {
-      const data = await requestJson<{ message: AdminMessageRow; people: PeopleNames }>(
-        '/api/admin/messages',
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ id: message.id, ...patch }),
-        }
-      );
-      invalidateJson('/api/admin/messages');
-      if (patch.send === true) {
-        // Reload so the page picks up who it was emailed to and opens the thread.
+    const request = () =>
+      requestJson<{ message: AdminMessageRow; people: PeopleNames }>('/api/admin/messages', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: message.id, ...patch }),
+      });
+    if (patch.send === true) {
+      // Sending waits: the page reloads to pick up who it was emailed to and
+      // open the thread, and that has to be the sent message.
+      setBusy(true);
+      try {
+        await request();
+        invalidateJson('/api/admin/messages');
         window.location.reload();
         return;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to update the message');
+        setBusy(false);
+      } finally {
+        setConfirmSend(false);
       }
-      setMessage(data.message);
-      setPeople((prev) => ({ ...prev, ...data.people }));
-      setEditingMessage(false);
-      setBusy(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update the message');
-      setBusy(false);
-    } finally {
-      setConfirmSend(false);
+      return;
     }
+    // Pin and archive flip at once; the server's row replaces the guess.
+    const guess: Partial<AdminMessageRow> = {};
+    if (typeof patch.pinned === 'boolean') guess.pinned = patch.pinned;
+    if (typeof patch.archived === 'boolean') {
+      guess.archived_at = patch.archived ? new Date().toISOString() : null;
+    }
+    setEditingMessage(false);
+    await optimistic(
+      setMessage,
+      (prev) => (prev ? { ...prev, ...guess } : prev),
+      async () => {
+        const data = await request();
+        setPeople((prev) => ({ ...prev, ...data.people }));
+        invalidateJson('/api/admin/messages');
+        return data;
+      },
+      {
+        reconcile: (_prev, data) => data.message,
+        onError: (message) => setError(message || 'Failed to update the message'),
+      }
+    );
   };
 
   const deleteMessage = async () => {
@@ -318,7 +358,6 @@ export function MessageThread({
                 <button
                   type="button"
                   className={buttonClass}
-                  disabled={busy}
                   onClick={() => setEditingMessage(true)}
                 >
                   Edit
@@ -338,7 +377,6 @@ export function MessageThread({
                 <button
                   type="button"
                   className={buttonClass}
-                  disabled={busy}
                   onClick={() => setEditingMessage(true)}
                 >
                   Edit
@@ -346,7 +384,6 @@ export function MessageThread({
                 <button
                   type="button"
                   className={buttonClass}
-                  disabled={busy}
                   onClick={() => void patchMessage({ pinned: !message.pinned })}
                 >
                   {message.pinned ? 'Unpin' : 'Pin'}
@@ -354,7 +391,6 @@ export function MessageThread({
                 <button
                   type="button"
                   className={buttonClass}
-                  disabled={busy}
                   onClick={() => void patchMessage({ archived: !message.archived_at })}
                 >
                   {message.archived_at ? 'Restore' : 'Archive'}
@@ -399,7 +435,6 @@ export function MessageThread({
                     <button
                       type="button"
                       className="hover:text-white"
-                      disabled={busy}
                       onClick={() => setEditingReply({ id: reply.id, body: reply.body_md })}
                     >
                       Edit
@@ -407,7 +442,6 @@ export function MessageThread({
                     <button
                       type="button"
                       className="hover:text-[var(--pyre-red)]"
-                      disabled={busy}
                       onClick={() => void deleteReply(reply)}
                     >
                       Delete
@@ -427,7 +461,7 @@ export function MessageThread({
                     <button
                       type="button"
                       className={goldButtonClass}
-                      disabled={busy || !editingReply.body.trim()}
+                      disabled={!editingReply.body.trim()}
                       onClick={() => void saveReplyEdit()}
                     >
                       Save
@@ -435,7 +469,6 @@ export function MessageThread({
                     <button
                       type="button"
                       className={buttonClass}
-                      disabled={busy}
                       onClick={() => setEditingReply(null)}
                     >
                       Cancel
@@ -463,7 +496,7 @@ export function MessageThread({
               <button
                 type="button"
                 className={goldButtonClass}
-                disabled={busy || !draft.trim()}
+                disabled={!draft.trim()}
                 onClick={() => void postReply()}
               >
                 Reply

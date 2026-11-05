@@ -52,7 +52,9 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { compactInputClass, compactSelectClass, goldButtonClass } from '@/components/admin/ui';
 import type { ClassificationView } from '@/lib/classify/view';
 import { readError } from '@/lib/client/api';
+import { primeJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime } from '@/lib/client/format';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type {
   ShiftNoteAttachmentRow,
   ShiftNoteReplyRow,
@@ -192,7 +194,42 @@ interface Viewer {
 /** Whose notes came back: the whole log (admins), or the shared notes plus this person's own. */
 type Scope = 'all' | 'shared';
 
+/** The log's one read; lib/client/pageData warms it when a link here is hovered. */
+const LOG_URL = '/api/admin/shift-notes';
+
+interface LogResponse {
+  notes: ShiftNoteRow[];
+  attachments?: Record<string, ShiftNoteAttachmentRow[]>;
+  replies?: Record<string, ShiftNoteReplyRow[]>;
+  people?: PeopleNames;
+  viewer?: Viewer;
+  scope?: Scope;
+  classifications?: Record<string, ClassificationView>;
+  suggestionsEnabled?: boolean;
+}
+
+async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as T;
+}
+
+/** What a note's PATCH route answers: the note, and the history entries the change wrote. */
+interface NotePatchResponse {
+  note: ShiftNoteRow;
+  activity?: ShiftNoteReplyRow[];
+  people: PeopleNames;
+  classification?: ClassificationView;
+}
+
 export function ShiftNotes() {
+  // The log is cached across navigations (lib/client/cachedJson): coming
+  // back paints the last-known notes at once and revalidates behind them.
+  // The island keeps working state per piece (notes, media, threads, names)
+  // because the mutations below touch them one at a time; the response is
+  // folded into that state when it lands, and the state is mirrored back
+  // into the cache so what was changed here is what shows on return.
+  const log = useCachedJson<LogResponse>(LOG_URL);
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
   const [attachments, setAttachments] = useState<Record<string, ShiftNoteAttachmentRow[]>>({});
   // Each note's thread, in writing order (only the replies this viewer may see).
@@ -202,10 +239,8 @@ export function ShiftNotes() {
   const [lightbox, setLightbox] = useState<{ noteId: string; index: number } | null>(null);
   const [viewer, setViewer] = useState<Viewer>({ email: '', isAdmin: false });
   const [scope, setScope] = useState<Scope>('shared');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // What's uploading onto an existing note right now, by note id — e.g.
   // "2 of 3: uploading IMG_2041.jpg — 63%".
@@ -292,50 +327,45 @@ export function ShiftNotes() {
     if (hash.startsWith('#note-')) landOnRef.current = hash.slice(1);
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/shift-notes');
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as {
-        notes: ShiftNoteRow[];
-        attachments?: Record<string, ShiftNoteAttachmentRow[]>;
-        replies?: Record<string, ShiftNoteReplyRow[]>;
-        people?: PeopleNames;
-        viewer?: Viewer;
-        scope?: Scope;
-        classifications?: Record<string, ClassificationView>;
-        suggestionsEnabled?: boolean;
-      };
-      setNotes(data.notes);
-      resetSignals(data.classifications);
-      setAttachments(data.attachments ?? {});
-      setReplies(data.replies ?? {});
-      setNames(data.people ?? {});
-      if (data.viewer) setViewer(data.viewer);
-      if (data.scope) setScope(data.scope);
-      setCanSuggest(data.suggestionsEnabled === true);
-      if (data.viewer?.isAdmin) void refreshSuggestions(data.notes.map((n) => n.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load shift notes');
-    } finally {
-      setLoading(false);
-    }
-  }, [resetSignals, refreshSuggestions]);
-
+  // Each response — the cached one on mount, then every revalidation —
+  // becomes the working state. The ref keeps the same response from being
+  // folded in twice (the mirror below never changes `log.data`, so a
+  // response is only ever seen here once).
+  const hydratedRef = useRef<LogResponse | null>(null);
+  const { data: logData } = log;
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!logData || logData === hydratedRef.current) return;
+    hydratedRef.current = logData;
+    setNotes(logData.notes);
+    resetSignals(logData.classifications);
+    setAttachments(logData.attachments ?? {});
+    setReplies(logData.replies ?? {});
+    setNames(logData.people ?? {});
+    if (logData.viewer) setViewer(logData.viewer);
+    if (logData.scope) setScope(logData.scope);
+    setCanSuggest(logData.suggestionsEnabled === true);
+    if (logData.viewer?.isAdmin) void refreshSuggestions(logData.notes.map((n) => n.id));
+  }, [logData, resetSignals, refreshSuggestions]);
+
+  // Mirror what was changed here back into the cache (without touching the
+  // hook's own data, which would read as a new response), so leaving and
+  // coming back paints the log as it was left, not as it was first loaded.
+  useEffect(() => {
+    const base = hydratedRef.current;
+    if (!base) return;
+    primeJson(LOG_URL, { ...base, notes, attachments, replies, people: names });
+  }, [notes, attachments, replies, names]);
+
+  const loading = log.loading;
 
   // Once the log has painted, scroll to the note a search result pointed at.
   // The hash alone can't do it: the notes arrive after the page does.
   useEffect(() => {
-    if (loading || !landOnRef.current) return;
+    if (loading || notes.length === 0 || !landOnRef.current) return;
     const target = document.getElementById(landOnRef.current);
     landOnRef.current = null;
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [loading]);
+  }, [loading, notes]);
 
   /** Insert `note` into local state at its date-sorted place. */
   const mergeNote = useCallback((note: ShiftNoteRow, people: PeopleNames) => {
@@ -368,7 +398,6 @@ export function ShiftNotes() {
   /** Add media to an existing note (author-or-admin, re-checked server-side). */
   const attachTo = async (noteId: string, list: FileList | null) => {
     if (!list || list.length === 0) return;
-    setBusy(true);
     setError(null);
     setNotice(null);
     try {
@@ -404,7 +433,6 @@ export function ShiftNotes() {
       }
     } finally {
       setNoteUpload((prev) => ({ ...prev, [noteId]: null }));
-      setBusy(false);
     }
   };
 
@@ -431,53 +459,77 @@ export function ShiftNotes() {
     )
       return;
     setError(null);
-    const res = await fetch(`/api/admin/shift-note-media?id=${encodeURIComponent(attachment.id)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      setError(await readError(res));
-      return;
-    }
-    setAttachments((prev) => {
-      // Attachments in the log always belong to a note; staged rows (null
-      // note_id) live in the composer chips, not here.
-      if (!attachment.note_id) return prev;
-      return {
-        ...prev,
-        [attachment.note_id]: (prev[attachment.note_id] ?? []).filter(
-          (a) => a.id !== attachment.id
-        ),
-      };
-    });
+    // Attachments in the log always belong to a note; staged rows (null
+    // note_id) live in the composer chips, not here.
+    const noteId = attachment.note_id;
+    await optimistic(
+      setAttachments,
+      (prev) =>
+        noteId
+          ? { ...prev, [noteId]: (prev[noteId] ?? []).filter((a) => a.id !== attachment.id) }
+          : prev,
+      async () => {
+        const res = await fetch(
+          `/api/admin/shift-note-media?id=${encodeURIComponent(attachment.id)}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) throw new Error(await readError(res));
+      },
+      { onError: setError }
+    );
   };
 
+  /**
+   * Change a note on the server after the log already shows the change:
+   * the response's note replaces the guess, and the history entries the
+   * change wrote join its thread. A refusal puts the note back.
+   */
+  const patchNote = (
+    note: ShiftNoteRow,
+    guess: Partial<ShiftNoteRow>,
+    body: Record<string, unknown>,
+    failure: string
+  ) =>
+    optimistic(
+      setNotes,
+      (prev) => prev.map((n) => (n.id === note.id ? { ...n, ...guess } : n)),
+      async () => {
+        const data = await requestJson<NotePatchResponse>('/api/admin/shift-notes', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: note.id, ...body }),
+        });
+        setNames((names) => ({ ...names, ...data.people }));
+        for (const entry of data.activity ?? []) mergeReply(entry, data.people);
+        if (data.classification) mergeSignals(data.note.id, data.classification);
+        return data;
+      },
+      {
+        reconcile: (prev, data) =>
+          prev
+            .map((n) => (n.id === note.id ? data.note : n))
+            .sort(
+              (a, b) =>
+                b.note_date.localeCompare(a.note_date) || b.created_at.localeCompare(a.created_at)
+            ),
+        onError: (message) => setError(message || failure),
+      }
+    );
+
   const saveEdit = async () => {
-    if (!editId) return;
-    setBusy(true);
+    const note = editId ? notes.find((n) => n.id === editId) : null;
+    if (!note) return;
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch('/api/admin/shift-notes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editId, noteDate: editDate, body: editBody }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as {
-        note: ShiftNoteRow;
-        activity?: ShiftNoteReplyRow[];
-        people: PeopleNames;
-        classification?: ClassificationView;
-      };
-      mergeNote(data.note, data.people);
-      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
-      mergeSignals(data.note.id, data.classification);
-      setEditId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save the note');
-    } finally {
-      setBusy(false);
-    }
+    // The editor closes at once; the card shows the new text while the
+    // server reads it (its classifier chips refill when that lands).
+    setEditId(null);
+    await patchNote(
+      note,
+      { note_date: editDate, body: editBody },
+      { noteDate: editDate, body: editBody },
+      'Failed to save the note'
+    );
   };
 
   const deleteNote = async (note: ShiftNoteRow) => {
@@ -486,29 +538,33 @@ export function ShiftNotes() {
       ? 'Delete this note? Its photos and video go with it. This cannot be undone.'
       : 'Delete this note? This cannot be undone.';
     if (!(await confirmAction({ title: warning, confirmLabel: 'Delete', danger: true }))) return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch(`/api/admin/shift-notes?id=${note.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await readError(res));
-      setNotes((prev) => prev.filter((n) => n.id !== note.id));
-      setAttachments((prev) => {
-        const { [note.id]: _gone, ...rest } = prev;
-        return rest;
-      });
-      setReplies((prev) => {
-        const { [note.id]: _gone, ...rest } = prev;
-        return rest;
-      });
-      removeSignals(note.id);
-      removeSuggestions(note.id);
-      if (editId === note.id) setEditId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete the note');
-    } finally {
-      setBusy(false);
-    }
+    if (editId === note.id) setEditId(null);
+    // The card goes at once and comes back if the server refuses; what hung
+    // off it (media, thread, signals, suggestions) is only dropped once the
+    // deletion is confirmed, since none of it shows without the card.
+    const deleted = await optimistic(
+      setNotes,
+      (prev) => prev.filter((n) => n.id !== note.id),
+      async () => {
+        const res = await fetch(`/api/admin/shift-notes?id=${note.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(await readError(res));
+        return true;
+      },
+      { onError: (message) => setError(message || 'Failed to delete the note') }
+    );
+    if (!deleted) return;
+    setAttachments((prev) => {
+      const { [note.id]: _gone, ...rest } = prev;
+      return rest;
+    });
+    setReplies((prev) => {
+      const { [note.id]: _gone, ...rest } = prev;
+      return rest;
+    });
+    removeSignals(note.id);
+    removeSuggestions(note.id);
   };
 
   const canTouch = (note: ShiftNoteRow) => canEditNote(note, viewer);
@@ -516,55 +572,22 @@ export function ShiftNotes() {
   /** Switch who can see a note: everyone with the page, or the admins (re-checked server-side). */
   const setAdminOnly = async (note: ShiftNoteRow, adminOnly: boolean) => {
     if (adminOnly === note.admin_only) return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch('/api/admin/shift-notes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: note.id, adminOnly }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as {
-        note: ShiftNoteRow;
-        activity?: ShiftNoteReplyRow[];
-        people: PeopleNames;
-      };
-      mergeNote(data.note, data.people);
-      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to change who can see the note');
-    } finally {
-      setBusy(false);
-    }
+    await patchNote(
+      note,
+      { admin_only: adminOnly },
+      { adminOnly },
+      'Failed to change who can see the note'
+    );
   };
 
   /** Admin triage: flip a note's status (re-checked server-side). */
   const setStatus = async (note: ShiftNoteRow, status: ShiftNoteStatus) => {
     if (status === note.status) return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch('/api/admin/shift-notes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: note.id, status }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as {
-        note: ShiftNoteRow;
-        activity?: ShiftNoteReplyRow[];
-        people: PeopleNames;
-      };
-      mergeNote(data.note, data.people);
-      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update the status');
-    } finally {
-      setBusy(false);
-    }
+    await patchNote(note, { status }, { status }, 'Failed to update the status');
   };
 
   /** Put `reply` into its note's thread at its place in writing order. */
@@ -579,74 +602,127 @@ export function ShiftNotes() {
     }));
   };
 
+  /** One reply's row, changed on the server after the thread already shows it. */
+  const patchReply = (
+    reply: ShiftNoteReplyRow,
+    guess: Partial<ShiftNoteReplyRow>,
+    body: Record<string, unknown>,
+    failure: string
+  ) =>
+    optimistic(
+      setReplies,
+      (prev) => ({
+        ...prev,
+        [reply.note_id]: (prev[reply.note_id] ?? []).map((r) =>
+          r.id === reply.id ? { ...r, ...guess } : r
+        ),
+      }),
+      async () => {
+        const data = await requestJson<{ reply: ShiftNoteReplyRow; people: PeopleNames }>(
+          '/api/admin/shift-note-replies',
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: reply.id, ...body }),
+          }
+        );
+        setNames((names) => ({ ...names, ...data.people }));
+        return data;
+      },
+      {
+        reconcile: (prev, data) => ({
+          ...prev,
+          [reply.note_id]: (prev[reply.note_id] ?? []).map((r) =>
+            r.id === reply.id ? data.reply : r
+          ),
+        }),
+        onError: (message) => setError(message || failure),
+      }
+    );
+
   const addReply = async (note: ShiftNoteRow) => {
     const draft = (replyDrafts[note.id] ?? '').trim();
     if (!draft) return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch('/api/admin/shift-note-replies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          noteId: note.id,
-          body: draft,
-          isPrivate: viewer.isAdmin && !!replyPrivate[note.id],
+    const isPrivate = viewer.isAdmin && !!replyPrivate[note.id];
+    // The composer clears and the comment joins the thread at once, under a
+    // temporary id the server's row replaces; a refusal takes it back out.
+    setReplyDrafts((prev) => ({ ...prev, [note.id]: '' }));
+    setReplyPrivate((prev) => ({ ...prev, [note.id]: false }));
+    const now = new Date().toISOString();
+    const pending: ShiftNoteReplyRow = {
+      id: tempId(),
+      note_id: note.id,
+      kind: 'comment',
+      body: draft,
+      author_email: viewer.email,
+      is_private: isPrivate,
+      data: null,
+      updated_by: null,
+      created_at: now,
+      updated_at: now,
+    };
+    await optimistic(
+      setReplies,
+      (prev) => ({ ...prev, [note.id]: [...(prev[note.id] ?? []), pending] }),
+      async () => {
+        const data = await requestJson<{ reply: ShiftNoteReplyRow; people: PeopleNames }>(
+          '/api/admin/shift-note-replies',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ noteId: note.id, body: draft, isPrivate }),
+          }
+        );
+        setNames((names) => ({ ...names, ...data.people }));
+        return data;
+      },
+      {
+        reconcile: (prev, data) => ({
+          ...prev,
+          [note.id]: [
+            ...(prev[note.id] ?? []).filter((r) => r.id !== pending.id && r.id !== data.reply.id),
+            data.reply,
+          ].sort((a, b) => a.created_at.localeCompare(b.created_at)),
         }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
-      mergeReply(data.reply, data.people);
-      setReplyDrafts((prev) => ({ ...prev, [note.id]: '' }));
-      setReplyPrivate((prev) => ({ ...prev, [note.id]: false }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add the reply');
-    } finally {
-      setBusy(false);
-    }
+        onError: (message) => {
+          setError(message || 'Failed to add the reply');
+          // Hand the words back so they are not lost.
+          setReplyDrafts((prev) => ({ ...prev, [note.id]: draft }));
+          setReplyPrivate((prev) => ({ ...prev, [note.id]: isPrivate }));
+        },
+      }
+    );
   };
 
   const saveReplyEdit = async () => {
-    if (!replyEditId) return;
-    setBusy(true);
+    const reply = replyEditId
+      ? Object.values(replies)
+          .flat()
+          .find((r) => r.id === replyEditId)
+      : null;
+    if (!reply) return;
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch('/api/admin/shift-note-replies', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: replyEditId, body: replyEditBody }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
-      mergeReply(data.reply, data.people);
-      setReplyEditId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save the reply');
-    } finally {
-      setBusy(false);
-    }
+    setReplyEditId(null);
+    await patchReply(
+      reply,
+      { body: replyEditBody },
+      { body: replyEditBody },
+      'Failed to save the reply'
+    );
   };
 
   /** Admin-only: move a reply between the shared thread and the admins. */
   const toggleReplyPrivate = async (reply: ShiftNoteReplyRow) => {
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch('/api/admin/shift-note-replies', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reply.id, isPrivate: !reply.is_private }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
-      mergeReply(data.reply, data.people);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update the reply');
-    } finally {
-      setBusy(false);
-    }
+    await patchReply(
+      reply,
+      { is_private: !reply.is_private },
+      { isPrivate: !reply.is_private },
+      'Failed to update the reply'
+    );
   };
 
   const deleteReply = async (reply: ShiftNoteReplyRow) => {
@@ -659,23 +735,22 @@ export function ShiftNotes() {
       }))
     )
       return;
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/admin/shift-note-replies?id=${reply.id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      setReplies((prev) => ({
+    if (replyEditId === reply.id) setReplyEditId(null);
+    await optimistic(
+      setReplies,
+      (prev) => ({
         ...prev,
         [reply.note_id]: (prev[reply.note_id] ?? []).filter((r) => r.id !== reply.id),
-      }));
-      if (replyEditId === reply.id) setReplyEditId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete the reply');
-    } finally {
-      setBusy(false);
-    }
+      }),
+      async () => {
+        const res = await fetch(`/api/admin/shift-note-replies?id=${reply.id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(await readError(res));
+      },
+      { onError: (message) => setError(message || 'Failed to delete the reply') }
+    );
   };
 
   // Author options for the filter, ordered by display name.
@@ -734,6 +809,11 @@ export function ShiftNotes() {
   }, [visible]);
 
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (!logData) {
+    return (
+      <p className="text-sm text-[var(--pyre-red)]">{log.error ?? 'Failed to load shift notes'}</p>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -879,7 +959,6 @@ export function ShiftNotes() {
                         type="button"
                         className={`${buttonClass} flex items-center px-2`}
                         disabled={
-                          busy ||
                           signals.rerunning === note.id ||
                           suggestions.runs[note.id]?.status === 'queued' ||
                           suggestions.runs[note.id]?.status === 'running'
@@ -922,7 +1001,7 @@ export function ShiftNotes() {
                               : ''
                           }`}
                           aria-pressed={note.status === status}
-                          disabled={busy || note.status === status}
+                          disabled={note.status === status}
                           onClick={() => void setStatus(note, status)}
                         >
                           {statusLabel(status)}
@@ -931,7 +1010,6 @@ export function ShiftNotes() {
                     <button
                       type="button"
                       className={buttonClass}
-                      disabled={busy}
                       title={
                         note.admin_only
                           ? 'Let everyone with Shift Notes see this note'
@@ -944,7 +1022,6 @@ export function ShiftNotes() {
                     <button
                       type="button"
                       className={buttonClass}
-                      disabled={busy}
                       onClick={() => {
                         setEditId(note.id);
                         setEditDate(note.note_date);
@@ -956,7 +1033,6 @@ export function ShiftNotes() {
                     <button
                       type="button"
                       className={buttonClass}
-                      disabled={busy}
                       onClick={() => void deleteNote(note)}
                     >
                       Delete
@@ -985,17 +1061,12 @@ export function ShiftNotes() {
                     <button
                       type="button"
                       className={goldButtonClass}
-                      disabled={busy || !editBody.trim() || !editDate}
+                      disabled={!editBody.trim() || !editDate}
                       onClick={() => void saveEdit()}
                     >
                       Save
                     </button>
-                    <button
-                      type="button"
-                      className={buttonClass}
-                      disabled={busy}
-                      onClick={() => setEditId(null)}
-                    >
+                    <button type="button" className={buttonClass} onClick={() => setEditId(null)}>
                       Cancel
                     </button>
                   </div>
@@ -1104,7 +1175,6 @@ export function ShiftNotes() {
                         accept={ACCEPT_ATTRIBUTE}
                         multiple
                         className="hidden"
-                        disabled={busy}
                         onChange={(e) => {
                           void attachTo(note.id, e.target.files);
                           e.target.value = '';
@@ -1176,7 +1246,6 @@ export function ShiftNotes() {
                               <button
                                 type="button"
                                 className="hover:text-white"
-                                disabled={busy}
                                 onClick={() => {
                                   setReplyEditId(reply.id);
                                   setReplyEditBody(reply.body);
@@ -1188,7 +1257,6 @@ export function ShiftNotes() {
                                 <button
                                   type="button"
                                   className="hover:text-white"
-                                  disabled={busy}
                                   onClick={() => void toggleReplyPrivate(reply)}
                                 >
                                   {reply.is_private ? 'Share with author' : 'Make private'}
@@ -1197,7 +1265,6 @@ export function ShiftNotes() {
                               <button
                                 type="button"
                                 className="hover:text-[var(--pyre-red)]"
-                                disabled={busy}
                                 onClick={() => void deleteReply(reply)}
                               >
                                 Delete
@@ -1217,7 +1284,7 @@ export function ShiftNotes() {
                               <button
                                 type="button"
                                 className={goldButtonClass}
-                                disabled={busy || !replyEditBody.trim()}
+                                disabled={!replyEditBody.trim()}
                                 onClick={() => void saveReplyEdit()}
                               >
                                 Save
@@ -1225,7 +1292,6 @@ export function ShiftNotes() {
                               <button
                                 type="button"
                                 className={buttonClass}
-                                disabled={busy}
                                 onClick={() => setReplyEditId(null)}
                               >
                                 Cancel
@@ -1260,7 +1326,7 @@ export function ShiftNotes() {
                         <button
                           type="button"
                           className={buttonClass}
-                          disabled={busy || !(replyDrafts[note.id] ?? '').trim()}
+                          disabled={!(replyDrafts[note.id] ?? '').trim()}
                           onClick={() => void addReply(note)}
                         >
                           Reply
