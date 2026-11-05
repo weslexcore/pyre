@@ -130,6 +130,20 @@ has no admin row. Every `/admin/*` page shares `AdminLayout` (server-side
 gate + responsive nav) and every `/api/admin/*` route re-checks the session via
 `requireAdmin` or `requirePage`.
 
+Every admin page is a thin `.astro` shell around a React island that reads its
+JSON from `/api/admin/*`. The islands share one client-side data layer in
+`src/lib/client/`:
+
+- `cachedJson.ts` — a stale-while-revalidate cache keyed by URL that survives
+  `ClientRouter` navigations, so returning to a page paints its last data at
+  once. An entry younger than `FRESH_MS` is painted without a revalidation.
+- `pageData.ts` — the URLs each admin page reads first. `AdminLayout` warms them
+  when a link to the page is hovered, touched or focused, and again when the
+  navigation starts, so the island finds its data already cached when it mounts.
+- `optimistic.ts` — mutations change the view first and send the request behind
+  it, rolling back only when the server refuses. Islands keep their lists
+  interactive while a save is out instead of disabling the page on a busy flag.
+
 The directory groups tools into three sections: Operations, Marketing, and
 Monitoring.
 

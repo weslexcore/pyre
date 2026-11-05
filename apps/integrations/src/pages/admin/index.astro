@@ -1,4 +1,5 @@
 ---
+import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
 // Admin home: directory of the tools this user may view, grouped by section,
 // with a per-user Pinned section at the top (pinning and drag-reordering live
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
@@ -17,7 +18,9 @@ import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
+import { etStamp } from '@/lib/client/format';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   getNextUpcomingShift,
   getOnCallNow,
@@ -26,10 +29,7 @@ import {
   type OnCallNow,
   type WeekShift,
 } from '@/lib/schedule/next-shift';
-import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
 import { getSetting } from '@/lib/settings/store';
-import { etStamp } from '@/lib/client/format';
-import { normalizeEmail } from '@/lib/email/address';
 import type { SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -38,15 +38,26 @@ import { type ActiveRun, loadActiveRuns } from '@/lib/sops/runs';
 import { loadShiftSops, type ShiftSops } from '@/lib/sops/shift-sops';
 
 const access = Astro.locals.adminAccess ?? null;
-const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
-const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 const email = (Astro.locals.adminUser?.email ?? '').toLowerCase();
-const pins = email ? await getToolPins(email) : [];
+const db = getDb();
+const canSeeSops = !!db && !!access && canViewPage(access, '/admin/sops');
+
+// Every read this page makes is independent of the others, so they all go
+// out together: the settings row, the pins, the roster, the on-call and
+// week lookups, and the SOP viewer's role. Serially they were six round
+// trips ahead of the first byte of the dashboard.
+const [hiddenTools, pins, staff, onCallRaw, sopRole] = await Promise.all([
+  access ? getSetting('navigation.hiddenTools') : Promise.resolve([] as string[]),
+  email ? getToolPins(email) : Promise.resolve([] as string[]),
+  db && access ? listStaff() : Promise.resolve(null),
+  db && access ? getOnCallNow(db) : Promise.resolve(null),
+  canSeeSops ? getSopRole(email, access) : Promise.resolve(null),
+]);
+const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 // Memo for AdminLayout (its frontmatter runs after the page's), so the nav
 // doesn't refetch the same list on this request.
 Astro.locals.toolPins = pins;
 
-const db = getDb();
 let nextShift: NextShift | null = null;
 // Whether the chip is the viewer's own shift ("Your next shift") vs the
 // admin's schedule-wide one ("Next shift", with who's on it).
@@ -57,28 +68,6 @@ let weekShifts: WeekShift[] = [];
 // Who's on call for the shift happening now (or the next one), with names.
 let onCallNow: Array<OnCallNow & { name: string | null }> = [];
 let selfStaffId: string | null = null;
-if (db && access) {
-  const staff = (await listStaff()) ?? [];
-  selfStaffId = email
-    ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
-    : null;
-  const nameById = new Map(staff.map((s) => [s.id, s.display_name]));
-  onCallNow = ((await getOnCallNow(db)) ?? []).map((entry) => ({
-    ...entry,
-    name: entry.onCallStaffId ? (nameById.get(entry.onCallStaffId) ?? null) : null,
-  }));
-  if (selfStaffId) weekShifts = (await getWeekShifts(db, selfStaffId)) ?? [];
-  if (access.isAdmin) {
-    nextShift = await getNextUpcomingShift(db);
-    if (nextShift) {
-      assignedNames = nextShift.assignments.map((a) => nameById.get(a.staff_id) ?? '?');
-    }
-  } else if (selfStaffId && weekShifts.length === 0) {
-    // Nothing this week — the next one ahead is still worth a chip.
-    nextShift = await getNextUpcomingShift(db, selfStaffId);
-    chipIsOwn = true;
-  }
-}
 
 // Open checklist runs and shift duties, for anyone who can reach the SOP
 // library. The runs are the same rows the library's own strip shows
@@ -88,17 +77,43 @@ if (db && access) {
 let activeRuns: ActiveRun[] = [];
 let runPeople: PeopleNames = {};
 let shiftSops: ShiftSops | null = null;
-if (db && access && canViewPage(access, '/admin/sops')) {
-  const viewer: SopViewer = {
-    role: await getSopRole(email, access),
-    email: normalizeEmail(email),
-  };
-  const [{ runs }, shift] = await Promise.all([
-    loadActiveRuns(db, viewer),
-    loadShiftSops(db, viewer),
+
+if (db && access) {
+  const roster = staff ?? [];
+  selfStaffId = email
+    ? (roster.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
+    : null;
+  const nameById = new Map(roster.map((s) => [s.id, s.display_name]));
+  onCallNow = (onCallRaw ?? []).map((entry) => ({
+    ...entry,
+    name: entry.onCallStaffId ? (nameById.get(entry.onCallStaffId) ?? null) : null,
+  }));
+
+  // The second wave: the shift chips (which need the viewer's staff id) and
+  // the SOP blocks (which need the viewer's role), again all at once.
+  const viewer: SopViewer | null =
+    canSeeSops && sopRole ? { role: sopRole, email: normalizeEmail(email) } : null;
+  const [week, adminNext, runsResult, shift] = await Promise.all([
+    selfStaffId ? getWeekShifts(db, selfStaffId) : Promise.resolve(null),
+    access.isAdmin ? getNextUpcomingShift(db) : Promise.resolve(null),
+    viewer ? loadActiveRuns(db, viewer) : Promise.resolve(null),
+    viewer ? loadShiftSops(db, viewer) : Promise.resolve(null),
   ]);
-  activeRuns = ownRunsFirst(runs, email);
-  runPeople = await getPeopleNames(activeRuns.map((run) => run.started_by));
+  weekShifts = week ?? [];
+  if (access.isAdmin) {
+    nextShift = adminNext;
+    if (nextShift) {
+      assignedNames = nextShift.assignments.map((a) => nameById.get(a.staff_id) ?? '?');
+    }
+  } else if (selfStaffId && weekShifts.length === 0) {
+    // Nothing this week — the next one ahead is still worth a chip.
+    nextShift = await getNextUpcomingShift(db, selfStaffId);
+    chipIsOwn = true;
+  }
+  if (runsResult) {
+    activeRuns = ownRunsFirst(runsResult.runs, email);
+    runPeople = await getPeopleNames(activeRuns.map((run) => run.started_by));
+  }
   shiftSops = shift;
 }
 

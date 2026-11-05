@@ -3,9 +3,10 @@
 // keyset "load more" pagination; each row expands to the stored
 // before/after details.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass } from '@/components/admin/ui';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ScheduleChangeRow } from '@/lib/schedule/change-log';
 
 const FILTERS: Array<{ value: string; label: string }> = [
@@ -52,38 +53,66 @@ const timestamp = (iso: string): string =>
     minute: '2-digit',
   });
 
-export function ScheduleChanges() {
-  const [entries, setEntries] = useState<ScheduleChangeRow[]>([]);
-  const [filter, setFilter] = useState('');
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface ChangesPage {
+  entries: ScheduleChangeRow[];
+  hasMore: boolean;
+}
 
-  const load = useCallback(
-    async (before?: string) => {
-      setLoading(true);
-      setError(null);
+/** The log route with its filter and keyset cursor. */
+function changesUrl(filter: string, before?: string): string {
+  const params = new URLSearchParams();
+  if (filter) params.set('entityType', filter);
+  if (before) params.set('before', before);
+  return `/api/admin/schedule-changes?${params}`;
+}
+
+export function ScheduleChanges() {
+  const [filter, setFilter] = useState('');
+  // The first page of each filter is cached, so switching filters you have
+  // already looked at (or coming back to the log) repaints at once.
+  const firstUrl = useMemo(() => changesUrl(filter), [filter]);
+  const first = useCachedJson<ChangesPage>(firstUrl);
+  // "Load more" pages append behind the first page; they belong to the
+  // filter they were fetched under and fall away when it changes.
+  const [more, setMore] = useState<{ filter: string; page: ChangesPage } | null>(null);
+  const [paging, setPaging] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  const moreForFilter = more && more.filter === filter ? more.page : null;
+  const entries = useMemo(
+    () => [...(first.data?.entries ?? []), ...(moreForFilter?.entries ?? [])],
+    [first.data, moreForFilter]
+  );
+  const hasMore = moreForFilter ? moreForFilter.hasMore : (first.data?.hasMore ?? false);
+  const loading = first.loading || paging;
+  const error = pageError ?? first.error;
+
+  const loadMore = useCallback(
+    async (before: string) => {
+      setPaging(true);
+      setPageError(null);
       try {
-        const params = new URLSearchParams();
-        if (filter) params.set('entityType', filter);
-        if (before) params.set('before', before);
-        const res = await fetch(`/api/admin/schedule-changes?${params}`);
+        const res = await fetch(changesUrl(filter, before));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as { entries: ScheduleChangeRow[]; hasMore: boolean };
-        setEntries((prev) => (before ? [...prev, ...body.entries] : body.entries));
-        setHasMore(body.hasMore);
+        const body = (await res.json()) as ChangesPage;
+        setMore((prev) => ({
+          filter,
+          page: {
+            entries: [
+              ...(prev && prev.filter === filter ? prev.page.entries : []),
+              ...body.entries,
+            ],
+            hasMore: body.hasMore,
+          },
+        }));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load');
+        setPageError(e instanceof Error ? e.message : 'Failed to load');
       } finally {
-        setLoading(false);
+        setPaging(false);
       }
     },
     [filter]
   );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   return (
     <div className="space-y-4">
@@ -159,7 +188,10 @@ export function ScheduleChanges() {
           type="button"
           className={buttonClass}
           disabled={loading}
-          onClick={() => void load(entries[entries.length - 1]?.created_at)}
+          onClick={() => {
+            const last = entries[entries.length - 1]?.created_at;
+            if (last) void loadMore(last);
+          }}
         >
           Load more
         </button>

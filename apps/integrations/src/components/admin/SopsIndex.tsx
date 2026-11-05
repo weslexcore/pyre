@@ -23,8 +23,10 @@ import {
   inputClass,
   selectClass,
 } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import { useLiveReorder } from '@/lib/client/useLiveReorder';
 import type { SopRow } from '@/lib/db';
 import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
@@ -135,18 +137,63 @@ function AccessBadge({ label }: { label: string }) {
   );
 }
 
+/** The library's reads; lib/client/pageData warms both when a link here is hovered. */
+const LIBRARY_URL = '/api/admin/sops';
+const ACTIVE_RUNS_URL = '/api/admin/sop-runs?view=active';
+
+interface ActiveRunsResponse {
+  runs?: ActiveRun[];
+  people?: PeopleNames;
+  viewer?: string;
+}
+
 export function SopsIndex() {
-  const [sops, setSops] = useState<SopSummary[]>([]);
-  const [people, setPeople] = useState<PeopleNames>({});
-  const [categories, setCategories] = useState<string[]>([]);
-  const [role, setRole] = useState<SopRole>('staff');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The library is cached across navigations: opening a document and coming
+  // back paints the list at once and revalidates behind it. Every change
+  // below writes to this entry first and lets the server catch up.
+  const library = useCachedJson<ListResponse>(LIBRARY_URL);
+  const { data, setData } = library;
+  const sops = useMemo(() => data?.sops ?? [], [data]);
+  // Server-supplied so sections holding nothing yet still get a header;
+  // deriving from the documents would drop them.
+  const categories = useMemo(() => data?.categories ?? categoriesInOrder(data?.sops ?? []), [data]);
+  const role: SopRole = data?.role ?? 'staff';
+  const assistEnabled = data?.assistEnabled ?? false;
+  const staff = data?.staff ?? [];
+  // The caller's pinned document ids (personal; shown in the Pinned strip).
+  const pins = useMemo(() => new Set(data?.pins ?? []), [data]);
+  // The duty documents for the caller's own current-or-next shift, shown
+  // above everything else: what you are about to do beats what is merely
+  // filed on this page.
+  const shiftSops = data?.shiftSops ?? null;
+  const loading = library.loading;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? library.error;
+  const setError = setActionError;
+
+  // Live edits to the arrangement (drag and drop, section changes) go into
+  // the cached list, which is what the cards render from.
+  const setSops = useCallback(
+    (update: (prev: SopSummary[]) => SopSummary[]) =>
+      setData((prev) => (prev ? { ...prev, sops: update(prev.sops) } : prev)),
+    [setData]
+  );
+  const setCategories = useCallback(
+    (update: (prev: string[]) => string[]) =>
+      setData((prev) =>
+        prev
+          ? { ...prev, categories: update(prev.categories ?? categoriesInOrder(prev.sops)) }
+          : prev
+      ),
+    [setData]
+  );
 
   const [showCreate, setShowCreate] = useState(false);
   // Slugs ticked for printing; null when the library isn't in print-select
   // mode. In that mode a card tap ticks it instead of opening it.
   const [printSelection, setPrintSelection] = useState<Set<string> | null>(null);
+  // Only the create form waits on the server (it navigates into the new
+  // document on success); everything else on the page changes at once.
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   // Either an existing section name or NEW_SECTION, in which case the typed
@@ -154,7 +201,6 @@ export function SopsIndex() {
   const [newCategory, setNewCategory] = useState<string>(NEW_SECTION);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newNotes, setNewNotes] = useState('');
-  const [assistEnabled, setAssistEnabled] = useState(false);
   // New documents start readable by everyone and editable by admins — the
   // same defaults the columns carry.
   const [newView, setNewView] = useState<SopGrant>({
@@ -162,7 +208,6 @@ export function SopsIndex() {
     emails: [],
   });
   const [newEdit, setNewEdit] = useState<SopGrant>({ roles: ['admin'], emails: [] });
-  const [staff, setStaff] = useState<GrantablePerson[]>([]);
 
   // Standalone "add a section" form, and the header being renamed in place.
   const [showAddSection, setShowAddSection] = useState(false);
@@ -174,17 +219,46 @@ export function SopsIndex() {
   // cancel gets there.
   const renameCancelledRef = useRef(false);
 
+  // Debounced library search; snippets come from the server so results only
+  // ever cover documents this user may view. Each query is its own cache
+  // entry, so retyping a term you already searched answers at once.
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < MIN_QUERY_LENGTH) {
+      setDebouncedQuery('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(q), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const search = useCachedJson<{ results: SearchResult[] }>(
+    debouncedQuery ? `/api/admin/sops?q=${encodeURIComponent(debouncedQuery)}` : null
+  );
+  const queryPending = query.trim().length >= MIN_QUERY_LENGTH && debouncedQuery !== query.trim();
+  const searching = queryPending || search.loading;
+  const results: SearchResult[] | null =
+    debouncedQuery && !queryPending ? (search.data?.results ?? null) : null;
+  useEffect(() => {
+    if (search.error) setActionError(search.error);
+  }, [search.error]);
 
-  // Unfinished runs on documents this role may view — runs are shared per
-  // document, so someone else's open checklist is the one you walk up to and
-  // continue.
-  const [activeRuns, setActiveRuns] = useState<ActiveRun[]>([]);
+  // Resume strip. Separate from the library read so a runs outage still
+  // leaves a working SOP list: unfinished runs on documents this role may
+  // view — runs are shared per document, so someone else's open checklist is
+  // the one you walk up to and continue.
+  const runsQuery = useCachedJson<ActiveRunsResponse>(ACTIVE_RUNS_URL);
+  const activeRuns = useMemo(() => runsQuery.data?.runs ?? [], [runsQuery.data]);
   // The session email, from the runs response, so the strip can put the
   // viewer's own open checklists first and label them as theirs.
-  const [viewerEmail, setViewerEmail] = useState('');
+  const viewerEmail = runsQuery.data?.viewer ?? '';
+  // Whoever started an open run may not be an editor of any document, so
+  // the strip brings its own names.
+  const people = useMemo(
+    () => ({ ...(runsQuery.data?.people ?? {}), ...(data?.people ?? {}) }),
+    [runsQuery.data, data]
+  );
 
   // Own open checklists first — they are the ones this person has to finish —
   // then everyone else's, each group newest first as the API returns them.
@@ -201,125 +275,27 @@ export function SopsIndex() {
     return map;
   }, [activeRuns]);
 
-  // The duty documents for the caller's own current-or-next shift, shown
-  // above everything else: what you are about to do beats what is merely
-  // filed on this page.
-  const [shiftSops, setShiftSops] = useState<ShiftSops | null>(null);
-
-  // The caller's pinned document ids (personal; shown in the Pinned strip).
-  const [pins, setPins] = useState<Set<string>>(new Set());
-
-  const togglePin = async (sop: SopSummary) => {
+  // Optimistic flip; the response's authoritative list replaces it, and a
+  // refusal puts it back.
+  const togglePin = (sop: SopSummary) => {
     const pinned = !pins.has(sop.id);
-    // Optimistic flip; the response's authoritative list replaces it.
-    setPins((prev) => {
-      const next = new Set(prev);
-      if (pinned) next.add(sop.id);
-      else next.delete(sop.id);
-      return next;
-    });
-    try {
-      const res = await fetch('/api/admin/sop-pins', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sopId: sop.id, pinned }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as { pins: string[] };
-      setPins(new Set(body.pins));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update pin');
-      await load({ silent: true });
-    }
+    setError(null);
+    return optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              pins: pinned ? [...prev.pins, sop.id] : prev.pins.filter((id) => id !== sop.id),
+            }
+          : prev,
+      () => sendJson<{ pins: string[] }>('/api/admin/sop-pins', 'PUT', { sopId: sop.id, pinned }),
+      {
+        reconcile: (current, body) => (current ? { ...current, pins: body.pins } : current),
+        onError: setError,
+      }
+    );
   };
-
-  // silent = refresh the data without blanking the list (used to resync after
-  // a failed reorder; the initial load shows the loading state).
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    // Silent refreshes keep any just-set error visible (e.g. "failed to save
-    // the new order") instead of wiping it with the refetch.
-    if (!opts?.silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const res = await fetch('/api/admin/sops');
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as ListResponse;
-      setSops(body.sops);
-      // Server-supplied so sections holding nothing yet still get a header;
-      // deriving from the documents would drop them.
-      setCategories(body.categories ?? categoriesInOrder(body.sops));
-      setRole(body.role);
-      setAssistEnabled(body.assistEnabled ?? false);
-      setStaff(body.staff ?? []);
-      setPins(new Set(body.pins ?? []));
-      setShiftSops(body.shiftSops ?? null);
-      setPeople((prev) => ({ ...prev, ...body.people }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load SOPs');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Resume strip. Separate from the library load so a runs outage still leaves
-  // a working SOP list.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/admin/sop-runs?view=active');
-        if (!res.ok) return;
-        const body = (await res.json()) as {
-          runs?: ActiveRun[];
-          people?: PeopleNames;
-          viewer?: string;
-        };
-        if (!cancelled) {
-          setActiveRuns(body.runs ?? []);
-          setViewerEmail(body.viewer ?? '');
-          // Whoever started an open run may not be an editor of any document,
-          // so the strip brings its own names.
-          setPeople((prev) => ({ ...prev, ...body.people }));
-        }
-      } catch {
-        // Non-fatal: the library renders fine without the strip.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Debounced library search; snippets come from the server so results only
-  // ever cover documents this user may view.
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < MIN_QUERY_LENGTH) {
-      setResults(null);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/admin/sops?q=${encodeURIComponent(q)}`);
-        if (!res.ok) throw new Error(await readError(res));
-        const body = (await res.json()) as { results: SearchResult[] };
-        setResults(body.results);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Search failed');
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
 
   // The section the create form will file the document under: the chosen one,
   // or the name typed into the "new section" field.
@@ -329,23 +305,17 @@ export function SopsIndex() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/sops', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          // The API gives a brand-new section a position of its own, so a
-          // section named here behaves exactly like one added on its own.
-          category: chosenCategory || 'General',
-          viewRoles: withAdmins(newView.roles),
-          viewEmails: newView.emails,
-          editRoles: withAdmins(newEdit.roles),
-          editEmails: newEdit.emails,
-          content: `# ${newTitle.trim()}\n`,
-        }),
+      const { sop } = await sendJson<{ sop: SopRow }>('/api/admin/sops', 'POST', {
+        title: newTitle.trim(),
+        // The API gives a brand-new section a position of its own, so a
+        // section named here behaves exactly like one added on its own.
+        category: chosenCategory || 'General',
+        viewRoles: withAdmins(newView.roles),
+        viewEmails: newView.emails,
+        editRoles: withAdmins(newEdit.roles),
+        editEmails: newEdit.emails,
+        content: `# ${newTitle.trim()}\n`,
       });
-      if (!res.ok) throw new Error(await readError(res));
-      const { sop } = (await res.json()) as { sop: SopRow };
       // The editor's writing assistant picks these up and drafts from them.
       // Best-effort: without storage, the editor opens with an empty
       // assistant and the notes can be pasted there.
@@ -356,6 +326,8 @@ export function SopsIndex() {
           // Storage blocked; nothing to hand off.
         }
       }
+      // The list this page comes back to has a new card on it.
+      invalidateJson(LIBRARY_URL);
       // Straight into the editor for the new document.
       window.location.href = `/admin/sops/${sop.slug}?edit=1`;
     } catch (e) {
@@ -366,56 +338,56 @@ export function SopsIndex() {
 
   // ---- sections ------------------------------------------------------------
 
-  const addSection = async () => {
+  // New sections land last and hold nothing: the header goes on at once and
+  // the form pre-selects it, so "add a section" flows straight into filling it.
+  const addSection = () => {
     const name = sectionDraft.trim();
     if (!name) return;
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch('/api/admin/sop-categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      setSectionDraft('');
-      setShowAddSection(false);
-      // New sections land last and hold nothing — the reload is what puts the
-      // (empty) header on screen.
-      await load({ silent: true });
-      // Pre-select it, so "add a section" flows straight into filling it.
-      setNewCategory(name);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add the section');
-    } finally {
-      setBusy(false);
-    }
+    setSectionDraft('');
+    setShowAddSection(false);
+    setNewCategory(name);
+    return optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              categories: [...(prev.categories ?? categoriesInOrder(prev.sops)), name],
+            }
+          : prev,
+      () => sendJson('/api/admin/sop-categories', 'POST', { name }),
+      {
+        onError: (message) => {
+          setError(message);
+          setNewCategory(NEW_SECTION);
+        },
+      }
+    );
   };
 
-  const renameSection = async (name: string) => {
+  // Every document in the section moves with it, so the rename is applied
+  // to the header and the cards together.
+  const renameSection = (name: string) => {
     const newName = renameDraft.trim();
-    if (!newName || newName === name) {
-      setRenaming(null);
-      return;
-    }
-    setBusy(true);
+    setRenaming(null);
+    if (!newName || newName === name) return;
     setError(null);
-    try {
-      const res = await fetch('/api/admin/sop-categories', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, newName }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      setRenaming(null);
-      // Every document in the section moved with it, so refetch rather than
-      // patching names in place.
-      await load({ silent: true });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to rename the section');
-    } finally {
-      setBusy(false);
-    }
+    return optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              categories: (prev.categories ?? categoriesInOrder(prev.sops)).map((c) =>
+                c === name ? newName : c
+              ),
+              sops: prev.sops.map((s) => (s.category === name ? { ...s, category: newName } : s)),
+            }
+          : prev,
+      () => sendJson('/api/admin/sop-categories', 'PATCH', { name, newName }),
+      { onError: setError }
+    );
   };
 
   const deleteSection = async (name: string) => {
@@ -428,19 +400,21 @@ export function SopsIndex() {
       }))
     )
       return;
-    setBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/admin/sop-categories?name=${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      await load({ silent: true });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to remove the section');
-    } finally {
-      setBusy(false);
-    }
+    await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              categories: (prev.categories ?? categoriesInOrder(prev.sops)).filter(
+                (c) => c !== name
+              ),
+            }
+          : prev,
+      () => sendJson(`/api/admin/sop-categories?name=${encodeURIComponent(name)}`, 'DELETE'),
+      { onError: setError }
+    );
   };
 
   // ---- drag and drop -------------------------------------------------------
@@ -449,8 +423,8 @@ export function SopsIndex() {
     onDrop: (finished, before) => void commit(finished, before),
     // Cancelled (Escape, or released outside) — put everything back.
     onCancel: (before) => {
-      setSops(before.sops);
-      setCategories(before.categories);
+      setSops(() => before.sops);
+      setCategories(() => before.categories);
     },
   });
   const drag = reorder.drag;
@@ -468,13 +442,13 @@ export function SopsIndex() {
     beginDrag(e, { kind: 'sop', id: sop.id }, '[data-sop-card]');
 
   const enterSop = (targetId: string) => {
-    if (busy || drag?.kind !== 'sop' || drag.id === targetId) return;
+    if (drag?.kind !== 'sop' || drag.id === targetId) return;
     if (!reorder.enterOnce(`sop:${targetId}`)) return;
     setSops((prev) => repositionSop(prev, drag.id, targetId));
   };
 
   const enterCategory = (name: string) => {
-    if (busy || !drag) return;
+    if (!drag) return;
     if (drag.kind === 'category') {
       if (drag.name === name || !reorder.enterOnce(`cat:${name}`)) return;
       setCategories((prev) => repositionCategory(prev, drag.name, name));
@@ -486,17 +460,14 @@ export function SopsIndex() {
     }
   };
 
+  // The live-drag arrangement on screen is already the order to store, so
+  // nothing waits: the requests go out and only a refusal is reported — with
+  // a resync (which keeps the list on screen) to what the server holds.
   const commit = async (finished: Drag, before: DragSnapshot | null) => {
-    setBusy(true);
     setError(null);
     try {
       if (finished.kind === 'category') {
-        const res = await fetch('/api/admin/sop-order', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ categories }),
-        });
-        if (!res.ok) throw new Error(await readError(res));
+        await sendJson('/api/admin/sop-order', 'PUT', { categories });
       } else {
         const moved = sops.find((s) => s.id === finished.id);
         if (!moved) return;
@@ -504,33 +475,17 @@ export function SopsIndex() {
         // settings PATCH), then the order within the new section.
         const original = before?.sops.find((s) => s.id === finished.id);
         if (original && original.category !== moved.category) {
-          const res = await fetch('/api/admin/sops', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: moved.id, category: moved.category }),
-          });
-          if (!res.ok) throw new Error(await readError(res));
+          await sendJson('/api/admin/sops', 'PATCH', { id: moved.id, category: moved.category });
         }
-        const res = await fetch('/api/admin/sop-order', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            category: moved.category,
-            sopIds: sops.filter((s) => s.category === moved.category).map((s) => s.id),
-          }),
+        await sendJson('/api/admin/sop-order', 'PUT', {
+          category: moved.category,
+          sopIds: sops.filter((s) => s.category === moved.category).map((s) => s.id),
         });
-        if (!res.ok) throw new Error(await readError(res));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the new order');
-      // Resync (without blanking the list) so the view falls back to what the
-      // server actually holds.
-      await load({ silent: true });
-    } finally {
-      setBusy(false);
+      void library.reload();
     }
-    // On success there's nothing to refetch: the live-drag arrangement on
-    // screen is exactly the order the server just stored.
   };
 
   const endDrag = reorder.end;

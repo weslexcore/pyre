@@ -17,6 +17,12 @@
 // behind it, and a Momence outage leaves the last-known floor on screen
 // rather than nothing. The mirror keeps its own, longer, age limit.
 //
+// The cache can be filled before an island asks: warmJson() from a link
+// hover or the start of a navigation (lib/client/pageData maps each admin
+// page to the URLs its islands read first), primeJson() with data the server
+// rendered into the page. An island mounting onto an entry younger than
+// FRESH_MS paints it and does not revalidate — that one request served both.
+//
 // The /api/admin routes stay the security boundary. Entries live only in the
 // visitor's own browser and are keyed by full URL, so two different queries
 // can never collide.
@@ -31,8 +37,21 @@ interface Entry {
 
 const cache = new Map<string, Entry>();
 
+/**
+ * One request per URL at a time: a warm started from a link hover and the
+ * island that mounts a moment later share the same response.
+ */
+const inflight = new Map<string, Promise<unknown>>();
+
 /** Cached data older than this is dropped rather than painted. */
 const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * An entry younger than this is painted without a revalidation behind it:
+ * the fetch a hover or a navigation just made *is* the fetch. Older entries
+ * paint at once and refresh in the background as before.
+ */
+export const FRESH_MS = 5_000;
 
 /** Pages key by query string (week, window, filters) — keep the map bounded. */
 const MAX_ENTRIES = 50;
@@ -129,6 +148,71 @@ function readCache<T>(key: string, maxAgeMs: number): T | null {
   return hit.data as T;
 }
 
+/** Whether `key` holds an entry younger than `freshMs`. */
+function isFresh(key: string, freshMs: number): boolean {
+  const hit = cache.get(key);
+  return !!hit && Date.now() - hit.at <= freshMs;
+}
+
+/**
+ * The one network read for a URL: joins the request already in flight for
+ * it, or starts one. Writes the cache on success. Rejects on a non-2xx.
+ */
+function fetchJson<T>(target: string, persistTtl: number | null): Promise<T> {
+  const running = inflight.get(target);
+  if (running) return running as Promise<T>;
+  // Assigned below, before the first await inside resolves — the closure
+  // only reads it after that.
+  let request: Promise<T> | undefined;
+  const run = async (): Promise<T> => {
+    try {
+      const res = await fetch(target, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as T;
+      // Invalidated or superseded (a forced reload) while in flight: the
+      // answer is the caller's to use, but not the cache's to keep.
+      if (inflight.get(target) === request) {
+        writeCache(target, body);
+        if (persistTtl !== null) writePersistedJson(target, body, persistTtl);
+      }
+      return body;
+    } finally {
+      if (inflight.get(target) === request) inflight.delete(target);
+    }
+  };
+  request = run();
+  inflight.set(target, request);
+  return request;
+}
+
+/**
+ * Fetch `url` into the cache before any island asks for it — from a link
+ * hover, a tap, or the start of a navigation — so the page it belongs to
+ * paints with data the moment it hydrates. A no-op while a request for the
+ * URL is in flight or its entry is younger than `freshMs`; a failed warm is
+ * swallowed (the island reports its own fetch's error).
+ */
+export function warmJson(url: string, freshMs: number = FRESH_MS): Promise<void> {
+  if (isFresh(url, freshMs)) return Promise.resolve();
+  return fetchJson(url, null).then(
+    () => undefined,
+    () => undefined
+  );
+}
+
+/**
+ * Seed the cache with data the server already rendered into the page, so an
+ * island whose first read is that same URL paints it without a round trip.
+ */
+export function primeJson(url: string, data: unknown): void {
+  writeCache(url, data);
+}
+
+/** The cached entry for `url`, fresh or not, or null when there is none. */
+export function peekJson<T>(url: string): T | null {
+  return (cache.get(url)?.data as T | undefined) ?? null;
+}
+
 function writeCache(key: string, data: unknown): void {
   // Map iterates in insertion order, so re-inserting keeps the freshest keys
   // last and lets us evict the oldest first.
@@ -149,11 +233,17 @@ function writeCache(key: string, data: unknown): void {
 export function invalidateJson(prefix?: string): void {
   if (prefix === undefined) {
     cache.clear();
+    inflight.clear();
     removeStored('');
     return;
   }
   for (const key of [...cache.keys()]) {
     if (key.startsWith(prefix)) cache.delete(key);
+  }
+  // A warm still in flight would land after the invalidation: forget it, so
+  // the next read starts its own request rather than joining it.
+  for (const key of [...inflight.keys()]) {
+    if (key.startsWith(prefix)) inflight.delete(key);
   }
   removeStored(prefix);
 }
@@ -183,6 +273,11 @@ export interface CachedJsonOptions {
    */
   persist?: boolean;
   persistMaxAgeMs?: number;
+  /**
+   * An entry younger than this paints without a revalidation (default
+   * FRESH_MS). Pass 0 for a view that must always see the server on mount.
+   */
+  freshMs?: number;
 }
 
 /**
@@ -194,7 +289,12 @@ export function useCachedJson<T>(
   url: string | null,
   options: CachedJsonOptions = {}
 ): CachedJson<T> {
-  const { maxAgeMs = DEFAULT_MAX_AGE_MS, persist = false, persistMaxAgeMs = maxAgeMs } = options;
+  const {
+    maxAgeMs = DEFAULT_MAX_AGE_MS,
+    persist = false,
+    persistMaxAgeMs = maxAgeMs,
+    freshMs = FRESH_MS,
+  } = options;
 
   const [data, setDataState] = useState<T | null>(() => (url ? readCache<T>(url, maxAgeMs) : null));
   const [error, setError] = useState<string | null>(null);
@@ -220,23 +320,29 @@ export function useCachedJson<T>(
   const run = useCallback(
     async (target: string, force: boolean): Promise<void> => {
       if (force) {
+        // A reload must see the server, not a request a hover started.
+        inflight.delete(target);
         setPending(true);
       } else {
         const cached =
           readCache<T>(target, maxAgeMs) ??
           (persist ? readPersistedJson<T>(target, persistMaxAgeMs) : null);
         if (cached !== null) setDataState(cached);
+        // Just warmed (or just mutated through setData): nothing to revalidate.
+        if (cached !== null && isFresh(target, freshMs)) {
+          if (persist) writePersistedJson(target, cached, persistMaxAgeMs);
+          requestId.current += 1;
+          setError(null);
+          setPending(false);
+          return;
+        }
         setPending(true);
       }
 
       const id = ++requestId.current;
       setError(null);
       try {
-        const res = await fetch(target, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as T;
-        writeCache(target, body);
-        if (persist) writePersistedJson(target, body, persistMaxAgeMs);
+        const body = await fetchJson<T>(target, persist ? persistMaxAgeMs : null);
         // A newer request, an unmount, or a key change superseded this one.
         if (id !== requestId.current || !mounted.current || urlRef.current !== target) return;
         setDataState(body);
@@ -247,7 +353,7 @@ export function useCachedJson<T>(
         if (id === requestId.current && mounted.current) setPending(false);
       }
     },
-    [maxAgeMs, persist, persistMaxAgeMs]
+    [maxAgeMs, persist, persistMaxAgeMs, freshMs]
   );
 
   useEffect(() => {

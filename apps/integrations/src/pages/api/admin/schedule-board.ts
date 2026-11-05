@@ -193,152 +193,188 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const shifts = (shiftsRes.data ?? []) as Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   for (const shift of shifts) shift.assignments = [];
 
-  if (shifts.length > 0) {
-    let assignmentsQuery = db
-      .from('shift_assignments')
-      .select('*')
-      .in(
-        'shift_id',
-        shifts.map((s) => s.id)
-      )
-      .order('starts_at');
-    if (!includeDrafts) assignmentsQuery = assignmentsQuery.eq('is_draft', false);
-
-    const { data: assignments, error } = await assignmentsQuery;
-    if (error) return dbError(error);
-
-    const byShift = new Map(shifts.map((s) => [s.id, s]));
-    for (const assignment of (assignments ?? []) as ShiftAssignmentRow[]) {
-      byShift.get(assignment.shift_id)?.assignments.push(assignment);
-    }
-  }
-
-  const { data: neighborShifts, error: neighborError } = await db
-    .from('shifts')
-    .select('id, shift_date')
-    .in('shift_date', [addDays(start, -1), addDays(end, 1)])
-    .eq('is_draft', false)
-    .eq('status', 'active');
-  if (neighborError) return dbError(neighborError);
-  const neighborAssignments: NeighborAssignment[] = [];
-  if ((neighborShifts ?? []).length > 0) {
-    const dateOf = new Map(
-      (neighborShifts ?? []).map((s) => [s.id as string, s.shift_date as string])
-    );
-    const { data: rows, error } = await db
-      .from('shift_assignments')
-      .select('shift_id, staff_id, starts_at, ends_at')
-      .in('shift_id', [...dateOf.keys()])
-      .eq('is_draft', false);
-    if (error) return dbError(error);
-    for (const a of (rows ?? []) as Array<{
-      shift_id: string;
-      staff_id: string;
-      starts_at: string;
-      ends_at: string;
-    }>) {
-      neighborAssignments.push({
-        staff_id: a.staff_id,
-        shift_date: dateOf.get(a.shift_id) as string,
-        starts_at: a.starts_at,
-        ends_at: a.ends_at,
-      });
-    }
-  }
+  const shiftIds = shifts.map((s) => s.id);
 
   const email = (gate.user.email ?? '').toLowerCase();
   const staff = (staffRes.data ?? []) as StaffRow[];
   const selfStaffId = email
     ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
     : null;
+  const seesRequests = shifts.length > 0 && (canManage || selfStaffId !== null);
+  const today = utcToEastern(new Date().toISOString()).date;
+
+  // Everything from here hangs off the shift ids (or off nothing at all), so
+  // it is one round of reads rather than nine in a row — the board is the
+  // page people open most, and each round trip was on the critical path.
+  const none = Promise.resolve({ data: null, error: null });
+
+  let assignmentsQuery =
+    shifts.length > 0
+      ? db.from('shift_assignments').select('*').in('shift_id', shiftIds).order('starts_at')
+      : null;
+  if (assignmentsQuery && !includeDrafts) {
+    assignmentsQuery = assignmentsQuery.eq('is_draft', false);
+  }
 
   // Pending requests on the fetched shifts. Everyone sees enough to render
   // their own "requested" state; only the manage side sees other people's.
-  let shiftRequests: ShiftRequestRow[] = [];
-  if (shifts.length > 0 && (canManage || selfStaffId)) {
-    let requestsQuery = db
-      .from('shift_requests')
-      .select('*')
-      .eq('status', 'pending')
-      .in(
-        'shift_id',
-        shifts.map((s) => s.id)
-      )
-      .order('created_at');
-    if (!canManage) requestsQuery = requestsQuery.eq('staff_id', selfStaffId as string);
-
-    const { data: requests, error } = await requestsQuery;
-    if (error) return dbError(error);
-    shiftRequests = (requests ?? []) as ShiftRequestRow[];
+  let requestsQuery = seesRequests
+    ? db
+        .from('shift_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .in('shift_id', shiftIds)
+        .order('created_at')
+    : null;
+  if (requestsQuery && !canManage) {
+    requestsQuery = requestsQuery.eq('staff_id', selfStaffId as string);
   }
 
   // Pending hours changes, same visibility as shift requests.
-  let hoursChangeRequests: HoursChangeRequestRow[] = [];
-  if (shifts.length > 0 && (canManage || selfStaffId)) {
-    let changesQuery = db
-      .from('hours_change_requests')
-      .select('*')
-      .eq('status', 'pending')
-      .in(
-        'shift_id',
-        shifts.map((s) => s.id)
-      )
-      .order('created_at');
-    if (!canManage) changesQuery = changesQuery.eq('staff_id', selfStaffId as string);
-
-    const { data: changes, error } = await changesQuery;
-    if (error) return dbError(error);
-    hoursChangeRequests = (changes ?? []) as HoursChangeRequestRow[];
+  let changesQuery = seesRequests
+    ? db
+        .from('hours_change_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .in('shift_id', shiftIds)
+        .order('created_at')
+    : null;
+  if (changesQuery && !canManage) {
+    changesQuery = changesQuery.eq('staff_id', selfStaffId as string);
   }
 
-  // The Requests badge: outstanding asks on any upcoming shift, however far
-  // out — a week-sized fetch must not hide requests sitting in later weeks.
-  // Sub requests count too: an open sub is as much waiting on attention as a
-  // pending shift request. Hours changes reach back into recent past shifts —
-  // staying late is usually asked about after the fact.
+  const [
+    assignmentsRes,
+    neighborRes,
+    requestsRes,
+    changesRes,
+    counts,
+    subsRes,
+    paySchedule,
+    settings,
+    proposalsRes,
+  ] = await Promise.all([
+    assignmentsQuery ?? none,
+    db
+      .from('shifts')
+      .select('id, shift_date')
+      .in('shift_date', [addDays(start, -1), addDays(end, 1)])
+      .eq('is_draft', false)
+      .eq('status', 'active'),
+    requestsQuery ?? none,
+    changesQuery ?? none,
+    // The Requests badge: outstanding asks on any upcoming shift, however far
+    // out — a week-sized fetch must not hide requests sitting in later weeks.
+    // Sub requests count too: an open sub is as much waiting on attention as a
+    // pending shift request. Hours changes reach back into recent past shifts —
+    // staying late is usually asked about after the fact.
+    canManage
+      ? Promise.all([
+          db
+            .from('shift_requests')
+            .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+            .eq('status', 'pending')
+            .gte('shifts.shift_date', today),
+          db
+            .from('sub_requests')
+            .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+            .eq('status', 'open')
+            .gte('shifts.shift_date', today),
+          db
+            .from('hours_change_requests')
+            .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+            .eq('status', 'pending')
+            .gte('shifts.shift_date', addDays(today, -HOURS_CHANGE_LOOKBACK_DAYS)),
+        ])
+      : Promise.resolve(null),
+    shifts.length > 0
+      ? db
+          .from('sub_requests')
+          .select('*')
+          .eq('status', 'open')
+          .in('shift_id', shiftIds)
+          .order('created_at')
+      : none,
+    getPaySchedule(),
+    getScheduleSettings(),
+    includeDrafts
+      ? db
+          .from('schedule_proposals')
+          .select('*')
+          .eq('status', 'draft')
+          .gte('week_start', addDays(start, -6))
+          .lte('week_start', end)
+          .order('created_at', { ascending: false })
+      : none,
+  ]);
+  for (const res of [assignmentsRes, neighborRes, requestsRes, changesRes, subsRes, proposalsRes]) {
+    if (res.error) return dbError(res.error);
+  }
+
+  const byShift = new Map(shifts.map((s) => [s.id, s]));
+  for (const assignment of (assignmentsRes.data ?? []) as ShiftAssignmentRow[]) {
+    byShift.get(assignment.shift_id)?.assignments.push(assignment);
+  }
+
+  const shiftRequests = (requestsRes.data ?? []) as ShiftRequestRow[];
+  const hoursChangeRequests = (changesRes.data ?? []) as HoursChangeRequestRow[];
+
   let pendingRequestCount = 0;
-  if (canManage) {
-    const today = utcToEastern(new Date().toISOString()).date;
-    const [requestsCount, subsCount, changesCount] = await Promise.all([
-      db
-        .from('shift_requests')
-        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .gte('shifts.shift_date', today),
-      db
-        .from('sub_requests')
-        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
-        .eq('status', 'open')
-        .gte('shifts.shift_date', today),
-      db
-        .from('hours_change_requests')
-        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .gte('shifts.shift_date', addDays(today, -HOURS_CHANGE_LOOKBACK_DAYS)),
-    ]);
+  if (counts) {
+    const [requestsCount, subsCount, changesCount] = counts;
     const countError = requestsCount.error ?? subsCount.error ?? changesCount.error;
     if (countError) return dbError(countError);
     pendingRequestCount =
       (requestsCount.count ?? 0) + (subsCount.count ?? 0) + (changesCount.count ?? 0);
   }
 
-  let subRequests: SubRequestRow[] = [];
-  if (shifts.length > 0) {
-    const { data: subs, error } = await db
-      .from('sub_requests')
-      .select('*')
-      .eq('status', 'open')
-      .in(
-        'shift_id',
-        shifts.map((s) => s.id)
-      )
-      .order('created_at');
-    if (error) return dbError(error);
-    // Why someone needs a sub is between them and the managers; teammates
-    // still see whether it's an emergency, so they know how much it matters.
-    subRequests = ((subs ?? []) as SubRequestRow[]).map((sub) =>
-      canManage || sub.requester_staff_id === selfStaffId ? sub : { ...sub, reason: null }
-    );
+  // Why someone needs a sub is between them and the managers; teammates
+  // still see whether it's an emergency, so they know how much it matters.
+  const subRequests = ((subsRes.data ?? []) as SubRequestRow[]).map((sub) =>
+    canManage || sub.requester_staff_id === selfStaffId ? sub : { ...sub, reason: null }
+  );
+
+  // The second round: the rows the first round's answers point at — the
+  // neighbouring days' assignments, and the drafting conversations behind
+  // the proposals (admin notes + agent rationales, for the review banner).
+  const neighborShifts = (neighborRes.data ?? []) as Array<{ id: string; shift_date: string }>;
+  const dateOf = new Map(neighborShifts.map((s) => [s.id, s.shift_date]));
+  const proposals = (proposalsRes.data ?? []) as ScheduleProposalRow[];
+  const sessionIds = [
+    ...new Set(proposals.map((p) => p.agent_session_id).filter(Boolean)),
+  ] as string[];
+  const [neighborRowsRes, messagesRes] = await Promise.all([
+    dateOf.size > 0
+      ? db
+          .from('shift_assignments')
+          .select('shift_id, staff_id, starts_at, ends_at')
+          .in('shift_id', [...dateOf.keys()])
+          .eq('is_draft', false)
+      : none,
+    sessionIds.length > 0
+      ? db
+          .from('schedule_draft_messages')
+          .select('*')
+          .in('agent_session_id', sessionIds)
+          .order('created_at', { ascending: true })
+      : none,
+  ]);
+  if (neighborRowsRes.error) return dbError(neighborRowsRes.error);
+  if (messagesRes.error) return dbError(messagesRes.error);
+
+  const neighborAssignments: NeighborAssignment[] = [];
+  for (const a of (neighborRowsRes.data ?? []) as Array<{
+    shift_id: string;
+    staff_id: string;
+    starts_at: string;
+    ends_at: string;
+  }>) {
+    neighborAssignments.push({
+      staff_id: a.staff_id,
+      shift_date: dateOf.get(a.shift_id) as string,
+      starts_at: a.starts_at,
+      ends_at: a.ends_at,
+    });
   }
 
   // Pay rate is payroll data: canViewPay sees everyone's; each person only
@@ -370,7 +406,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         };
   };
 
-  const paySchedule = await getPaySchedule();
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
     // dashboard access stay on the manage side. The calendar feed token is
@@ -405,36 +440,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     hoursChangeRequests,
     subRequests,
     pendingRequestCount,
-    settings: await getScheduleSettings(),
+    settings,
     paydays: paySchedule ? paydaysBetween(paySchedule, start, end) : [],
     dutyAssignments: (dutyRes.data ?? []) as DutyAssignmentRow[],
     neighborAssignments,
   };
 
   if (includeDrafts) {
-    const { data: proposals, error } = await db
-      .from('schedule_proposals')
-      .select('*')
-      .eq('status', 'draft')
-      .gte('week_start', addDays(start, -6))
-      .lte('week_start', end)
-      .order('created_at', { ascending: false });
-    if (error) return dbError(error);
-    payload.proposals = (proposals ?? []) as ScheduleProposalRow[];
-
-    // The drafting conversations behind those proposals (admin notes +
-    // agent rationales), for the review banner's thread.
-    const sessionIds = [
-      ...new Set(payload.proposals.map((p) => p.agent_session_id).filter(Boolean)),
-    ] as string[];
+    payload.proposals = proposals;
     if (sessionIds.length > 0) {
-      const { data: messages, error: messagesError } = await db
-        .from('schedule_draft_messages')
-        .select('*')
-        .in('agent_session_id', sessionIds)
-        .order('created_at', { ascending: true });
-      if (messagesError) return dbError(messagesError);
-      payload.draftMessages = (messages ?? []) as ScheduleDraftMessageRow[];
+      payload.draftMessages = (messagesRes.data ?? []) as ScheduleDraftMessageRow[];
     }
   }
 

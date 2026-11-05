@@ -135,28 +135,29 @@ export const GET: APIRoute = async ({ cookies }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const staff = await listStaff(true);
+  // Three independent reads, together: the roster, the stipends that ride
+  // along so pay rates and stipends are managed from one place (mutations go
+  // through /api/admin/stipends), and the boards the per-board checkboxes
+  // offer, so /admin/users doesn't fetch them from the boards API to render
+  // one column of a form.
+  const [staff, stipendsRes, boardsRes] = await Promise.all([
+    listStaff(true),
+    db.from('staff_stipends').select('*').order('created_at'),
+    db
+      .from('boards')
+      .select('slug, name, archived')
+      .eq('archived', false)
+      .order('sort_order', { ascending: true }),
+  ]);
   if (staff === null) return json({ error: 'Storage unavailable' }, 503);
-
-  // Recurring stipends ride along so pay rates and stipends are managed from
-  // one place (mutations go through /api/admin/stipends).
-  const stipendsRes = await db.from('staff_stipends').select('*').order('created_at');
   if (stipendsRes.error) return json({ error: stipendsRes.error.message }, 500);
+  if (boardsRes.error) return json({ error: boardsRes.error.message }, 500);
 
   // Env-allowlisted emails without a staff row, so the legacy ADMIN_EMAILS /
   // STAFF_EMAILS entries stay visible and importable. Whether they actually
   // grant access depends on the bootstrap rule (only while the table has no
   // admin row) — envActive tells the UI which wording to use.
   const envUsers = getEnvAllowlist().filter((e) => !staff.some((s) => s.email === e.email));
-
-  // The boards the per-board checkboxes offer, so /admin/users doesn't have
-  // to fetch them from the boards API to render one column of a form.
-  const boardsRes = await db
-    .from('boards')
-    .select('slug, name, archived')
-    .eq('archived', false)
-    .order('sort_order', { ascending: true });
-  if (boardsRes.error) return json({ error: boardsRes.error.message }, 500);
 
   return json({
     // Someone's calendar feed token is a credential, not roster data — an

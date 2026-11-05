@@ -52,27 +52,34 @@ Astro.response.headers.set('Cache-Control', 'private, no-store');
 const user = Astro.locals.adminUser ?? null;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!user && !!access && canViewPath(access, Astro.url.pathname);
-const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
-const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
+// Everything the shell reads is independent, so it is read at once: these
+// four queries used to run one after another on every admin page, and their
+// round trips added up ahead of the first byte.
+const grantedTools = access ? toolsForAccess(access) : [];
+const [hiddenTools, pinnedHrefs, unreadCount, pendingCount] = await Promise.all([
+  access ? getSetting('navigation.hiddenTools') : Promise.resolve([] as string[]),
+  // The user's pin order for the nav's Pinned group — reuse the page's fetch
+  // when it already made one (the /admin index memoizes into locals).
+  Astro.locals.toolPins ??
+    (allowed && user?.email ? getToolPins(user.email) : Promise.resolve([] as string[])),
+  // The bell's badge, painted by the server so it is right on first paint; the
+  // island keeps it fresh from there. Zero when storage is down — never blocks.
+  allowed && user?.email ? getUnreadCount(user.email) : Promise.resolve(0),
+  // Agent suggestions waiting for a decision, beside the Suggestions entry in
+  // the menu — for whoever holds that page. Zero when storage is down.
+  allowed && grantedTools.some((tool) => tool.href === SUGGESTIONS_HREF)
+    ? getPendingSuggestionCount()
+    : Promise.resolve(0),
+]);
+const tools = access ? visibleTools(grantedTools, hiddenTools) : [];
 // Pages the global search (cmd+K, or the magnifier in the header) can open:
 // the same tools plus their sub-pages, filtered the same way.
 const searchPages = access ? searchablePages(tools, access) : [];
 // The header's plus button writes a shift note from any page — offered to
 // whoever may open the shift-notes page (everyone on the roster, by default).
 const canAddShiftNote = !!access && canViewPath(access, SHIFT_NOTES_HREF);
-// The user's pin order for the nav's Pinned group — reuse the page's fetch
-// when it already made one (the /admin index memoizes into locals).
-const pinnedHrefs =
-  Astro.locals.toolPins ?? (allowed && user?.email ? await getToolPins(user.email) : []);
-// The bell's badge, painted by the server so it is right on first paint; the
-// island keeps it fresh from there. Zero when storage is down — never blocks.
-const unreadCount = allowed && user?.email ? await getUnreadCount(user.email) : 0;
-// Agent suggestions waiting for a decision, beside the Suggestions entry in
-// the menu — for whoever holds that page. Zero when storage is down.
-const pendingSuggestions =
-  allowed && tools.some((tool) => tool.href === SUGGESTIONS_HREF)
-    ? await getPendingSuggestionCount()
-    : 0;
+// The count only shows beside a Suggestions entry that is actually in the menu.
+const pendingSuggestions = tools.some((tool) => tool.href === SUGGESTIONS_HREF) ? pendingCount : 0;
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
 ---
 
@@ -187,7 +194,33 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
     <script>
       import type { TransitionBeforePreparationEvent } from 'astro:transitions/client';
 
+      import { warmJson } from '@/lib/client/cachedJson';
       import { holdLoadingBar } from '@/lib/client/loadingBar';
+      import { isWarmableHref, jsonUrlsFor } from '@/lib/client/pageData';
+
+      // Data warming. The ClientRouter prefetches the next *document* on
+      // hover/tap; this fetches the next page's *JSON* on the same signals
+      // (and again when a navigation starts, for links that got neither),
+      // so the island finds its first read already in the cache and paints
+      // at once. warmJson is a no-op while a request is in flight or the
+      // entry is fresh, so the pointer crossing a link's children many times
+      // costs a Map lookup each. The logout link is excluded by its path
+      // (not under /admin) — it never gets warmed or prefetched.
+      function warmLink(href: string | null | undefined) {
+        if (!href) return;
+        const url = isWarmableHref(href, window.location.origin);
+        if (!url) return;
+        for (const target of jsonUrlsFor(url.pathname, url.searchParams)) void warmJson(target);
+      }
+      function onIntent(event: Event) {
+        const link = (event.target as Element | null)?.closest?.('a[href]');
+        if (link && !link.hasAttribute('data-astro-reload')) {
+          warmLink(link.getAttribute('href'));
+        }
+      }
+      document.addEventListener('pointerover', onIntent, { passive: true });
+      document.addEventListener('touchstart', onIntent, { passive: true });
+      document.addEventListener('focusin', onIntent);
 
       // Slow-navigation indicator for the ClientRouter. The router hands us
       // the function that fetches the next document (event.loader); wrapping
@@ -200,6 +233,8 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
       // A navigation the router abandons (the user clicked again mid-load)
       // settles on its own; each wrapped loader releases only its own hold.
       document.addEventListener('astro:before-preparation', (event: TransitionBeforePreparationEvent) => {
+        // The data request goes out beside the document request, not after it.
+        warmLink(event.to.href);
         const load = event.loader;
         event.loader = async () => {
           const release = holdLoadingBar();

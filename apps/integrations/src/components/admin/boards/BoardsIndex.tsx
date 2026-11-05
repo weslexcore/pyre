@@ -14,12 +14,12 @@
 // what else exists.
 
 import { todayEastern } from '@pyre/schedule-core';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally, UpNextCard } from '@/lib/boards/store';
-import { readError } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
@@ -52,35 +52,21 @@ interface BoardsResponse {
   unattachedGoals?: GoalRow[];
 }
 
+/** The list's one read; lib/client/pageData warms it when a link here is hovered. */
+const BOARDS_URL = '/api/admin/boards';
+
 export function BoardsIndex() {
-  const [data, setData] = useState<BoardsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/boards');
-      if (!res.ok) throw new Error(await readError(res));
-      setData((await res.json()) as BoardsResponse);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the boards');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Cached across navigations: coming back to the boards paints the last
+  // list at once and revalidates behind it; a warmed entry skips even that.
+  const { data, error: loadError, loading, reload } = useCachedJson<BoardsResponse>(BOARDS_URL);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
 
   // The first load holds the header's loading bar, so moving between
   // views reads as one load from click to content.
-  useLoadingBar(loading && !data);
+  useLoadingBar(loading);
 
-  if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data) {
     return <p className="text-sm text-[var(--pyre-red)]">{error ?? 'Boards are not available.'}</p>;
   }
@@ -130,12 +116,12 @@ export function BoardsIndex() {
           canManage={canManage}
           busy={false}
           renderBoard={cardFor}
-          onChanged={load}
-          onError={setError}
+          onChanged={reload}
+          onError={setActionError}
         />
       )}
 
-      {!loading && boards.length === 0 && (
+      {boards.length === 0 && (
         <p className="text-sm text-white/50">
           {canManage
             ? 'No boards yet. Make the first one — what are you actually trying to achieve?'

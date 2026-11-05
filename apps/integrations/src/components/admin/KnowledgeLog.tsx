@@ -5,10 +5,11 @@
 // and the answer it gave. Reads /api/admin/knowledge-log (admin-only);
 // rows are written by the agent.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, selectClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { describeToolCall, type TrailStep } from '@/lib/knowledge/trail';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { AskTrail } from './AskTrail';
@@ -78,42 +79,65 @@ export function describeScope(scope: LogRow['viewer_scope']): string {
   ].join(' · ');
 }
 
+/** The log route with its filters; the first page of each filter is its own cache key. */
+function logUrl(filter: string, before?: string): string {
+  const params = new URLSearchParams();
+  if (filter) params.set('asker', filter);
+  if (before) params.set('before', before);
+  return `/api/admin/knowledge-log?${params}`;
+}
+
 export function KnowledgeLog() {
-  const [rows, setRows] = useState<LogRow[]>([]);
-  const [people, setPeople] = useState<PeopleNames>({});
-  const [askers, setAskers] = useState<string[]>([]);
   const [asker, setAsker] = useState('');
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The first page comes through the cache, so returning to the log (or
+  // flipping back to a person already looked at) paints without a wait.
+  const firstUrl = useMemo(() => logUrl(asker), [asker]);
+  const first = useCachedJson<LogPayload>(firstUrl);
+  // "Load older" pages append behind the first; they belong to the filter
+  // they were fetched under and are dropped when it changes.
+  const [older, setOlder] = useState<{ filter: string; rows: LogRow[]; hasMore: boolean } | null>(
+    null
+  );
+  const [olderPeople, setOlderPeople] = useState<PeopleNames>({});
+  const [paging, setPaging] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [trailOpen, setTrailOpen] = useState<Set<string>>(new Set());
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
 
-  const load = useCallback(async (filter: string, before?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (filter) params.set('asker', filter);
-      if (before) params.set('before', before);
-      const res = await fetch(`/api/admin/knowledge-log?${params}`);
-      if (!res.ok) throw new Error(await readError(res));
-      const payload = (await res.json()) as LogPayload;
-      setRows((prev) => (before ? [...prev, ...payload.rows] : payload.rows));
-      setPeople((prev) => ({ ...prev, ...payload.people }));
-      setAskers(payload.askers);
-      setHasMore(payload.hasMore);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load the log');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const olderRows = older && older.filter === asker ? older.rows : [];
+  const rows = useMemo(() => [...(first.data?.rows ?? []), ...olderRows], [first.data, olderRows]);
+  const people = useMemo(
+    () => ({ ...olderPeople, ...(first.data?.people ?? {}) }),
+    [olderPeople, first.data]
+  );
+  const askers = first.data?.askers ?? [];
+  const hasMore = older && older.filter === asker ? older.hasMore : (first.data?.hasMore ?? false);
+  const loading = first.loading || paging;
+  const error = pageError ?? first.error;
 
-  useEffect(() => {
-    void load(asker);
-  }, [asker, load]);
+  const loadOlder = useCallback(
+    async (before: string) => {
+      setPaging(true);
+      setPageError(null);
+      try {
+        const res = await fetch(logUrl(asker, before));
+        if (!res.ok) throw new Error(await readError(res));
+        const payload = (await res.json()) as LogPayload;
+        setOlder((prev) => ({
+          filter: asker,
+          rows: [...(prev && prev.filter === asker ? prev.rows : []), ...payload.rows],
+          hasMore: payload.hasMore,
+        }));
+        setOlderPeople((prev) => ({ ...prev, ...payload.people }));
+      } catch (e) {
+        setPageError(e instanceof Error ? e.message : 'Failed to load the log');
+      } finally {
+        setPaging(false);
+      }
+    },
+    [asker]
+  );
 
   const toggleIn = (setter: typeof setOpen, id: string) =>
     setter((prev) => {
@@ -147,7 +171,10 @@ export function KnowledgeLog() {
           type="button"
           className={buttonClass}
           disabled={loading}
-          onClick={() => void load(asker)}
+          onClick={() => {
+            setOlder(null);
+            void first.reload();
+          }}
         >
           Refresh
         </button>
@@ -261,7 +288,10 @@ export function KnowledgeLog() {
           type="button"
           className={buttonClass}
           disabled={loading}
-          onClick={() => void load(asker, rows[rows.length - 1]?.asked_at)}
+          onClick={() => {
+            const last = rows[rows.length - 1]?.asked_at;
+            if (last) void loadOlder(last);
+          }}
         >
           Load older
         </button>
