@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GOAL_CREATED_EVENT } from '@/lib/boards/createActions';
-import { readError } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
 import {
@@ -51,34 +51,22 @@ function goalAnchorId(goalId: string): string {
   return `goal-${goalId}`;
 }
 
+/** The page's one read; lib/client/pageData warms it when a link here is hovered. */
+const GOALS_URL = '/api/admin/goals';
+
 export function GoalsOverview() {
-  const [data, setData] = useState<GoalsOverviewData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across navigations: coming back paints the last list at once
+  // and revalidates behind it; a warmed entry skips even that.
+  const { data, error: loadError, loading, reload } = useCachedJson<GoalsOverviewData>(GOALS_URL);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const [owner, setOwner] = useState('all');
   const [area, setArea] = useState('all');
+  // Only the open goal's panel waits on this; the rest of the page stays live.
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   /** A goal to bring into view once it has rendered open. */
   const scrollTo = useRef<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/goals');
-      if (!res.ok) throw new Error(await readError(res));
-      setData((await res.json()) as GoalsOverviewData);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the goals');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   // #goal-<id> opens that goal — on arrival, and when a link on the page
   // changes the hash.
@@ -99,7 +87,7 @@ export function GoalsOverview() {
   useEffect(() => {
     const onCreated = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
-      void load().then(() => {
+      void reload().then(() => {
         setOpenId(id);
         scrollTo.current = id;
         window.history.replaceState(window.history.state, '', `#${goalAnchorId(id)}`);
@@ -107,7 +95,7 @@ export function GoalsOverview() {
     };
     window.addEventListener(GOAL_CREATED_EVENT, onCreated);
     return () => window.removeEventListener(GOAL_CREATED_EVENT, onCreated);
-  }, [load]);
+  }, [reload]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: openId is the retry once the row renders open
   useEffect(() => {
@@ -119,21 +107,28 @@ export function GoalsOverview() {
     element.scrollIntoView({ block: 'start' });
   }, [data, openId]);
 
+  // The panel's writes (GoalPanel: edits, completion, KPIs, the board it is
+  // on) come back with derived rows — pace, rollups, the trail — this page
+  // cannot work out for itself, so the server is read again afterwards.
+  // That read revalidates behind the rows already on screen, never a
+  // spinner, and it is waited for only so the panel's form closes onto the
+  // saved goal rather than the old one. The index tallies goals too.
   const mutate = useCallback(
     async (run: () => Promise<unknown>) => {
       setBusy(true);
-      setError(null);
+      setActionError(null);
       try {
         await run();
-        await load();
+        invalidateJson('/api/admin/boards');
+        await reload();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'That did not save');
+        setActionError(e instanceof Error ? e.message : 'That did not save');
         throw e;
       } finally {
         setBusy(false);
       }
     },
-    [load]
+    [reload]
   );
 
   const toggle = (goalId: string) => {
@@ -174,9 +169,9 @@ export function GoalsOverview() {
 
   // The first load holds the header's loading bar, so moving between
   // views reads as one load from click to content.
-  useLoadingBar(loading && !data);
+  useLoadingBar(loading);
 
-  if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data) {
     return <p className="text-sm text-[var(--pyre-red)]">{error ?? 'Goals are not available.'}</p>;
   }
@@ -256,7 +251,7 @@ export function GoalsOverview() {
         </div>
       )}
 
-      {rows.length === 0 && !loading && (
+      {rows.length === 0 && (
         <p className="text-sm text-white/50">
           No goals yet. What are you actually trying to achieve?
         </p>
