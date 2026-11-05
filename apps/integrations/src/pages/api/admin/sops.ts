@@ -18,6 +18,7 @@ import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { notifySopSaved } from '@/lib/notifications/sops';
+import { sopAssistEnabled } from '@/lib/sops/assist';
 import { countTasks } from '@/lib/sops/checklist';
 import { loadSop, loadSopDocument, redactGrantEmails } from '@/lib/sops/document';
 import {
@@ -34,7 +35,6 @@ import {
 } from '@/lib/sops/levels';
 import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
-import { sopAssistEnabled } from '@/lib/sops/assist';
 import { getSopRole } from '@/lib/sops/role';
 import { MAX_SOP_CONTENT, MAX_SOP_TITLE, saveSopVersion } from '@/lib/sops/save-version';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
@@ -213,13 +213,18 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Library listing, filtered to what this role may view and sorted by the
   // admin-managed category order (see /api/admin/sop-order).
-  const { data, error } = await db.from('sops').select('*');
+  // The documents, the section order, and the caller's pins are three
+  // independent reads, so they go out together rather than one after another.
+  const email = (gate.user.email ?? '').toLowerCase();
+  const [{ data, error }, { data: categories, error: categoriesError }, pinsRes] =
+    await Promise.all([
+      db.from('sops').select('*'),
+      db.from('sop_categories').select('name, sort_order'),
+      email ? db.from('sop_pins').select('sop_id').eq('user_email', email) : Promise.resolve(null),
+    ]);
   if (error) return dbError(error);
-
-  const { data: categories, error: categoriesError } = await db
-    .from('sop_categories')
-    .select('name, sort_order');
   if (categoriesError) return dbError(categoriesError);
+  if (pinsRes?.error) return dbError(pinsRes.error);
 
   const visible = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(viewer, sop));
   const ranks = (categories ?? []) as CategoryRank[];
@@ -264,34 +269,36 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return json({ results, role, q });
   }
 
-  // The caller's pinned documents (personal; see /api/admin/sop-pins).
-  const email = (gate.user.email ?? '').toLowerCase();
-  let pins: string[] = [];
-  if (email) {
-    const { data: pinRows, error: pinsError } = await db
-      .from('sop_pins')
-      .select('sop_id')
-      .eq('user_email', email);
-    if (pinsError) return dbError(pinsError);
-    const visibleIds = new Set(sorted.map((s) => s.id));
-    pins = (pinRows ?? []).map((p) => p.sop_id as string).filter((id) => visibleIds.has(id));
-  }
+  // The caller's pinned documents (personal; see /api/admin/sop-pins),
+  // trimmed to the ones they may still view.
+  const visibleIds = new Set(sorted.map((s) => s.id));
+  const pins = (pinsRes?.data ?? [])
+    .map((p) => p.sop_id as string)
+    .filter((id) => visibleIds.has(id));
+
+  // The extras are independent of each other too, so they are read at once.
+  const [shiftSops, staff, assistEnabled, people] = await Promise.all([
+    // The duty documents for this caller's own current-or-next shift, so the
+    // library opens on what they are about to do. Null when they hold no
+    // duties (or aren't working); never anyone else's shift.
+    loadShiftSops(db, viewer),
+    // The create form grants access at creation time, so it needs the same
+    // roster the settings panel does. Admins only, for the same reason.
+    role === 'admin' ? listGrantablePeople() : Promise.resolve(undefined),
+    // Whether the create form offers rough notes for the writing assistant.
+    role === 'admin' ? sopAssistEnabled() : Promise.resolve(false),
+    getPeopleNames(sorted.map((s) => s.updated_by ?? '')),
+  ]);
 
   return json({
     sops: sorted.map((sop) => toSummary(sop, role === 'admin')),
     categories: sections,
-    // The duty documents for this caller's own current-or-next shift, so the
-    // library opens on what they are about to do. Null when they hold no
-    // duties (or aren't working); never anyone else's shift.
-    shiftSops: await loadShiftSops(db, viewer),
-    // The create form grants access at creation time, so it needs the same
-    // roster the settings panel does. Admins only, for the same reason.
-    staff: role === 'admin' ? await listGrantablePeople() : undefined,
-    // Whether the create form offers rough notes for the writing assistant.
-    assistEnabled: role === 'admin' ? await sopAssistEnabled() : false,
+    shiftSops,
+    staff,
+    assistEnabled,
     role,
     pins,
-    people: await getPeopleNames(sorted.map((s) => s.updated_by ?? '')),
+    people,
   });
 };
 

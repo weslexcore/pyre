@@ -7,10 +7,12 @@
 // either way. A non-admin's log is narrowed to runs of the SOPs they may view; that
 // scoping is enforced by the API, and this island just renders what it's
 // given. isAdmin decides one thing here: whether a run can be deleted.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, compactInputClass, compactSelectClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { type RunEntry, RunsList } from './SopRunsList';
@@ -37,14 +39,26 @@ function runTime(run: RunEntry): number {
   return Date.parse(run.ended_at ?? run.started_at);
 }
 
+interface RunsResponse {
+  runs: RunEntry[];
+  /** Roster names for the emails the runs record. */
+  people?: PeopleNames;
+  /** The session email; marks and filters own runs. */
+  viewer?: string;
+}
+
+/** The log's one read; lib/client/pageData warms it when a link here is hovered. */
+const LIST_URL = '/api/admin/sop-runs?view=list';
+
 export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
-  const [runs, setRuns] = useState<RunEntry[]>([]);
-  // Roster names for the emails the runs record, from the same response.
-  const [names, setNames] = useState<PeopleNames>({});
-  // The session email, from the same response; marks and filters own runs.
-  const [viewerEmail, setViewerEmail] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across navigations: coming back paints the last log at once and
+  // revalidates behind it.
+  const { data, error: loadError, loading, setData } = useCachedJson<RunsResponse>(LIST_URL);
+  const runs = data?.runs ?? [];
+  const names = data?.people ?? {};
+  const viewerEmail = data?.viewer ?? '';
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
 
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]['key']>('all');
   const [onlyMine, setOnlyMine] = useState(false);
@@ -54,40 +68,15 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
   const [toDate, setToDate] = useState('');
   const [itemQuery, setItemQuery] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/sop-runs?view=list');
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as {
-        runs: RunEntry[];
-        people?: PeopleNames;
-        viewer?: string;
-      };
-      setRuns(body.runs);
-      setNames(body.people ?? {});
-      setViewerEmail(body.viewer ?? '');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load runs');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const deleteRun = async (run: RunEntry) => {
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/sop-runs?id=${run.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await readError(res));
-      setRuns((prev) => prev.filter((r) => r.id !== run.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete the run');
-    }
+  // The row goes at once; a refusal puts it back with the reason.
+  const deleteRun = (run: RunEntry) => {
+    setActionError(null);
+    return optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, runs: prev.runs.filter((r) => r.id !== run.id) } : prev),
+      () => sendJson(`/api/admin/sop-runs?id=${run.id}`, 'DELETE'),
+      { onError: setActionError }
+    );
   };
 
   const sops = useMemo(() => {

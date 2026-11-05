@@ -179,10 +179,6 @@ export const GET: APIRoute = async ({ cookies }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  // Awaited, not fire-and-forget — a serverless runtime may freeze the
-  // instance the moment the response goes out.
-  await sweepStagedAttachments(db);
-
   const viewer = viewerOf(gate);
 
   let query = db
@@ -196,70 +192,78 @@ export const GET: APIRoute = async ({ cookies }) => {
   // their own admin-only ones.
   if (!viewer.isAdmin) query = query.or(visibleNotesFilter(viewer.email));
 
-  const { data, error } = await query;
+  // The sweep only touches staged (note-less) attachment rows, which the
+  // list below never reads, so it runs beside the list query rather than
+  // ahead of it. Awaited, not fire-and-forget — a serverless runtime may
+  // freeze the instance the moment the response goes out.
+  const [{ data, error }] = await Promise.all([query, sweepStagedAttachments(db)]);
   if (error) return dbError(error);
 
   // The filter above is the query; this is the rule, so the two can't drift.
   const notes = ((data ?? []) as ShiftNoteRow[]).filter((note) => canSeeNote(note, viewer));
+  const noteIds = notes.map((n) => n.id);
+
+  // Each note's media and each note's thread are independent of each other,
+  // so they are read together.
+  const [attachRes, replyRes] = await Promise.all([
+    notes.length > 0
+      ? db
+          .from('shift_note_attachments')
+          .select('*')
+          .in('note_id', noteIds)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    notes.length > 0
+      ? db
+          .from('shift_note_replies')
+          .select('*')
+          .in('note_id', noteIds)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (attachRes.error) return dbError(attachRes.error);
+  if (replyRes.error) return dbError(replyRes.error);
 
   // Each note's media, keyed by note id, in upload order.
   const attachments: Record<string, ShiftNoteAttachmentRow[]> = {};
-  if (notes.length > 0) {
-    const { data: rows, error: attachError } = await db
-      .from('shift_note_attachments')
-      .select('*')
-      .in(
-        'note_id',
-        notes.map((n) => n.id)
-      )
-      .order('created_at', { ascending: true });
-    if (attachError) return dbError(attachError);
-    for (const row of (rows ?? []) as ShiftNoteAttachmentRow[]) {
-      if (!row.note_id) continue; // staged rows never match the .in() filter
-      const group = attachments[row.note_id];
-      if (group) group.push(row);
-      else attachments[row.note_id] = [row];
-    }
+  for (const row of (attachRes.data ?? []) as ShiftNoteAttachmentRow[]) {
+    if (!row.note_id) continue; // staged rows never match the .in() filter
+    const group = attachments[row.note_id];
+    if (group) group.push(row);
+    else attachments[row.note_id] = [row];
   }
 
   // Each note's thread, keyed by note id, in writing order — minus the
   // admin-private replies when the viewer isn't one.
   const replies: Record<string, ShiftNoteReplyRow[]> = {};
   const visibleReplies: ShiftNoteReplyRow[] = [];
-  if (notes.length > 0) {
-    const { data: rows, error: replyError } = await db
-      .from('shift_note_replies')
-      .select('*')
-      .in(
-        'note_id',
-        notes.map((n) => n.id)
-      )
-      .order('created_at', { ascending: true });
-    if (replyError) return dbError(replyError);
-    for (const row of (rows ?? []) as ShiftNoteReplyRow[]) {
-      if (!canSeeReply(row, viewer)) continue;
-      visibleReplies.push(row);
-      const group = replies[row.note_id];
-      if (group) group.push(row);
-      else replies[row.note_id] = [row];
-    }
+  for (const row of (replyRes.data ?? []) as ShiftNoteReplyRow[]) {
+    if (!canSeeReply(row, viewer)) continue;
+    visibleReplies.push(row);
+    const group = replies[row.note_id];
+    if (group) group.push(row);
+    else replies[row.note_id] = [row];
   }
+
+  // The names, the classifier's findings, and the settings switch: again
+  // independent, again together.
+  const [people, classifications, suggestions] = await Promise.all([
+    peopleFor(notes, visibleReplies),
+    viewer.isAdmin ? loadClassifications(db, 'shift_note', noteIds) : Promise.resolve(null),
+    viewer.isAdmin ? suggestionsEnabled() : Promise.resolve(false),
+  ]);
 
   return json({
     notes,
     attachments,
     replies,
-    people: await peopleFor(notes, visibleReplies),
+    people,
     // What the classifier found in each note, keyed by note id — admins only.
     ...(viewer.isAdmin
       ? {
-          classifications: await loadClassifications(
-            db,
-            'shift_note',
-            notes.map((n) => n.id)
-          ),
+          classifications,
           // Whether the AI button also asks for suggestions (the settings page's switch).
-          suggestionsEnabled: await suggestionsEnabled(),
+          suggestionsEnabled: suggestions,
         }
       : {}),
     // So the island knows whether it is showing the whole log or the shared

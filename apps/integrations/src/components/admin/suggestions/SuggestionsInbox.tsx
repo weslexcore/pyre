@@ -2,10 +2,10 @@
 // editors to decide, newest first, each under the record it came from with a
 // link back to it; and, one filter away, what was decided and by whom.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { compactSelectClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { PeopleNames } from '@/lib/sops/names';
 import {
   KIND_LABELS,
@@ -31,30 +31,16 @@ interface InboxResponse {
 export function SuggestionsInbox() {
   const [status, setStatus] = useState<StatusFilter>('pending');
   const [kind, setKind] = useState<'all' | SuggestionKind>('all');
-  const [data, setData] = useState<InboxResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ status });
-      if (kind !== 'all') params.set('kind', kind);
-      const res = await fetch(`/api/admin/suggestions?${params}`);
-      if (!res.ok) throw new Error(await readError(res));
-      setData((await res.json()) as InboxResponse);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load suggestions');
-    } finally {
-      setLoading(false);
-    }
+  // Each filter combination is its own cache entry, so flipping between
+  // pending and decided (or back to the inbox from a note) repaints at once.
+  const url = useMemo(() => {
+    const params = new URLSearchParams({ status });
+    if (kind !== 'all') params.set('kind', kind);
+    return `/api/admin/suggestions?${params}`;
   }, [status, kind]);
+  const { data, error, loading, setData } = useCachedJson<InboxResponse>(url);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  // A decision taken on a card is written straight into the cached list.
   const replace = (next: SuggestionView, result?: SuggestionResultLink) =>
     setData((prev) =>
       prev
@@ -108,7 +94,7 @@ export function SuggestionsInbox() {
         </p>
       )}
       {error && <ErrorBanner>{error}</ErrorBanner>}
-      {loading && !data && <p className="font-mono text-xs text-white/40">Loading…</p>}
+      {loading && <p className="font-mono text-xs text-white/40">Loading…</p>}
       {data && rows.length === 0 && (
         <p className="font-mono text-xs text-white/40">
           {status === 'pending'
