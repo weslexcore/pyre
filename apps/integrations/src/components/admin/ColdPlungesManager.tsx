@@ -20,7 +20,8 @@ import {
   labelClass,
 } from '@/components/admin/ui';
 import { ApiError, sendJson } from '@/lib/client/api';
-import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { ColdPlungeRow } from '@/lib/db';
 import { CHART_GALLONS, PRODUCTS, shockDoses } from '@/lib/water/charts';
 import { formatGallons, PLUNGE_LIMITS } from '@/lib/water/plunges';
@@ -71,48 +72,100 @@ export function ColdPlungesManager() {
   const [draft, setDraft] = useState<Draft>({ name: '', gallons: '', shockGrams: '' });
   const [newPlunge, setNewPlunge] = useState({ name: '', gallons: String(CHART_GALLONS) });
 
-  // Every change goes through here: run it, refresh the list, and drop the
-  // water log's cached copy so it picks up the new names and volumes.
-  const run = async (key: string, action: () => Promise<void>): Promise<boolean> => {
+  // Every change lands in the list at once and the request goes out behind
+  // it; a refusal puts the list back and says why. The list is written
+  // through to the cache under the same URL the water log reads, so it picks
+  // up new names and volumes without a refetch of its own.
+  const run = async <R,>(
+    key: string,
+    update: (plunges: ColdPlungeRow[]) => ColdPlungeRow[],
+    action: () => Promise<R>,
+    reconcile?: (plunges: ColdPlungeRow[], result: R) => ColdPlungeRow[]
+  ): Promise<boolean> => {
     setBusy(key);
     setMessage(null);
-    try {
-      await action();
-      invalidateJson(PLUNGES_URL);
-      await reload();
-      return true;
-    } catch (e) {
-      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setExpired(true);
-      setMessage(e instanceof Error ? e.message : 'Something went wrong');
-      return false;
-    } finally {
-      setBusy(null);
-    }
+    const result = await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, plunges: update(prev.plunges) } : prev),
+      action,
+      {
+        reconcile: reconcile
+          ? (prev, value) => (prev ? { ...prev, plunges: reconcile(prev.plunges, value) } : prev)
+          : undefined,
+        onError: (text, e) => {
+          if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setExpired(true);
+          setMessage(text);
+        },
+      }
+    );
+    setBusy(null);
+    return result !== null;
   };
 
   const add = async () => {
-    const ok = await run('add', async () => {
-      await sendJson(PLUNGES_URL, 'POST', { name: newPlunge.name, gallons: newPlunge.gallons });
-    });
-    if (ok) setNewPlunge({ name: '', gallons: String(CHART_GALLONS) });
+    const pending = tempId();
+    const name = newPlunge.name;
+    const gallons = Number(newPlunge.gallons);
+    setNewPlunge({ name: '', gallons: String(CHART_GALLONS) });
+    const ok = await run(
+      'add',
+      (list) => [
+        ...list,
+        {
+          id: pending,
+          name: name.trim(),
+          gallons: Number.isFinite(gallons) && gallons > 0 ? gallons : CHART_GALLONS,
+          shock_oxidizer_grams: null,
+          archived: false,
+          sort_order: list.length,
+        } as ColdPlungeRow,
+      ],
+      () =>
+        sendJson<{ plunge: ColdPlungeRow }>(PLUNGES_URL, 'POST', {
+          name,
+          gallons: newPlunge.gallons,
+        }),
+      (list, { plunge }) => list.map((p) => (p.id === pending ? plunge : p))
+    );
+    // A refused add hands the form back what was typed.
+    if (!ok) setNewPlunge({ name, gallons: newPlunge.gallons });
   };
 
+  const patchPlunge = (
+    plunge: ColdPlungeRow,
+    body: Record<string, unknown>,
+    next: Partial<ColdPlungeRow>
+  ) =>
+    run(
+      plunge.id,
+      (list) => list.map((p) => (p.id === plunge.id ? { ...p, ...next } : p)),
+      () => sendJson<{ plunge: ColdPlungeRow }>(PLUNGES_URL, 'PATCH', { id: plunge.id, ...body }),
+      (list, { plunge: saved }) => list.map((p) => (p.id === plunge.id ? saved : p))
+    );
+
   const saveEdit = async (plunge: ColdPlungeRow) => {
-    const ok = await run(plunge.id, async () => {
-      await sendJson(PLUNGES_URL, 'PATCH', {
-        id: plunge.id,
+    setEditingId(null);
+    const shock = draft.shockGrams.trim();
+    const gallons = Number(draft.gallons);
+    const ok = await patchPlunge(
+      plunge,
+      {
         name: draft.name,
         gallons: draft.gallons,
-        shock_oxidizer_grams: draft.shockGrams.trim() || null,
-      });
-    });
-    if (ok) setEditingId(null);
+        shock_oxidizer_grams: shock || null,
+      },
+      {
+        name: draft.name.trim(),
+        gallons: Number.isFinite(gallons) && gallons > 0 ? gallons : plunge.gallons,
+        shock_oxidizer_grams: shock ? Number(shock) : null,
+      }
+    );
+    // Refused: reopen the editor with what was typed, so nothing is lost.
+    if (!ok) setEditingId(plunge.id);
   };
 
   const setArchived = (plunge: ColdPlungeRow, value: boolean) =>
-    run(plunge.id, async () => {
-      await sendJson(PLUNGES_URL, 'PATCH', { id: plunge.id, archived: value });
-    });
+    patchPlunge(plunge, { archived: value }, { archived: value });
 
   const move = (plunge: ColdPlungeRow, by: -1 | 1) => {
     const ids = active.map((p) => p.id);
@@ -122,10 +175,13 @@ export function ColdPlungesManager() {
     [ids[from], ids[to]] = [ids[to], ids[from]];
     // Archived plunges keep their place after the active ones.
     const order = [...ids, ...archived.map((p) => p.id)];
-    void run(plunge.id, async () => {
-      const result = await sendJson<{ plunges: ColdPlungeRow[] }>(PLUNGES_URL, 'PATCH', { order });
-      setData((prev) => (prev ? { ...prev, plunges: result.plunges } : prev));
-    });
+    const rank = new Map(order.map((id, index) => [id, index]));
+    void run(
+      plunge.id,
+      (list) => [...list].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)),
+      () => sendJson<{ plunges: ColdPlungeRow[] }>(PLUNGES_URL, 'PATCH', { order }),
+      (_list, result) => result.plunges
+    );
   };
 
   const remove = async (plunge: ColdPlungeRow) => {
@@ -138,9 +194,11 @@ export function ColdPlungesManager() {
       }))
     )
       return;
-    await run(plunge.id, async () => {
-      await sendJson(`${PLUNGES_URL}?id=${encodeURIComponent(plunge.id)}`, 'DELETE');
-    });
+    await run(
+      plunge.id,
+      (list) => list.filter((p) => p.id !== plunge.id),
+      () => sendJson(`${PLUNGES_URL}?id=${encodeURIComponent(plunge.id)}`, 'DELETE')
+    );
   };
 
   if (expired || isSessionExpired(error)) {
@@ -230,7 +288,7 @@ export function ColdPlungesManager() {
                 type="button"
                 aria-label={`Move ${plunge.name} up`}
                 onClick={() => move(plunge, -1)}
-                disabled={busy !== null || index === 0}
+                disabled={rowBusy || index === 0}
                 className={buttonClass}
               >
                 Up
@@ -239,7 +297,7 @@ export function ColdPlungesManager() {
                 type="button"
                 aria-label={`Move ${plunge.name} down`}
                 onClick={() => move(plunge, 1)}
-                disabled={busy !== null || index === active.length - 1}
+                disabled={rowBusy || index === active.length - 1}
                 className={buttonClass}
               >
                 Down
@@ -250,7 +308,7 @@ export function ColdPlungesManager() {
                   setEditingId(plunge.id);
                   setDraft(draftFor(plunge));
                 }}
-                disabled={busy !== null}
+                disabled={rowBusy}
                 className={buttonClass}
               >
                 Edit
@@ -260,7 +318,7 @@ export function ColdPlungesManager() {
           <button
             type="button"
             onClick={() => void setArchived(plunge, !plunge.archived)}
-            disabled={busy !== null}
+            disabled={rowBusy}
             className={buttonClass}
           >
             {plunge.archived ? 'Restore' : 'Archive'}
@@ -269,7 +327,7 @@ export function ColdPlungesManager() {
             <button
               type="button"
               onClick={() => void remove(plunge)}
-              disabled={busy !== null}
+              disabled={rowBusy}
               className={`${buttonClass} hover:border-[var(--pyre-red)] hover:text-[var(--pyre-red)]`}
             >
               Delete
@@ -343,7 +401,7 @@ export function ColdPlungesManager() {
               </label>
               <button
                 type="submit"
-                disabled={busy !== null || !newPlunge.name.trim()}
+                disabled={busy === 'add' || !newPlunge.name.trim()}
                 className={formButtonClass}
               >
                 {busy === 'add' ? 'Adding…' : 'Add'}

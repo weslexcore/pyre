@@ -15,6 +15,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import {
   DAY_KEYS,
   type DayKey,
@@ -453,8 +454,34 @@ export function ScheduleLintRules() {
     }
   };
 
-  const toggle = (rule: ListedRule) =>
-    void post({ action: 'update', id: rule.id, enabled: !rule.enabled }, rule.id);
+  // The switch flips at once; the server's list (summaries included) replaces
+  // the guess when it answers, and a refusal flips it back.
+  const toggle = async (rule: ListedRule) => {
+    const enabled = !rule.enabled;
+    setBusy(rule.id);
+    setMessage(null);
+    await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? { ...prev, rules: prev.rules.map((r) => (r.id === rule.id ? { ...r, enabled } : r)) }
+          : prev,
+      () => sendJson<StateResponse>(API, 'POST', { action: 'update', id: rule.id, enabled }),
+      {
+        reconcile: (prev, result) =>
+          prev && result.rules
+            ? {
+                ...prev,
+                rules: result.rules,
+                resolutions: result.resolutions ?? prev.resolutions,
+                kinds: result.kinds,
+              }
+            : prev,
+        onError: setMessage,
+      }
+    );
+    setBusy(null);
+  };
 
   const startEdit = (rule: ListedRule) => {
     setEditing(rule.id);
@@ -649,8 +676,8 @@ export function ScheduleLintRules() {
             <button
               type="button"
               className={formButtonClass}
-              disabled={busy !== null}
-              onClick={() => toggle(rule)}
+              disabled={busy === rule.id}
+              onClick={() => void toggle(rule)}
             >
               {rule.enabled ? 'Turn off' : 'Turn on'}
             </button>
@@ -658,7 +685,7 @@ export function ScheduleLintRules() {
               <button
                 type="button"
                 className={formButtonClass}
-                disabled={busy !== null}
+                disabled={busy === rule.id}
                 onClick={() => startEdit(rule)}
               >
                 Edit
@@ -668,7 +695,7 @@ export function ScheduleLintRules() {
               <button
                 type="button"
                 className={formButtonClass}
-                disabled={busy !== null}
+                disabled={busy === rule.id}
                 onClick={() => setDeleting(rule)}
               >
                 Delete

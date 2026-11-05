@@ -28,9 +28,10 @@ import {
   movePatch,
 } from '@/lib/boards/calendar';
 import type { Assignable } from '@/lib/boards/people';
-import { readError } from '@/lib/client/api';
-import { useCachedJson } from '@/lib/client/cachedJson';
+import { sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
+import { optimistic } from '@/lib/client/optimistic';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { filterChipClass } from '../scheduleUi';
@@ -234,19 +235,22 @@ export function BoardsCalendar() {
             }
           }}
           onDelete={async () => {
+            // The chip leaves the month at once; a refusal brings it back.
+            const gone = openCard.id;
             setBusy(true);
             setSaveError(null);
-            try {
-              const res = await fetch(`/api/admin/board-cards?id=${openCard.id}`, {
-                method: 'DELETE',
-              });
-              if (!res.ok) throw new Error(await readError(res));
-              setOpenCardId(null);
-              await reload();
-            } catch (e) {
-              setSaveError(e instanceof Error ? e.message : 'That did not delete');
-            } finally {
-              setBusy(false);
+            setOpenCardId(null);
+            const result = await optimistic(
+              setData,
+              (prev) => (prev ? { ...prev, cards: prev.cards.filter((c) => c.id !== gone) } : prev),
+              () => sendJson(`/api/admin/board-cards?id=${gone}`, 'DELETE'),
+              { onError: setSaveError }
+            );
+            setBusy(false);
+            if (result !== null) {
+              // The board and the task list count this card too.
+              invalidateJson('/api/admin/board-cards');
+              invalidateJson('/api/admin/all-tasks');
             }
           }}
         />

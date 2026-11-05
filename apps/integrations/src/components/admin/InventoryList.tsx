@@ -36,6 +36,7 @@ import {
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import {
   COUNT_SCHEDULES,
   countEveryLabel,
@@ -307,20 +308,42 @@ export function InventoryList() {
     }
   };
 
+  // The row shows the edit at once (the patch is the row's own columns);
+  // the saved row replaces it when the server answers, with whatever it
+  // derived (stock after a movement, who did it), and a refusal puts the
+  // old row back.
   const save = async (id: string, patch: Patch): Promise<boolean> => {
     setSaveError(null);
-    try {
-      const res = await sendJson<{ item: InventoryRow; people: Record<string, string> }>(
-        `${INVENTORY_API}?id=${id}`,
-        'PATCH',
-        patch
-      );
-      replaceRow(res.item, res.people);
-      return true;
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
-      return false;
-    }
+    const result = await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((i) =>
+                i.id === id ? ({ ...i, ...patch } as InventoryRow) : i
+              ),
+            }
+          : prev,
+      () =>
+        sendJson<{ item: InventoryRow; people: Record<string, string> }>(
+          `${INVENTORY_API}?id=${id}`,
+          'PATCH',
+          patch
+        ),
+      {
+        reconcile: (prev, res) =>
+          prev
+            ? {
+                ...prev,
+                items: prev.items.map((i) => (i.id === id ? res.item : i)),
+                people: { ...prev.people, ...res.people },
+              }
+            : prev,
+        onError: setSaveError,
+      }
+    );
+    return result !== null;
   };
 
   const add = async (name: string): Promise<boolean> => {
@@ -343,16 +366,15 @@ export function InventoryList() {
       ? `Delete ${item.name} and its history? This can't be undone. To set it aside for now (a seasonal item, say), mark it inactive instead.`
       : `Delete ${item.name} and its history? This can't be undone.`;
     if (!window.confirm(ask)) return;
+    // The row goes at once; a refusal brings it back and says why.
     setSaveError(null);
-    try {
-      await sendJson(`${INVENTORY_API}?id=${item.id}`, 'DELETE');
-      setDetails((open) => (open?.id === item.id ? null : open));
-      setData((prev) =>
-        prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev
-      );
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
-    }
+    setDetails((open) => (open?.id === item.id ? null : open));
+    await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev),
+      () => sendJson(`${INVENTORY_API}?id=${item.id}`, 'DELETE'),
+      { onError: setSaveError }
+    );
   };
 
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;

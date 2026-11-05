@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import { timeAgo } from '@/lib/client/relativeTime';
 import type {
   GuestFieldValue,
@@ -179,20 +180,48 @@ export function GuestProfile({
         );
         target = created;
       }
-      const { note } = await sendJson<{ note: GuestProfileNoteRow }>(
-        '/api/admin/guest-notes',
-        'POST',
+      // The note is on the page as soon as it is sent; the saved row (its
+      // id, its time) replaces it when the server answers, and a refusal
+      // takes it back off and hands the text back to the composer.
+      const owner = target;
+      const body = noteBody.trim();
+      const pending = tempId();
+      setNoteBody('');
+      const result = await optimistic(
+        ours.setData,
+        (prev) =>
+          prev
+            ? {
+                ...prev,
+                profile: prev.profile ?? owner,
+                notes: [
+                  {
+                    id: pending,
+                    profile_id: owner.id,
+                    body,
+                    author_email: '',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  } as GuestProfileNoteRow,
+                  ...prev.notes,
+                ],
+              }
+            : prev,
+        () =>
+          sendJson<{ note: GuestProfileNoteRow }>('/api/admin/guest-notes', 'POST', {
+            profileId: owner.id,
+            body,
+          }),
         {
-          profileId: target.id,
-          body: noteBody.trim(),
+          reconcile: (prev, { note }) =>
+            prev ? { ...prev, notes: prev.notes.map((n) => (n.id === pending ? note : n)) } : prev,
+          onError: (message) => {
+            setNoteError(message);
+            setNoteBody(body);
+          },
         }
       );
-      const owner = target;
-      ours.setData((prev) =>
-        prev ? { ...prev, profile: prev.profile ?? owner, notes: [note, ...prev.notes] } : prev
-      );
-      setNoteBody('');
-      invalidateJson('/api/admin/guests');
+      if (result !== null) invalidateJson('/api/admin/guests');
     } catch (e) {
       setNoteError(e instanceof Error ? e.message : 'Could not save the note');
     } finally {
@@ -202,16 +231,17 @@ export function GuestProfile({
 
   const removeNote = useCallback(async () => {
     if (!deleting) return;
+    // The note goes at once; a refusal brings it back and says why.
+    const gone = deleting.id;
     setNoteBusy(true);
+    setDeleting(null);
     try {
-      await sendJson(`/api/admin/guest-notes?id=${deleting.id}`, 'DELETE');
-      const gone = deleting.id;
-      ours.setData((prev) =>
-        prev ? { ...prev, notes: prev.notes.filter((n) => n.id !== gone) } : prev
+      await optimistic(
+        ours.setData,
+        (prev) => (prev ? { ...prev, notes: prev.notes.filter((n) => n.id !== gone) } : prev),
+        () => sendJson(`/api/admin/guest-notes?id=${gone}`, 'DELETE'),
+        { onError: setNoteError }
       );
-      setDeleting(null);
-    } catch (e) {
-      setNoteError(e instanceof Error ? e.message : 'Could not remove the note');
     } finally {
       setNoteBusy(false);
     }

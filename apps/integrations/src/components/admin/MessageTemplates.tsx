@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { sendJson as requestJson } from '@/lib/client/api';
 import {
   type Backup,
   backupKeys,
@@ -26,6 +26,7 @@ import {
 } from '@/lib/client/autosave';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import type { AdminMessageTemplateRow } from '@/lib/db';
 import { TEMPLATE_NAME_MAX, TEMPLATE_PLACEHOLDERS } from '@/lib/messages/templates';
 import { excerpt } from '@/lib/notifications/types';
@@ -311,22 +312,19 @@ export function MessageTemplates() {
     ) {
       return;
     }
+    // The row goes at once; a refusal brings it back and says why.
     setBusy(true);
     setError(null);
-    try {
-      const res = await fetch(`${TEMPLATES_URL}?id=${encodeURIComponent(template.id)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      clearBackup(`${BACKUP_PREFIX}${template.id}`);
-      invalidateJson(TEMPLATES_URL);
-      await feed.reload();
-      if (editing?.kind === 'edit' && editing.template.id === template.id) setEditing(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete the template');
-    } finally {
-      setBusy(false);
-    }
+    if (editing?.kind === 'edit' && editing.template.id === template.id) setEditing(null);
+    const result = await optimistic(
+      feed.setData,
+      (prev) =>
+        prev ? { ...prev, templates: prev.templates.filter((t) => t.id !== template.id) } : prev,
+      () => requestJson(`${TEMPLATES_URL}?id=${encodeURIComponent(template.id)}`, 'DELETE'),
+      { onError: setError }
+    );
+    if (result !== null) clearBackup(`${BACKUP_PREFIX}${template.id}`);
+    setBusy(false);
   };
 
   return (

@@ -13,8 +13,9 @@ import type {
   LinkRow as LinkRowData,
   UtmCampaign,
 } from '@/lib/campaigns/types';
-import { readError } from '@/lib/client/api';
+import { readError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import type { QrStyle } from '@/lib/qr/style';
 import { BackLink } from '../BackLink';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -57,22 +58,27 @@ export function CampaignDetail({
   const links = useMemo(() => data?.links ?? [], [data?.links]);
   const showGenerate = generateOpen ?? links.length === 0;
 
+  // The fields change on screen at once (the body is the campaign's own
+  // columns); the saved row replaces them when the server answers, and a
+  // refusal puts the old ones back.
   const patchCampaign = useCallback(
     async (body: Record<string, unknown>): Promise<UtmCampaign | null> => {
       setActionError(null);
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        setActionError(campaignErrorMessage(await readError(res)));
-        return null;
-      }
-      const json = (await res.json()) as { campaign: UtmCampaign };
-      setData((prev) => (prev ? { ...prev, campaign: json.campaign } : prev));
+      const result = await optimistic(
+        setData,
+        (prev) =>
+          prev
+            ? { ...prev, campaign: { ...prev.campaign, ...(body as Partial<UtmCampaign>) } }
+            : prev,
+        () => sendJson<{ campaign: UtmCampaign }>(url, 'PATCH', body),
+        {
+          reconcile: (prev, { campaign }) => (prev ? { ...prev, campaign } : prev),
+          onError: (message) => setActionError(campaignErrorMessage(message)),
+        }
+      );
+      if (!result) return null;
       invalidateJson('/api/admin/campaigns?');
-      return json.campaign;
+      return result.campaign;
     },
     [url, setData]
   );
@@ -111,35 +117,47 @@ export function CampaignDetail({
 
   // `quiet` skips the row's busy flag — used by the QR style autosave, which
   // must never grey out the buttons someone is about to click.
+  // The row shows the edit at once (the body is the link's own columns); the
+  // saved row replaces it when the server answers, keeping the click count
+  // the page already had, and a refusal puts the old row back.
   const patchLink = useCallback(
     async (linkId: string, body: Record<string, unknown>, quiet = false): Promise<void> => {
       if (!quiet) setBusyLink(linkId);
       if (!quiet) setActionError(null);
-      try {
-        const res = await fetch(`${url}/links/${encodeURIComponent(linkId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const message = campaignErrorMessage(await readError(res));
-          if (!quiet) setActionError(message);
-          throw new Error(message);
-        }
-        const json = (await res.json()) as { link: LinkRowData };
-        setData((prev) =>
+      const result = await optimistic(
+        setData,
+        (prev) =>
           prev
             ? {
                 ...prev,
                 links: prev.links.map((l) =>
-                  l.id === linkId ? { ...json.link, clicks: l.clicks || json.link.clicks } : l
+                  l.id === linkId ? { ...l, ...(body as Partial<LinkRowData>) } : l
                 ),
               }
-            : prev
-        );
-      } finally {
-        if (!quiet) setBusyLink(null);
-      }
+            : prev,
+        () =>
+          sendJson<{ link: LinkRowData }>(
+            `${url}/links/${encodeURIComponent(linkId)}`,
+            'PATCH',
+            body
+          ),
+        {
+          reconcile: (prev, { link }) =>
+            prev
+              ? {
+                  ...prev,
+                  links: prev.links.map((l) =>
+                    l.id === linkId ? { ...link, clicks: l.clicks || link.clicks } : l
+                  ),
+                }
+              : prev,
+          onError: (message) => {
+            if (!quiet) setActionError(campaignErrorMessage(message));
+          },
+        }
+      );
+      if (!quiet) setBusyLink(null);
+      if (result === null) throw new Error('That did not save');
     },
     [url, setData]
   );
@@ -148,21 +166,14 @@ export function CampaignDetail({
     async (linkId: string) => {
       setBusyLink(linkId);
       setActionError(null);
-      try {
-        const res = await fetch(`${url}/links/${encodeURIComponent(linkId)}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          setActionError(campaignErrorMessage(await readError(res)));
-          return;
-        }
-        setData((prev) =>
-          prev ? { ...prev, links: prev.links.filter((l) => l.id !== linkId) } : prev
-        );
-        invalidateJson('/api/admin/campaigns?');
-      } finally {
-        setBusyLink(null);
-      }
+      const result = await optimistic(
+        setData,
+        (prev) => (prev ? { ...prev, links: prev.links.filter((l) => l.id !== linkId) } : prev),
+        () => sendJson(`${url}/links/${encodeURIComponent(linkId)}`, 'DELETE'),
+        { onError: (message) => setActionError(campaignErrorMessage(message)) }
+      );
+      setBusyLink(null);
+      if (result !== null) invalidateJson('/api/admin/campaigns?');
     },
     [url, setData]
   );
