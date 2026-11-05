@@ -3,12 +3,14 @@
 // request queue. Two tabs over two API routes; the manage capability gates
 // every mutation, so a read-only grant still gets the full picture.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, inputClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { fmtShortDate } from '@/lib/client/format';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { PartnerRow, PartnerVerificationRow } from '@/lib/db';
 
 const pillClass = (active: boolean) =>
@@ -452,55 +454,70 @@ function RequestRow({
 
 // --- Shell ---
 
+/** The page's first read; lib/client/pageData warms it when a link here is hovered. */
+const PARTNERS_URL = '/api/admin/partners';
+
+/** The partner row as it will read once the API applies `form` to it. */
+function applyForm(partner: PartnerRow, form: PartnerFormState): PartnerRow {
+  return {
+    ...partner,
+    name: form.name,
+    tag_name: form.tagName,
+    discount_percent: Number(form.discountPercent),
+    contact_emails: [...form.contactEmails],
+    cc_email: form.ccEmail || null,
+    decision_expiry_days: Number(form.decisionExpiryDays),
+    enabled: form.enabled,
+    reconciliation_enabled: form.reconciliationEnabled,
+    notes: form.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** What a request's status becomes under an admin action, or null if that is the server's call. */
+function statusAfter(action: string): PartnerVerificationRow['status'] | null {
+  switch (action) {
+    case 'confirm':
+      return 'confirmed';
+    case 'deny':
+      return 'denied';
+    case 'revoke':
+      return 'revoked';
+    default:
+      return null;
+  }
+}
+
 export function PartnersManager() {
   const [tab, setTab] = useState<'partners' | 'requests'>('partners');
-  const [data, setData] = useState<PartnersPayload | null>(null);
-  const [queue, setQueue] = useState<RequestsPayload | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>('pending');
   const [partnerFilter, setPartnerFilter] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Only the new-partner form guards against a double submit; the cards and
+  // the queue stay usable while a save is out.
+  const [saving, setSaving] = useState(false);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const loadPartners = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/partners');
-      if (!res.ok) {
-        setError(await readError(res));
-        return;
-      }
-      setData((await res.json()) as PartnersPayload);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadQueue = useCallback(async () => {
+  // Both reads are cached across navigations and keyed by their full URL,
+  // so each filter combination of the queue repaints from cache. Every
+  // action below changes the list on screen first; the server's answer
+  // (counts, tag status, the real id of a new partner) follows behind it.
+  const partners = useCachedJson<PartnersPayload>(PARTNERS_URL);
+  const data = partners.data;
+  const queueUrl = useMemo(() => {
+    if (tab !== 'requests') return null;
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     if (partnerFilter) params.set('partner', partnerFilter);
-    const res = await fetch(`/api/admin/partner-requests?${params}`);
-    if (!res.ok) {
-      setError(await readError(res));
-      return;
-    }
-    setQueue((await res.json()) as RequestsPayload);
-  }, [statusFilter, partnerFilter]);
-
-  useEffect(() => {
-    void loadPartners();
-  }, [loadPartners]);
-
-  useEffect(() => {
-    if (tab === 'requests') void loadQueue();
-  }, [tab, loadQueue]);
+    return `/api/admin/partner-requests?${params}`;
+  }, [tab, statusFilter, partnerFilter]);
+  const requests = useCachedJson<RequestsPayload>(queueUrl);
+  const queue = requests.data;
+  const error = actionError ?? partners.error ?? requests.error;
 
   const savePartner = async (form: PartnerFormState, id: string | null) => {
-    setBusy(true);
+    setSaving(true);
     setError(null);
     setNotice(null);
     const payload = {
@@ -515,24 +532,53 @@ export function PartnersManager() {
       reconciliationEnabled: form.reconciliationEnabled,
       notes: form.notes,
     };
-    const res = await fetch('/api/admin/partners', {
-      method: id ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      const body = (await res.json()) as { retagWarningCount?: number };
-      if (body.retagWarningCount) {
-        setNotice(
-          `Tag changed. ${body.retagWarningCount} already-confirmed member${body.retagWarningCount === 1 ? '' : 's'} still carry the old tag — rename it in Momence too, or they lose the discount.`
+    const pendingId = id ?? tempId();
+    const body = await optimistic(
+      partners.setData,
+      (prev) => {
+        if (!prev) return prev;
+        if (id) {
+          return {
+            ...prev,
+            partners: prev.partners.map((p) => (p.id === id ? applyForm(p, form) : p)),
+          };
+        }
+        const now = new Date().toISOString();
+        const fresh = applyForm(
+          {
+            id: pendingId,
+            slug: form.slug.trim().toLowerCase(),
+            name: form.name,
+            tag_name: form.tagName,
+            discount_percent: 0,
+            contact_emails: [],
+            cc_email: null,
+            enabled: false,
+            decision_expiry_days: 0,
+            reconciliation_enabled: false,
+            notes: null,
+            created_by: null,
+            updated_by: null,
+            created_at: now,
+            updated_at: now,
+          },
+          form
         );
-      }
-      setAdding(false);
-    } else {
-      setError(await readError(res));
+        return { ...prev, partners: [...prev.partners, fresh] };
+      },
+      () => sendJson<{ retagWarningCount?: number }>(PARTNERS_URL, id ? 'PATCH' : 'POST', payload),
+      { onError: setError }
+    );
+    setSaving(false);
+    if (!body) return;
+    if (body.retagWarningCount) {
+      setNotice(
+        `Tag changed. ${body.retagWarningCount} already-confirmed member${body.retagWarningCount === 1 ? '' : 's'} still carry the old tag — rename it in Momence too, or they lose the discount.`
+      );
     }
-    await loadPartners();
-    setBusy(false);
+    setAdding(false);
+    // The tag status and counts, and a new partner's real id, come from the server.
+    void partners.reload();
   };
 
   const deletePartner = async (partner: PartnerRow) => {
@@ -545,14 +591,13 @@ export function PartnersManager() {
       }))
     )
       return;
-    setBusy(true);
     setError(null);
-    const res = await fetch(`/api/admin/partners?id=${encodeURIComponent(partner.id)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) setError(await readError(res));
-    await loadPartners();
-    setBusy(false);
+    await optimistic(
+      partners.setData,
+      (prev) => prev && { ...prev, partners: prev.partners.filter((p) => p.id !== partner.id) },
+      () => sendJson(`${PARTNERS_URL}?id=${encodeURIComponent(partner.id)}`, 'DELETE'),
+      { onError: setError }
+    );
   };
 
   const importLegacy = async (slug: string, email: string) => {
@@ -572,28 +617,47 @@ export function PartnersManager() {
       }))
     )
       return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    const res = await fetch('/api/admin/partner-requests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action }),
-    });
-    if (res.ok) {
-      const body = (await res.json()) as { results?: { email: string; status: string }[] };
-      if (body.results) {
-        setNotice(body.results.map((r) => `${r.email}: ${r.status}`).join(' · '));
-      }
-    } else {
-      setError(await readError(res));
+    const next = statusAfter(action);
+    const body = await optimistic(
+      requests.setData,
+      (prev) => {
+        if (!prev || !next) return prev;
+        const row = prev.requests.find((r) => r.id === id);
+        if (!row || row.status === next) return prev;
+        const counts = { ...prev.counts };
+        counts[row.status] = Math.max(0, (counts[row.status] ?? 0) - 1);
+        counts[next] = (counts[next] ?? 0) + 1;
+        const decided = { ...row, status: next, decided_at: new Date().toISOString() };
+        return {
+          ...prev,
+          counts,
+          // A row that no longer matches the status filter leaves the list.
+          requests:
+            statusFilter && statusFilter !== next
+              ? prev.requests.filter((r) => r.id !== id)
+              : prev.requests.map((r) => (r.id === id ? decided : r)),
+        };
+      },
+      () =>
+        sendJson<{ results?: { email: string; status: string }[] }>(
+          '/api/admin/partner-requests',
+          'POST',
+          { id, action }
+        ),
+      { onError: setError }
+    );
+    if (!body) return;
+    if (body.results) {
+      setNotice(body.results.map((r) => `${r.email}: ${r.status}`).join(' · '));
     }
-    await loadQueue();
-    await loadPartners();
-    setBusy(false);
+    // Who the action reached, and the per-partner counts, come from the server.
+    void requests.reload();
+    void partners.reload();
   };
 
-  if (loading && !data) {
+  if (partners.loading) {
     return <p className="font-mono text-sm text-white/40">Loading…</p>;
   }
 
@@ -650,7 +714,7 @@ export function PartnersManager() {
                     <button
                       type="button"
                       className={`${buttonClass} ml-auto`}
-                      disabled={busy}
+                      disabled={saving}
                       onClick={() => importLegacy(entry.slug, entry.email)}
                     >
                       Import
@@ -667,7 +731,7 @@ export function PartnersManager() {
               partner={partner}
               data={data}
               canManage={canManage}
-              busy={busy}
+              busy={false}
               onSave={savePartner}
               onDelete={deletePartner}
             />
@@ -678,7 +742,7 @@ export function PartnersManager() {
               partner={null}
               data={data}
               canManage={canManage}
-              busy={busy}
+              busy={saving}
               onSave={savePartner}
               onDelete={deletePartner}
             />
@@ -749,7 +813,7 @@ export function PartnersManager() {
               key={request.id}
               request={request}
               canManage={canManage}
-              busy={busy}
+              busy={false}
               onAction={requestAction}
             />
           ))}

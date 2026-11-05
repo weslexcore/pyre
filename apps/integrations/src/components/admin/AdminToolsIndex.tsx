@@ -10,7 +10,8 @@ import { useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { dragHandleClass } from '@/components/admin/ui';
 import { normalizePins, repositionPin, TOOL_PINS_EVENT, togglePin } from '@/lib/admin/pinOrder';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { optimistic } from '@/lib/client/optimistic';
 import { useLiveReorder } from '@/lib/client/useLiveReorder';
 import { ADMIN_TOOL_SECTIONS, type AdminTool } from './adminTools';
 
@@ -29,7 +30,6 @@ export function AdminToolsIndex({
   validPinHrefs = tools.map((tool) => tool.href),
 }: AdminToolsIndexProps) {
   const [pins, setPins] = useState<string[]>(() => normalizePins(initialPins, validPinHrefs));
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toolByHref = new Map(tools.map((tool) => [tool.href, tool]));
@@ -39,33 +39,36 @@ export function AdminToolsIndex({
     .filter((tool): tool is AdminTool => !!tool);
   const sections = ADMIN_TOOL_SECTIONS.filter((s) => tools.some((t) => t.section === s.key));
 
-  const save = async (next: string[], previous: string[]) => {
-    setPins(next); // optimistic — the PUT response replaces it
-    setBusy(true);
+  // The pinned list changes at once (the nav menu on this page with it),
+  // the PUT goes out behind, and a refusal puts the previous list back.
+  // `previous` is the list before the gesture started: during a drag the
+  // state already holds the live arrangement, so the helper's own snapshot
+  // would not be the one to restore.
+  const announce = (hrefs: string[]) =>
+    document.dispatchEvent(new CustomEvent(TOOL_PINS_EVENT, { detail: hrefs }));
+  const save = (next: string[], previous: string[]) => {
     setError(null);
-    try {
-      const res = await fetch('/api/admin/tool-pins', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hrefs: next }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const saved = ((await res.json()) as { hrefs?: string[] }).hrefs ?? next;
-      const normalized = normalizePins(saved, validPinHrefs);
-      setPins(normalized);
-      document.dispatchEvent(new CustomEvent(TOOL_PINS_EVENT, { detail: normalized }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save pins');
-      setPins(previous);
-    } finally {
-      setBusy(false);
-    }
+    announce(next);
+    void optimistic(
+      setPins,
+      () => next,
+      () => sendJson<{ hrefs?: string[] }>('/api/admin/tool-pins', 'PUT', { hrefs: next }),
+      {
+        reconcile: (_pins, saved) => {
+          const normalized = normalizePins(saved.hrefs ?? next, validPinHrefs);
+          announce(normalized);
+          return normalized;
+        },
+        onError: (message) => {
+          setError(message || 'Failed to save pins');
+          setPins(previous);
+          announce(previous);
+        },
+      }
+    );
   };
 
-  const toggle = (href: string) => {
-    if (busy) return;
-    void save(togglePin(pins, href), pins);
-  };
+  const toggle = (href: string) => void save(togglePin(pins, href), pins);
 
   // ---- drag and drop -------------------------------------------------------
 
@@ -83,7 +86,7 @@ export function AdminToolsIndex({
     reorder.begin(e, href, pins, href, '[data-pin-card]');
 
   const enterPin = (targetHref: string) => {
-    if (busy || !drag || drag === targetHref) return;
+    if (!drag || drag === targetHref) return;
     if (!reorder.enterOnce(targetHref)) return;
     setPins((prev) => repositionPin(prev, drag, targetHref));
   };
@@ -106,7 +109,14 @@ export function AdminToolsIndex({
             : 'border-white/10 hover:border-white/30 hover:bg-white/10'
         }`}
       >
-        <a href={tool.href} draggable={false} className="block px-4 py-4">
+        <a
+          href={tool.href}
+          // "tap", not hover: the island renders after Astro binds its hover
+          // listeners on astro:page-load, so hover would never fire here.
+          data-astro-prefetch="tap"
+          draggable={false}
+          className="block px-4 py-4"
+        >
           <div
             className={`font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] ${
               inPinned ? 'pr-14' : 'pr-8'
@@ -126,7 +136,6 @@ export function AdminToolsIndex({
             }`}
             title={isPinned ? 'Unpin' : 'Pin to top'}
             aria-label={isPinned ? `Unpin ${tool.title}` : `Pin ${tool.title} to top`}
-            disabled={busy}
             onClick={() => toggle(tool.href)}
           >
             {isPinned ? '★' : '☆'}
@@ -137,7 +146,7 @@ export function AdminToolsIndex({
               className={dragHandleClass}
               title="Drag to reorder"
               aria-label={`Drag to reorder ${tool.title}`}
-              draggable={!busy}
+              draggable
               onDragStart={(e) => startDrag(e, tool.href)}
               onDragEnd={endDrag}
             >

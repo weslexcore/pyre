@@ -6,8 +6,9 @@
 
 import { type KeyboardEvent, useEffect, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
 import { etStamp } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import {
   CHECKPOINT_FROM,
   CHECKPOINT_FROM_LABELS,
@@ -626,36 +627,49 @@ export function SettingsPage({ initial, people }: { initial: SettingView[]; peop
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const call = async (key: SettingKey, request: Promise<Response>, done: string) => {
+  // The row changes the moment it is saved or reset; the server's full list
+  // replaces it once the call lands (it knows whether a reset falls back to
+  // an env var or the default), and a refusal puts the row back.
+  const call = async (
+    key: SettingKey,
+    update: (view: SettingView) => SettingView,
+    request: () => Promise<{ settings: SettingView[] }>,
+    done: string
+  ) => {
     setBusy(key);
     setError(null);
-    try {
-      const res = await request;
-      if (!res.ok) throw new Error(await readError(res));
-      setSettings(((await res.json()) as { settings: SettingView[] }).settings);
-      setNotice(done);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save');
-    } finally {
-      setBusy(null);
-    }
+    const result = await optimistic(
+      setSettings,
+      (views) => views.map((view) => (view.key === key ? update(view) : view)),
+      request,
+      {
+        reconcile: (_views, { settings: fresh }) => fresh,
+        onError: (message) => setError(message || 'Could not save'),
+      }
+    );
+    if (result) setNotice(done);
+    setBusy((current) => (current === key ? null : current));
   };
 
   const save = (key: SettingKey, value: AnySettingValue) =>
     void call(
       key,
-      fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value }),
-      }),
+      (view) => ({ ...view, value, source: 'saved', updatedAt: new Date().toISOString() }),
+      () => sendJson('/api/admin/settings', 'PUT', { key, value }),
       `Saved ${SETTINGS[key].label}. It takes effect within about 30 seconds.`
     );
 
   const reset = (key: SettingKey) =>
     void call(
       key,
-      fetch(`/api/admin/settings?key=${encodeURIComponent(key)}`, { method: 'DELETE' }),
+      (view) => ({
+        ...view,
+        value: view.fallback,
+        source: 'default',
+        updatedBy: null,
+        updatedAt: null,
+      }),
+      () => sendJson(`/api/admin/settings?key=${encodeURIComponent(key)}`, 'DELETE'),
       `Reset ${SETTINGS[key].label}.`
     );
 
@@ -688,7 +702,7 @@ export function SettingsPage({ initial, people }: { initial: SettingView[]; peop
                   key={view.key}
                   view={view}
                   people={people}
-                  busy={busy !== null}
+                  busy={busy === view.key}
                   onSave={save}
                   onReset={reset}
                 />

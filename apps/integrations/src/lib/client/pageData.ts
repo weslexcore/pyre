@@ -85,6 +85,7 @@ const RULES: Array<[RegExp, Rule]> = [
   [/^\/admin\/messages\/templates$/, () => [`${API}/message-templates`, `${API}/messages`]],
   [/^\/admin\/users$/, () => [`${API}/users`]],
   [/^\/admin\/partners$/, () => [`${API}/partners`]],
+  [/^\/admin\/referrals$/, () => [`${API}/referrals?`]],
   [/^\/admin\/email$/, () => [`${API}/email-stats?days=14`]],
   [/^\/admin\/webhooks$/, () => [`${API}/webhook-stats?days=30`]],
   [/^\/admin\/campaigns$/, () => [`${API}/campaigns?status=active`]],

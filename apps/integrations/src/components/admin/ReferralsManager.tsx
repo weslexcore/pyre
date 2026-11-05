@@ -3,11 +3,13 @@
 // route; the manage capability gates every mutation, so a read-only grant
 // still gets the full picture.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { buttonClass, inputClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { fmtShortDate } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import type {
   ReferralRedemptionRow,
   ReferralRewardRow,
@@ -49,65 +51,53 @@ const STATUS_COLORS: Record<string, string> = {
 const REDEMPTION_FILTERS = ['all', 'pending', 'redeemed', 'converted', 'expired', 'revoked'];
 
 export function ReferralsManager() {
-  const [data, setData] = useState<ReferralsPayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Only the create forms guard against a double submit; the lists stay
+  // usable while a change is out.
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   // Search is applied on submit (and carried along when the filter changes),
-  // not per keystroke — the ref keeps the effect below off the input's back.
-  const searchRef = useRef('');
-  searchRef.current = search;
+  // not per keystroke.
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [statusFilter, setStatusFilterState] = useState('all');
+  const setStatusFilter = (status: string) => {
+    setAppliedSearch(search);
+    setStatusFilterState(status);
+  };
 
-  const load = useCallback(async (q: string, status: string) => {
+  // One cache entry per (search, status), so flipping back to a filter you
+  // already looked at repaints from cache and revalidates behind you.
+  const url = useMemo(() => {
     const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (status !== 'all') params.set('status', status);
-    try {
-      const res = await fetch(`/api/admin/referrals?${params}`);
-      if (!res.ok) {
-        setLoadError(await readError(res));
-        return;
-      }
-      setData((await res.json()) as ReferralsPayload);
-      setLoadError(null);
-    } catch {
-      setLoadError('Failed to load');
-    }
-  }, []);
+    if (appliedSearch) params.set('q', appliedSearch);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    return `/api/admin/referrals?${params}`;
+  }, [appliedSearch, statusFilter]);
+  const { data, error: loadError, reload, setData } = useCachedJson<ReferralsPayload>(url);
 
-  useEffect(() => {
-    load(searchRef.current, statusFilter);
-  }, [load, statusFilter]);
-
-  const act = useCallback(
-    async (body: Record<string, unknown>, successNotice?: string) => {
-      setBusy(true);
+  // A change with an `update` is shown before it is sent (a toggle, a
+  // revoke) and put back if the server refuses; one without (a create, a
+  // tier upsert — the server mints codes and tag status) waits for the
+  // answer. Either way the fresh payload follows behind what is on screen.
+  const act = useCallback<Act>(
+    async (body, successNotice, update) => {
       setActionError(null);
       setNotice(null);
-      try {
-        const res = await fetch('/api/admin/referrals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          setActionError(await readError(res));
-          return false;
-        }
-        if (successNotice) setNotice(successNotice);
-        await load(search, statusFilter);
-        return true;
-      } catch {
-        setActionError('Request failed');
-        return false;
-      } finally {
-        setBusy(false);
-      }
+      if (!update) setBusy(true);
+      const result = await optimistic(
+        setData,
+        (prev) => (prev && update ? update(prev) : prev),
+        () => sendJson<unknown>('/api/admin/referrals', 'POST', body),
+        { onError: (message) => setActionError(message || 'Request failed') }
+      );
+      if (!update) setBusy(false);
+      if (result === null) return false;
+      if (successNotice) setNotice(successNotice);
+      void reload();
+      return true;
     },
-    [load, search, statusFilter]
+    [setData, reload]
   );
 
   if (loadError) {
@@ -150,7 +140,7 @@ export function ReferralsManager() {
         act={act}
         search={search}
         setSearch={setSearch}
-        onSearch={() => load(search, statusFilter)}
+        onSearch={() => setAppliedSearch(search)}
       />
 
       <RedemptionsSection
@@ -175,7 +165,12 @@ export function ReferralsManager() {
   );
 }
 
-type Act = (body: Record<string, unknown>, successNotice?: string) => Promise<boolean>;
+type Act = (
+  body: Record<string, unknown>,
+  successNotice?: string,
+  /** How the payload reads once the change lands, to show it before it does. */
+  update?: (data: ReferralsPayload) => ReferralsPayload
+) => Promise<boolean>;
 
 function TiersSection({
   tiers,
@@ -224,7 +219,16 @@ function TiersSection({
                 className={buttonClass}
                 disabled={busy}
                 onClick={() =>
-                  act({ action: 'toggle-tier', percent: tier.percent, enabled: !tier.enabled })
+                  act(
+                    { action: 'toggle-tier', percent: tier.percent, enabled: !tier.enabled },
+                    undefined,
+                    (prev) => ({
+                      ...prev,
+                      tiers: prev.tiers.map((t) =>
+                        t.percent === tier.percent ? { ...t, enabled: !tier.enabled } : t
+                      ),
+                    })
+                  )
                 }
               >
                 {tier.enabled ? 'Disable' : 'Enable'}
@@ -409,11 +413,22 @@ function ReferrersSection({
                 value={referrer.discount_percent}
                 disabled={busy}
                 onChange={(e) =>
-                  act({
-                    action: 'update-referrer',
-                    id: referrer.id,
-                    discountPercent: Number(e.target.value),
-                  })
+                  act(
+                    {
+                      action: 'update-referrer',
+                      id: referrer.id,
+                      discountPercent: Number(e.target.value),
+                    },
+                    undefined,
+                    (prev) => ({
+                      ...prev,
+                      referrers: prev.referrers.map((r) =>
+                        r.id === referrer.id
+                          ? { ...r, discount_percent: Number(e.target.value) }
+                          : r
+                      ),
+                    })
+                  )
                 }
               >
                 {tiers.map((tier) => (
@@ -437,7 +452,16 @@ function ReferrersSection({
                 className={buttonClass}
                 disabled={busy}
                 onClick={() =>
-                  act({ action: 'update-referrer', id: referrer.id, enabled: !referrer.enabled })
+                  act(
+                    { action: 'update-referrer', id: referrer.id, enabled: !referrer.enabled },
+                    undefined,
+                    (prev) => ({
+                      ...prev,
+                      referrers: prev.referrers.map((r) =>
+                        r.id === referrer.id ? { ...r, enabled: !referrer.enabled } : r
+                      ),
+                    })
+                  )
                 }
               >
                 {referrer.enabled ? 'Disable' : 'Enable'}
@@ -529,7 +553,16 @@ function RedemptionsSection({
                         danger: true,
                       })
                     ) {
-                      act({ action: 'revoke-redemption', id: row.id }, 'Redemption revoked');
+                      act(
+                        { action: 'revoke-redemption', id: row.id },
+                        'Redemption revoked',
+                        (prev) => ({
+                          ...prev,
+                          redemptions: prev.redemptions.map((r) =>
+                            r.id === row.id ? { ...r, status: 'revoked' } : r
+                          ),
+                        })
+                      );
                     }
                   }}
                 >
@@ -592,7 +625,12 @@ function RewardsSection({
                         danger: true,
                       })
                     ) {
-                      act({ action: 'revoke-reward', id: row.id }, 'Reward revoked');
+                      act({ action: 'revoke-reward', id: row.id }, 'Reward revoked', (prev) => ({
+                        ...prev,
+                        rewards: prev.rewards.map((r) =>
+                          r.id === row.id ? { ...r, status: 'revoked' } : r
+                        ),
+                      }));
                     }
                   }}
                 >

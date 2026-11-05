@@ -8,12 +8,13 @@
 // needs an email);
 // this island just mirrors them in the UI.
 import { weekStartOf } from '@pyre/schedule-core';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, inputClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { readError, sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
   ADMIN_TOOL_SECTIONS,
@@ -652,17 +653,56 @@ const fmtRate = (rate: number | null): string =>
     ? ''
     : `$${Number.isInteger(Number(rate)) ? Number(rate) : Number(rate).toFixed(2)}/hr`;
 
+/** The page's one read; lib/client/pageData warms it when a link here is hovered. */
+const USERS_URL = '/api/admin/users';
+
+const NO_STAFF: StaffRow[] = [];
+const NO_STIPENDS: StaffStipendRow[] = [];
+const NO_ENV_USERS: EnvUser[] = [];
+const NO_BOARDS: BoardOption[] = [];
+
+/** The row as it will read once the API applies `fields` (its camelCase keys). */
+function applyFields(person: StaffRow, fields: Record<string, unknown>): StaffRow {
+  const next = { ...person };
+  if (typeof fields.displayName === 'string') next.display_name = fields.displayName;
+  if ('email' in fields) next.email = (fields.email as string | null) || null;
+  if (typeof fields.payRate === 'number') next.pay_rate = fields.payRate;
+  if (typeof fields.isAdmin === 'boolean') next.is_admin = fields.isAdmin;
+  if (typeof fields.isFounder === 'boolean') next.is_founder = fields.isFounder;
+  if (typeof fields.isShiftLead === 'boolean') next.is_shift_lead = fields.isShiftLead;
+  if (typeof fields.onCallEligible === 'boolean') next.on_call_eligible = fields.onCallEligible;
+  if (typeof fields.active === 'boolean') next.active = fields.active;
+  if (Array.isArray(fields.pages)) next.pages = fields.pages as string[];
+  return next;
+}
+
+/** The API's order: by display name. */
+const byName = (a: StaffRow, b: StaffRow) => a.display_name.localeCompare(b.display_name);
+
 export function UsersManager() {
-  const [staff, setStaff] = useState<StaffRow[]>([]);
-  const [stipends, setStipends] = useState<StaffStipendRow[]>([]);
-  const [envUsers, setEnvUsers] = useState<EnvUser[]>([]);
-  const [boards, setBoards] = useState<BoardOption[]>([]);
-  const [envActive, setEnvActive] = useState(false);
-  const [self, setSelf] = useState('');
-  const [source, setSource] = useState<'db' | 'env'>('db');
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across navigations: coming back here paints the last roster at
+  // once and revalidates behind it. Every edit below changes the roster on
+  // screen first and writes through to that cache; the server's row replaces
+  // the guess when the call lands, and a refusal restores the previous row.
+  const {
+    data,
+    loading,
+    error: loadError,
+    reload,
+    setData,
+  } = useCachedJson<UsersResponse>(USERS_URL);
+  const staff = data?.staff ?? NO_STAFF;
+  const stipends = data?.stipends ?? NO_STIPENDS;
+  const envUsers = data?.envUsers ?? NO_ENV_USERS;
+  const boards = data?.boards ?? NO_BOARDS;
+  const envActive = data?.envActive ?? false;
+  const self = data?.self ?? '';
+  const source = data?.source ?? 'db';
+  // Only the add form and the env imports guard against a double submit;
+  // the rows stay editable while any save is out.
+  const [adding, setAdding] = useState(false);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const [notice, setNotice] = useState<string | null>(null);
 
   // Which person's editor is open ('new' = the add form); one at a time.
@@ -671,7 +711,7 @@ export function UsersManager() {
   const [showFormer, setShowFormer] = useState(false);
 
   // Name/email/rate edits are typed before they're saved, so they live here
-  // until the row's Save button goes.
+  // until the row's Save button goes (a row without one shows its saved row).
   const [drafts, setDrafts] = useState<Record<string, PersonDraft>>({});
 
   const [newName, setNewName] = useState('');
@@ -689,56 +729,40 @@ export function UsersManager() {
   // and write shift notes.
   const [newPages, setNewPages] = useState<string[]>(DEFAULT_NEW_PAGES);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/users');
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as UsersResponse;
-      setStaff(body.staff);
-      setStipends(body.stipends ?? []);
-      setBoards(body.boards ?? []);
-      setDrafts(Object.fromEntries(body.staff.map((s) => [s.id, draftFor(s)])));
-      setEnvUsers(body.envUsers);
-      setEnvActive(body.envActive);
-      setSelf(body.self);
-      setSource(body.source);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Staff rows ride along in the schedule-board payload that the Calendar
+  // and Timesheet tabs cache, so every roster edit drops their entries too.
+  const dropScheduleCaches = () => invalidateJson('/api/admin/schedule-board');
 
   const patch = async (id: string, fields: Record<string, unknown>) => {
-    setBusy(true);
     setError(null);
     setNotice(null);
-    const res = await fetch('/api/admin/users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...fields }),
-    });
-    if (!res.ok) {
-      setError(await readError(res));
-    } else {
-      const body = (await res.json()) as { person: StaffRow; momenceMatch?: boolean };
-      if (body.momenceMatch === false) {
-        setNotice(
-          `No Momence member matched ${body.person.email} — they can only log in if it matches their Momence account email exactly.`
-        );
+    dropScheduleCaches();
+    const body = await optimistic(
+      setData,
+      (prev) =>
+        prev && {
+          ...prev,
+          staff: prev.staff.map((p) => (p.id === id ? applyFields(p, fields) : p)).sort(byName),
+        },
+      () =>
+        sendJson<{ person: StaffRow; momenceMatch?: boolean }>(USERS_URL, 'PATCH', {
+          id,
+          ...fields,
+        }),
+      {
+        reconcile: (prev, { person }) =>
+          prev && { ...prev, staff: prev.staff.map((p) => (p.id === id ? person : p)) },
+        onError: setError,
       }
+    );
+    if (!body) return;
+    // The saved row is the draft now (the server may have trimmed it).
+    setDrafts(({ [id]: _saved, ...rest }) => rest);
+    if (body.momenceMatch === false) {
+      setNotice(
+        `No Momence member matched ${body.person.email} — they can only log in if it matches their Momence account email exactly.`
+      );
     }
-    // Staff rows ride along in the schedule-board payload that the Calendar
-    // and Timesheet tabs cache, so every roster edit drops their entries too.
-    invalidateJson('/api/admin/schedule-board');
-    await load();
-    setBusy(false);
   };
 
   const remove = async (person: StaffRow) => {
@@ -751,38 +775,61 @@ export function UsersManager() {
       }))
     )
       return;
-    setBusy(true);
     setError(null);
     setNotice(null);
-    const res = await fetch(`/api/admin/users?id=${encodeURIComponent(person.id)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      setError(await readError(res));
-    } else {
-      setOpenId(null);
-      if (((await res.json()) as { deactivated: boolean }).deactivated) {
-        setNotice(
-          `${person.display_name} has shifts or time off on record, so they were taken off the schedule and had their access removed instead of being deleted.`
-        );
-      }
+    dropScheduleCaches();
+    setOpenId((current) => (current === person.id ? null : current));
+    const body = await optimistic(
+      setData,
+      (prev) =>
+        prev && {
+          ...prev,
+          staff: prev.staff.filter((p) => p.id !== person.id),
+          stipends: (prev.stipends ?? []).filter((s) => s.staff_id !== person.id),
+        },
+      () =>
+        sendJson<{ deactivated: boolean }>(
+          `${USERS_URL}?id=${encodeURIComponent(person.id)}`,
+          'DELETE'
+        ),
+      { onError: setError }
+    );
+    if (body?.deactivated) {
+      setNotice(
+        `${person.display_name} has shifts or time off on record, so they were taken off the schedule and had their access removed instead of being deleted.`
+      );
+      // They are still on the roster, as a former person: fetch that row back.
+      void reload();
     }
-    invalidateJson('/api/admin/schedule-board');
-    await load();
-    setBusy(false);
   };
 
-  const create = async (fields: Record<string, unknown>): Promise<StaffRow | null> => {
-    const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fields),
-    });
-    if (!res.ok) {
-      setError(await readError(res));
-      return null;
-    }
-    const body = (await res.json()) as { person: StaffRow; momenceMatch: boolean };
+  // The new person is on the list under a temporary id until the server
+  // names the row; a refusal takes them off again.
+  const create = async (
+    fields: Record<string, unknown>,
+    pending: StaffRow
+  ): Promise<StaffRow | null> => {
+    setAdding(true);
+    setError(null);
+    setNotice(null);
+    dropScheduleCaches();
+    const body = await optimistic(
+      setData,
+      (prev) =>
+        prev && {
+          ...prev,
+          staff: [...prev.staff, pending].sort(byName),
+          envUsers: prev.envUsers.filter((u) => u.email !== pending.email),
+        },
+      () => sendJson<{ person: StaffRow; momenceMatch: boolean }>(USERS_URL, 'POST', fields),
+      {
+        reconcile: (prev, { person }) =>
+          prev && { ...prev, staff: prev.staff.map((p) => (p.id === pending.id ? person : p)) },
+        onError: setError,
+      }
+    );
+    setAdding(false);
+    if (!body) return null;
     if (body.person.email && !body.momenceMatch) {
       setNotice(
         `Added ${body.person.display_name} — no Momence member matched ${body.person.email}. They can only log in if it matches their Momence account email exactly.`
@@ -791,19 +838,59 @@ export function UsersManager() {
     return body.person;
   };
 
+  const pendingRow = (fields: {
+    displayName: string;
+    email: string | null;
+    roles: Roles;
+    pages: string[];
+    payRate: number | null;
+  }): StaffRow => ({
+    id: tempId(),
+    display_name: fields.displayName,
+    email: fields.email,
+    is_founder: fields.roles.isFounder,
+    is_shift_lead: fields.roles.isShiftLead,
+    on_call_eligible: fields.roles.onCallEligible,
+    active: fields.roles.active,
+    is_admin: fields.roles.isAdmin,
+    pages: fields.pages,
+    momence_member_id: null,
+    added_by: self || null,
+    calendar_token: null,
+    calendar_payday: false,
+    // The API's defaults when no rate is given: 20, or 0 for a founder.
+    pay_rate: fields.payRate ?? (fields.roles.isFounder ? 0 : 20),
+    target_hours_per_week: null,
+    min_shifts_per_week: null,
+    preferred_shifts_per_week: null,
+    max_shifts_per_week: null,
+    scheduling_notes: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
   const importEnvUser = async (envUser: EnvUser) => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    const person = await create({
-      email: envUser.email,
-      isAdmin: envUser.isAdmin,
-      pages: envUser.pages,
-    });
+    const person = await create(
+      {
+        email: envUser.email,
+        isAdmin: envUser.isAdmin,
+        pages: envUser.pages,
+      },
+      pendingRow({
+        displayName: envUser.email,
+        email: envUser.email,
+        roles: {
+          isAdmin: envUser.isAdmin,
+          isFounder: false,
+          isShiftLead: false,
+          onCallEligible: false,
+          active: true,
+        },
+        pages: envUser.pages,
+        payRate: null,
+      })
+    );
     if (person) setNotice(`Imported ${envUser.email} — they're now managed from this page.`);
-    invalidateJson('/api/admin/schedule-board');
-    await load();
-    setBusy(false);
   };
 
   const resetNew = () => {
@@ -821,27 +908,31 @@ export function UsersManager() {
   };
 
   const addPerson = async () => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    const person = await create({
-      displayName: newName.trim(),
-      email: newEmail.trim(),
-      isAdmin: newRoles.isAdmin,
-      pages: newPages,
-      isFounder: newRoles.isFounder,
-      isShiftLead: newRoles.isShiftLead,
-      onCallEligible: newRoles.onCallEligible,
-      active: newRoles.active,
-      ...(newPayRate.trim() !== '' ? { payRate: Number(newPayRate) } : {}),
-    });
+    const payRate = newPayRate.trim() !== '' ? Number(newPayRate) : null;
+    const person = await create(
+      {
+        displayName: newName.trim(),
+        email: newEmail.trim(),
+        isAdmin: newRoles.isAdmin,
+        pages: newPages,
+        isFounder: newRoles.isFounder,
+        isShiftLead: newRoles.isShiftLead,
+        onCallEligible: newRoles.onCallEligible,
+        active: newRoles.active,
+        ...(payRate !== null ? { payRate } : {}),
+      },
+      pendingRow({
+        displayName: newName.trim() || newEmail.trim(),
+        email: newEmail.trim() || null,
+        roles: newRoles,
+        pages: newPages,
+        payRate,
+      })
+    );
     if (person) {
       resetNew();
       setOpenId(person.id);
     }
-    invalidateJson('/api/admin/schedule-board');
-    await load();
-    setBusy(false);
   };
 
   const visible = useMemo(() => {
@@ -855,7 +946,7 @@ export function UsersManager() {
     );
   }, [staff, filter, showFormer, openId]);
 
-  if (loading && staff.length === 0) {
+  if (loading) {
     return <p className="font-mono text-sm text-white/40">Loading…</p>;
   }
 
@@ -919,7 +1010,7 @@ export function UsersManager() {
         <button
           type="button"
           className={`${buttonClass} ml-auto`}
-          disabled={busy}
+          disabled={adding}
           onClick={() => setOpenId(openId === 'new' ? null : 'new')}
         >
           {openId === 'new' ? 'Cancel' : 'Add person'}
@@ -970,18 +1061,18 @@ export function UsersManager() {
           <EditorSection title="Roles">
             <RoleToggles
               roles={newRoles}
-              disabled={busy}
+              disabled={adding}
               onChange={(key, value) => setNewRoles({ ...newRoles, [key]: value })}
             />
           </EditorSection>
           <EditorSection title="Page access">
-            <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
+            <PagePicker pages={newPages} boards={boards} disabled={adding} onChange={setNewPages} />
           </EditorSection>
           <div className="flex gap-2">
             <button
               type="button"
               className={buttonClass}
-              disabled={busy || !canAdd}
+              disabled={adding || !canAdd}
               onClick={() => void addPerson()}
             >
               Add person
@@ -989,7 +1080,7 @@ export function UsersManager() {
             <button
               type="button"
               className={buttonClass}
-              disabled={busy}
+              disabled={adding}
               onClick={() => {
                 resetNew();
                 setOpenId(null);
@@ -1056,7 +1147,6 @@ export function UsersManager() {
                       <input
                         className={`${inputClass} w-44`}
                         value={draft.name}
-                        disabled={busy}
                         onChange={(e) => setDraft({ name: e.target.value })}
                         aria-label={`${person.display_name} name`}
                       />
@@ -1065,7 +1155,7 @@ export function UsersManager() {
                         type="email"
                         placeholder="momence login email"
                         value={draft.email}
-                        disabled={busy || isSelf}
+                        disabled={isSelf}
                         onChange={(e) => setDraft({ email: e.target.value })}
                         aria-label={`${person.display_name} Momence email`}
                       />
@@ -1076,7 +1166,6 @@ export function UsersManager() {
                           min={0}
                           step={0.5}
                           value={draft.payRate}
-                          disabled={busy}
                           onChange={(e) => setDraft({ payRate: e.target.value })}
                           aria-label={`${person.display_name} hourly pay rate`}
                         />
@@ -1086,7 +1175,6 @@ export function UsersManager() {
                         <button
                           type="button"
                           className={buttonClass}
-                          disabled={busy}
                           onClick={() =>
                             void patch(person.id, {
                               displayName: draft.name.trim(),
@@ -1104,7 +1192,7 @@ export function UsersManager() {
                       <button
                         type="button"
                         className={`${buttonClass} ml-auto`}
-                        disabled={busy || isSelf}
+                        disabled={isSelf}
                         onClick={() => void remove(person)}
                       >
                         Remove
@@ -1131,7 +1219,7 @@ export function UsersManager() {
                         onCallEligible: person.on_call_eligible,
                         active: person.active,
                       }}
-                      disabled={busy}
+                      disabled={false}
                       lockAdmin={isSelf}
                       onChange={(key, value) => void patch(person.id, { [key]: value })}
                     />
@@ -1141,7 +1229,7 @@ export function UsersManager() {
                     <PagePicker
                       pages={person.pages}
                       boards={boards}
-                      disabled={busy}
+                      disabled={false}
                       locked={isSelf ? [USERS_HREF] : []}
                       onChange={(next) => void patch(person.id, { pages: next })}
                     />
@@ -1151,12 +1239,13 @@ export function UsersManager() {
                     <PersonStipends
                       person={person}
                       stipends={stipends.filter((s) => s.staff_id === person.id)}
-                      disabled={busy}
+                      disabled={false}
                       onChanged={async () => {
                         // The hours report folds stipends into its cached
                         // schedule-board payload, so stipend edits drop it too.
-                        invalidateJson('/api/admin/schedule-board');
-                        await load();
+                        // The fresh rows arrive behind the ones on screen.
+                        dropScheduleCaches();
+                        await reload();
                       }}
                     />
                   </EditorSection>
@@ -1200,7 +1289,7 @@ export function UsersManager() {
                 <button
                   type="button"
                   className={`${buttonClass} ml-auto`}
-                  disabled={busy}
+                  disabled={adding}
                   onClick={() => void importEnvUser(u)}
                 >
                   Import
