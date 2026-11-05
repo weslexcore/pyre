@@ -11,11 +11,13 @@
 // landed in, which is the other question the founders ask each other and
 // Trello could never answer.
 
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { type ReactNode, useId, useMemo, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
-import { readError, sendJson } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
+import { optimistic } from '@/lib/client/optimistic';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
@@ -120,11 +122,20 @@ function TaskSection({
 }
 
 export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
-  const [data, setData] = useState<TasksData | null>(null);
+  // `since` is a day, not an instant, so the URL — and the cache entry it
+  // keys — is the same on every render and on every visit today.
   const [since, setSince] = useState(defaultSince);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across navigations: coming back paints the last list at once
+  // and revalidates behind it; a warmed entry skips even that.
+  const {
+    data,
+    setData,
+    error: loadError,
+    loading,
+    reload,
+  } = useCachedJson<TasksData>(`/api/admin/all-tasks?since=${encodeURIComponent(since)}`);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
 
   const [groupBy, setGroupBy] = useState<GroupBy>('board');
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -133,25 +144,10 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(readCollapsed);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/all-tasks?since=${encodeURIComponent(since)}`);
-      if (!res.ok) throw new Error(await readError(res));
-      setData((await res.json()) as TasksData);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the tasks');
-    } finally {
-      setLoading(false);
-    }
-  }, [since]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useCardDeepLink(data?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload: load });
+  useCardDeepLink(data?.cards, setOpenCardId, {
+    drawerOpen: openCardId !== null,
+    reload: () => void reload(),
+  });
 
   const saveCard = useOptimisticCardSave(data, setData);
 
@@ -190,25 +186,29 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     });
   }, [data, filtered, groupBy, viewerEmail]);
 
-  const mutate = async (run: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await run();
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not save');
-      throw e;
-    } finally {
-      setBusy(false);
+  // A deleted task leaves the page at once; a refused delete puts it back
+  // with the API's message. The board it was on counts it too.
+  const deleteCard = async (id: string) => {
+    setActionError(null);
+    const result = await optimistic(
+      setData,
+      (current) =>
+        current ? { ...current, cards: current.cards.filter((card) => card.id !== id) } : current,
+      () => sendJson(`/api/admin/board-cards?id=${id}`, 'DELETE'),
+      { onError: setActionError }
+    );
+    if (result) {
+      invalidateJson('/api/admin/boards');
+      invalidateJson('/api/admin/board-cards');
+      invalidateJson('/api/admin/goals');
     }
   };
 
   // The first load holds the header's loading bar, so moving between
   // views reads as one load from click to content.
-  useLoadingBar(loading && !data);
+  useLoadingBar(loading);
 
-  if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data || !built) {
     return <p className="text-sm text-[var(--pyre-red)]">{error ?? 'Tasks are not available.'}</p>;
   }
@@ -376,12 +376,12 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           fields={[]}
           people={people}
           owners={owners}
-          busy={busy}
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
-            await mutate(() => sendJson(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
+            const id = openCard.id;
             setOpenCardId(null);
+            await deleteCard(id);
           }}
         />
       )}

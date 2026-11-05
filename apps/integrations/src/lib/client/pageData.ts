@@ -75,6 +75,14 @@ const RULES: Array<[RegExp, Rule]> = [
   [/^\/admin\/ask\/routines$/, () => [`${API}/agent-routines`]],
   [/^\/admin\/boards$/, () => [`${API}/boards`]],
   [/^\/admin\/boards\/all-goals$/, () => [`${API}/goals`]],
+  // AllTasks: the last four weeks, as a UTC day — the same expression the
+  // island uses for its `since`.
+  [
+    /^\/admin\/boards\/tasks$/,
+    () => [
+      `${API}/all-tasks?since=${new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10)}`,
+    ],
+  ],
   [/^\/admin\/boards\/([^/]+)$/, (m) => [`${API}/board-cards?board=${encodeURIComponent(m[1])}`]],
   [/^\/admin\/guests$/, () => [`${API}/guests`]],
   [/^\/admin\/guests\/fields$/, () => [`${API}/guest-fields`]],

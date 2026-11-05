@@ -6,7 +6,9 @@
 // already use (dnd.tsx), so it works with a finger as well as a mouse.
 //
 // Live reordering is shown while dragging and persisted on drop as the
-// whole order (api/admin/board-order.ts); a refused drop reloads, which
+// whole order (api/admin/board-order.ts). The dropped order stands, and the
+// handles stay live, while the write is out — the caller's reload behind it
+// only confirms what is already on screen; a refused drop reloads, which
 // puts everything back.
 
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
@@ -97,16 +99,20 @@ export function BoardSections({
   );
   const locked = busy || saving || !canManage;
 
-  const write = async (run: () => Promise<unknown>) => {
-    setSaving(true);
+  // `lock` holds the forms (add, rename, delete) against a second submit
+  // while theirs is out; a drop never locks, since the page already shows
+  // the order it asked for and the next drag should not have to wait.
+  const write = async (run: () => Promise<unknown>, lock = true) => {
+    if (lock) setSaving(true);
     try {
       await run();
-      await onChanged();
+      if (lock) await onChanged();
+      else void onChanged();
     } catch (e) {
       onError(e instanceof Error ? e.message : 'That did not save');
       await onChanged();
     } finally {
-      setSaving(false);
+      if (lock) setSaving(false);
     }
   };
 
@@ -135,19 +141,25 @@ export function BoardSections({
     setDragging(null);
     if (!from) return;
     if (from.kind === 'section') {
-      void write(() =>
-        sendJson('/api/admin/board-order', 'PUT', { sectionIds: liveSections.map((s) => s.id) })
+      void write(
+        () =>
+          sendJson('/api/admin/board-order', 'PUT', {
+            sectionIds: liveSections.map((s) => s.id),
+          }),
+        false
       );
       return;
     }
     const moved = liveBoards.find((board) => board.id === from.id);
     if (!moved) return;
     const sectionId = moved.section_id;
-    void write(() =>
-      sendJson('/api/admin/board-order', 'PUT', {
-        sectionId,
-        boardIds: liveBoards.filter((board) => board.section_id === sectionId).map((b) => b.id),
-      })
+    void write(
+      () =>
+        sendJson('/api/admin/board-order', 'PUT', {
+          sectionId,
+          boardIds: liveBoards.filter((board) => board.section_id === sectionId).map((b) => b.id),
+        }),
+      false
     );
   };
 

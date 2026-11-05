@@ -28,7 +28,7 @@
 // one, and everyone on the board sees it.
 
 import { todayEastern } from '@pyre/schedule-core';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { buttonClass } from '@/components/admin/ui';
 import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
@@ -40,7 +40,10 @@ import { cardMatches, searchTerms } from '@/lib/boards/search';
 import type { LinkedSop } from '@/lib/boards/sops';
 import { BOARD_LIMITS, BOARDS_HREF } from '@/lib/boards/types';
 import { newViewDefaults } from '@/lib/boards/views';
-import { readError, sendJson } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { useLoadingBar } from '@/lib/client/loadingBar';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type {
   BoardCardRow,
   BoardColumnRow,
@@ -119,12 +122,38 @@ const initialView: ViewMode = (() => {
   return new URLSearchParams(window.location.search).get('view') || 'board';
 })();
 
+/** A board's one read; lib/client/pageData warms it when a link here is hovered. */
+function bundleUrl(slug: string): string {
+  return `/api/admin/board-cards?board=${encodeURIComponent(slug)}`;
+}
+
+/**
+ * Other pages that tally or list this board's cards. Written through after a
+ * card is made or deleted here, so the index's open counts and All Tasks are
+ * not stale when the person goes there next.
+ */
+function invalidateCardReaders() {
+  invalidateJson('/api/admin/boards');
+  invalidateJson('/api/admin/all-tasks');
+  invalidateJson('/api/admin/goals');
+}
+
 export function BoardView({ slug }: { slug: string }) {
   const [view, setView] = useState<ViewMode>(initialView);
-  const [bundle, setBundle] = useState<BundleResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across navigations: coming back to a board paints it at once and
+  // revalidates behind; a warmed entry skips even that.
+  const {
+    data: bundle,
+    setData: setBundle,
+    error: loadError,
+    loading,
+    reload,
+  } = useCachedJson<BundleResponse>(bundleUrl(slug));
+  // Only the goal's and the settings' forms wait on this: the columns, the
+  // cards, and the quick-add stay live while a save is out.
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The id of the view being edited, or null with the editor shut.
@@ -139,25 +168,14 @@ export function BoardView({ slug }: { slug: string }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const sensors = useBoardSensors();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/board-cards?board=${encodeURIComponent(slug)}`);
-      if (!res.ok) throw new Error(await readError(res));
-      setBundle((await res.json()) as BundleResponse);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load this board');
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
+  // The first load holds the header's loading bar, so moving between
+  // views reads as one load from click to content.
+  useLoadingBar(loading);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useCardDeepLink(bundle?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload: load });
+  useCardDeepLink(bundle?.cards, setOpenCardId, {
+    drawerOpen: openCardId !== null,
+    reload: () => void reload(),
+  });
 
   const saveCard = useOptimisticCardSave(bundle, setBundle);
   const links = useMemo(() => summariesById(bundle?.linkSummaries), [bundle?.linkSummaries]);
@@ -204,24 +222,84 @@ export function BoardView({ slug }: { slug: string }) {
 
   const openCard = bundle?.cards.find((card) => card.id === openCardId) ?? null;
 
+  // The goal's and the settings' writes (BoardGoal, BoardSettings) come
+  // back with derived rows — KPI rollups, a goal's trail — that this page
+  // cannot work out for itself, so they still read the server afterwards.
+  // The read is a revalidation behind data already on screen, never a
+  // spinner, and it is not waited for: the form closes as soon as the
+  // server has accepted the write.
   const mutate = async (run: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
+    setSaving(true);
+    setActionError(null);
     try {
       await run();
-      await load();
+      void reload();
+      invalidateCardReaders();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not save');
+      setActionError(e instanceof Error ? e.message : 'That did not save');
       throw e;
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
+  // A new card is on the board the moment it is typed: a pending row at the
+  // end of its column, swapped for the server's row when that lands, and
+  // withdrawn with the API's message if the server refuses it.
   const addCard = async (title: string, columnId?: string) => {
-    await mutate(() =>
-      sendJson('/api/admin/board-cards', 'POST', { board: slug, title, columnId })
+    if (!bundle) return;
+    const column =
+      bundle.columns.find((entry) => entry.id === columnId) ?? defaultColumn(bundle.columns);
+    if (!column) return;
+    const pendingId = tempId();
+    const nowIso = new Date().toISOString();
+    const pending: BoardCardRow = {
+      id: pendingId,
+      board_id: bundle.board.id,
+      column_id: column.id,
+      goal_id: bundle.goal?.id ?? null,
+      title,
+      notes_md: '',
+      assignee_emails: [],
+      due_date: null,
+      repeat_every: null,
+      repeat_unit: null,
+      waiting_on: null,
+      area: null,
+      sort_order: Math.max(0, ...bundle.cards.map((card) => card.sort_order)) + 1,
+      properties: {},
+      source: 'manual',
+      external_ref: null,
+      suggestion_id: null,
+      completed_at: null,
+      completed_by: null,
+      created_by: bundle.viewerEmail ?? '',
+      updated_by: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    setActionError(null);
+    const result = await optimistic(
+      setBundle,
+      (current) => (current ? { ...current, cards: [...current.cards, pending] } : current),
+      () =>
+        sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'POST', {
+          board: slug,
+          title,
+          columnId,
+        }),
+      {
+        reconcile: (current, { card }) =>
+          current
+            ? {
+                ...current,
+                cards: current.cards.map((row) => (row.id === pendingId ? card : row)),
+              }
+            : current,
+        onError: setActionError,
+      }
     );
+    if (result) invalidateCardReaders();
   };
 
   // A drop is a column and the order it should hold afterwards. The order
@@ -250,8 +328,7 @@ export function BoardView({ slug }: { slug: string }) {
         }),
       };
     });
-    setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       // A repeating card dropped into Done comes straight back to the first
       // open column for its next round, so it is not in the column the drop
@@ -285,11 +362,11 @@ export function BoardView({ slug }: { slug: string }) {
           cardIds: plan.orderedIds,
         });
       }
+      // A move into or out of Done changes the counts other pages show.
+      if (plan.moved) invalidateCardReaders();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Could not move this card');
-      await load();
-    } finally {
-      setBusy(false);
+      setActionError(error instanceof Error ? error.message : 'Could not move this card');
+      await reload();
     }
   };
 
@@ -305,7 +382,7 @@ export function BoardView({ slug }: { slug: string }) {
     if (plan) void dropCard(plan);
   };
 
-  if (loading && !bundle) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!bundle) {
     return (
       <p className="text-sm text-[var(--pyre-red)]">{error ?? 'This board is not available.'}</p>
@@ -345,8 +422,8 @@ export function BoardView({ slug }: { slug: string }) {
   // "+ View" makes the view there and then, from the board's likeliest
   // grouping, and opens it with its editor: nothing waits on a Save button.
   const createView = async () => {
-    setBusy(true);
-    setError(null);
+    setSaving(true);
+    setActionError(null);
     try {
       const { view: created } = await sendJson<{ view: BoardViewRow }>(
         '/api/admin/board-views',
@@ -357,9 +434,9 @@ export function BoardView({ slug }: { slug: string }) {
       showView(created.id);
       setEditing(created.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not make a view');
+      setActionError(e instanceof Error ? e.message : 'Could not make a view');
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
@@ -378,8 +455,48 @@ export function BoardView({ slug }: { slug: string }) {
   };
   const ownerOptions = owners.length > 0 ? owners : namesAsOwners(people);
 
-  const saveColumns = (next: ReturnType<typeof renameColumn>) =>
-    mutate(() => sendJson('/api/admin/boards', 'PATCH', { slug, columns: next }));
+  // A renamed or added column shows at once — the payload's rows are matched
+  // to the board's by key, and a column the board has not got yet is drawn
+  // under a pending id — and the server's answer (real ids, the board row
+  // it touched) is read behind it.
+  const saveColumns = async (next: ReturnType<typeof renameColumn>) => {
+    setActionError(null);
+    const nowIso = new Date().toISOString();
+    const result = await optimistic(
+      setBundle,
+      (current) => {
+        if (!current) return current;
+        const byKey = new Map(current.columns.map((column) => [column.key, column]));
+        return {
+          ...current,
+          columns: next.map((payload) => {
+            const existing = byKey.get(payload.key);
+            return {
+              ...(existing ?? {
+                id: tempId(),
+                board_id: current.board.id,
+                created_at: nowIso,
+              }),
+              key: payload.key,
+              label: payload.label,
+              kind: payload.kind,
+              assignee_emails: payload.assigneeEmails,
+              clears_assignees: payload.clearsAssignees,
+              sort_order: payload.sortOrder,
+              archived: payload.archived,
+              updated_at: nowIso,
+            };
+          }),
+        };
+      },
+      () => sendJson('/api/admin/boards', 'PATCH', { slug, columns: next }),
+      { onError: setActionError }
+    );
+    if (result !== null) {
+      void reload();
+      invalidateJson('/api/admin/boards');
+    }
+  };
 
   const draggingCard = bundle.cards.find((card) => card.id === draggingId) ?? null;
 
@@ -435,7 +552,7 @@ export function BoardView({ slug }: { slug: string }) {
               <button
                 type="button"
                 className={pillClass(false)}
-                disabled={busy}
+                disabled={saving}
                 onClick={() => void createView()}
               >
                 + View
@@ -504,14 +621,14 @@ export function BoardView({ slug }: { slug: string }) {
             cardCount={bundle.cards.length}
             owners={ownerOptions}
             people={bundle.people ?? {}}
-            busy={busy}
+            busy={saving}
             hasGoal={goal !== null}
             unattachedGoals={unattachedGoals}
             mutate={mutate}
             onSaved={(result) =>
               setBundle((current) => (current ? { ...current, ...result } : current))
             }
-            onSopsSaved={() => void load()}
+            onSopsSaved={() => void reload()}
           />
         </div>
       )}
@@ -546,13 +663,13 @@ export function BoardView({ slug }: { slug: string }) {
         today={today}
         canManage={canManage}
         canWorkGoal={canWorkGoal}
-        busy={busy}
+        busy={saving}
         mutate={mutate}
         onCompleted={() => setBurst((n) => n + 1)}
       />
 
       {quickAddColumn && (
-        <QuickAdd noun={noun} busy={busy} onAdd={(title) => addCard(title, quickAddColumn.id)} />
+        <QuickAdd noun={noun} onAdd={(title) => addCard(title, quickAddColumn.id)} />
       )}
 
       {mode === 'saved' && savedView ? (
@@ -580,7 +697,7 @@ export function BoardView({ slug }: { slug: string }) {
             // saveCard shows the move at once and puts it back with the
             // API's message if the write is refused.
             void saveCard(cardId, patch).catch((e: unknown) =>
-              setError(e instanceof Error ? e.message : 'Could not move that card')
+              setActionError(e instanceof Error ? e.message : 'Could not move that card')
             );
           }}
         />
@@ -594,18 +711,12 @@ export function BoardView({ slug }: { slug: string }) {
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {grouped.map(({ column, cards: columnCards }) => (
-              <DroppableColumn
-                key={column.id}
-                column={column}
-                className={`${cardClass} min-w-0`}
-                disabled={busy}
-              >
+              <DroppableColumn key={column.id} column={column} className={`${cardClass} min-w-0`}>
                 <ColumnHeader
                   column={column}
                   count={columnCards.length}
                   noun={noun}
                   people={people}
-                  busy={busy}
                   onAdd={column.archived ? undefined : (title) => addCard(title, column.id)}
                 />
                 <div className="min-h-16 space-y-2">
@@ -616,7 +727,7 @@ export function BoardView({ slug }: { slug: string }) {
                   )}
                   <SortableColumn cardIds={columnCards.map((card) => card.id)}>
                     {columnCards.map((card) => (
-                      <DraggableCard key={card.id} card={card} disabled={busy}>
+                      <DraggableCard key={card.id} card={card}>
                         {({ listeners, attributes }) => (
                           <CardRow
                             card={card}
@@ -636,7 +747,7 @@ export function BoardView({ slug }: { slug: string }) {
               </DroppableColumn>
             ))}
             {canManage && (
-              <AddColumn busy={busy} onAdd={(label) => saveColumns(appendColumn(columns, label))} />
+              <AddColumn onAdd={(label) => saveColumns(appendColumn(columns, label))} />
             )}
           </div>
 
@@ -665,6 +776,7 @@ export function BoardView({ slug }: { slug: string }) {
             columns={columns}
             people={people}
             heading="Goal activity"
+            viewerEmail={bundle.viewerEmail}
           />
         </section>
       )}
@@ -680,12 +792,24 @@ export function BoardView({ slug }: { slug: string }) {
           links={links}
           onLinkPicked={rememberLink}
           viewerEmail={bundle?.viewerEmail}
-          busy={busy}
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
-            await mutate(() => sendJson(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
+            // The card leaves the board and the drawer shuts at once; a
+            // refused delete puts it back with the API's message.
+            const id = openCard.id;
             setOpenCardId(null);
+            setActionError(null);
+            const result = await optimistic(
+              setBundle,
+              (current) =>
+                current
+                  ? { ...current, cards: current.cards.filter((row) => row.id !== id) }
+                  : current,
+              () => sendJson(`/api/admin/board-cards?id=${id}`, 'DELETE'),
+              { onError: setActionError }
+            );
+            if (result) invalidateCardReaders();
           }}
         />
       )}

@@ -6,11 +6,13 @@
 // posted. A comment may be files alone. A goal has no board to keep files
 // on, so its comments are words only.
 
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref } from '@/lib/boards/files';
 import type { MentionPerson } from '@/lib/boards/mentions';
-import { readError, sendJson } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import { isTempId, optimistic, tempId } from '@/lib/client/optimistic';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
@@ -43,6 +45,7 @@ export function ActivityFeed({
   columns,
   people,
   heading = 'Activity',
+  viewerEmail,
 }: {
   /** Exactly one of these; it decides which trail is read and commented on. */
   cardId?: string;
@@ -53,72 +56,86 @@ export function ActivityFeed({
   columns: BoardColumnRow[];
   people: PeopleNames;
   heading?: string;
+  /** Who is writing, so a comment still on its way carries their name. */
+  viewerEmail?: string;
 }) {
-  const [events, setEvents] = useState<BoardEventRow[]>([]);
-  const [names, setNames] = useState<PeopleNames>(people);
   const [note, setNote] = useState('');
-  const [mentionPeople, setMentionPeople] = useState<MentionPerson[]>([]);
-  const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
   // The files picked for the comment being written, already uploaded.
   const [files, setFiles] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   // Remounts the picker after a post, so its tiles start empty.
   const [pickerKey, setPickerKey] = useState(0);
   const takesFiles = Boolean(cardId && boardId);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const query = cardId ? `cardId=${cardId}` : goalId ? `goalId=${goalId}` : '';
 
-  const load = useCallback(async () => {
-    if (!query) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/board-events?${query}`);
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as EventsResponse;
-      setEvents(body.events);
-      setMentionPeople(body.mentionPeople ?? []);
-      setAttachments(body.attachments ?? []);
-      setNames({ ...people, ...(body.people ?? {}) });
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the activity');
-    } finally {
-      setLoading(false);
-    }
-  }, [query, people]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Cached across drawers and navigations: reopening a card paints its
+  // discussion at once and revalidates behind it.
+  const feed = useCachedJson<EventsResponse>(query ? `/api/admin/board-events?${query}` : null);
+  const events = feed.data?.events ?? [];
+  const mentionPeople = feed.data?.mentionPeople ?? [];
+  const attachments = feed.data?.attachments ?? [];
+  const names = useMemo(() => ({ ...people, ...(feed.data?.people ?? {}) }), [people, feed.data]);
+  const loading = feed.loading;
 
   const comments = events.filter((entry) => entry.action === 'comment');
   const activity = events.filter((entry) => entry.action !== 'comment');
 
+  // The comment is on the page the moment it is sent — a pending entry at
+  // the top, under the writer's name — and the composer is clear for the
+  // next one. The server's entry (its id, its files) takes the pending one's
+  // place when it lands; a refused post withdraws it with the API's message
+  // and hands the words back to the composer.
   const comment = async (event: FormEvent) => {
     event.preventDefault();
     const body = note.trim();
-    if ((!body && files.length === 0) || busy || uploading) return;
-    setBusy(true);
+    if ((!body && files.length === 0) || uploading) return;
+    const pendingId = tempId();
+    const pending: BoardEventRow = {
+      id: pendingId,
+      goal_id: goalId ?? null,
+      card_id: cardId ?? null,
+      action: 'comment',
+      actor: viewerEmail ?? '',
+      detail: files.length > 0 ? { files: files.length } : {},
+      note: body,
+      created_at: new Date().toISOString(),
+    };
+    const sentFiles = files;
     setError(null);
-    try {
-      await sendJson('/api/admin/board-events', 'POST', {
-        cardId,
-        goalId,
-        note: body,
-        ...(files.length > 0 ? { attachmentIds: files } : {}),
-      });
-      setNote('');
-      setFiles([]);
-      setPickerKey((n) => n + 1);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not post that');
-    } finally {
-      setBusy(false);
-    }
+    setNote('');
+    setFiles([]);
+    setPickerKey((n) => n + 1);
+    await optimistic(
+      feed.setData,
+      (current) => ({ ...current, events: [...(current?.events ?? []), pending] }),
+      () =>
+        sendJson<{ event: BoardEventRow; attachments?: AttachmentSummary[] }>(
+          '/api/admin/board-events',
+          'POST',
+          {
+            cardId,
+            goalId,
+            note: body,
+            ...(sentFiles.length > 0 ? { attachmentIds: sentFiles } : {}),
+          }
+        ),
+      {
+        reconcile: (current, posted) => ({
+          ...current,
+          events: (current?.events ?? []).map((entry) =>
+            entry.id === pendingId ? posted.event : entry
+          ),
+          attachments: [...(current?.attachments ?? []), ...(posted.attachments ?? [])],
+        }),
+        onError: (message) => {
+          setError(message);
+          setNote(body);
+          setFiles(sentFiles);
+        },
+      }
+    );
   };
 
   return (
@@ -144,7 +161,7 @@ export function ActivityFeed({
           value={note}
           onChange={setNote}
           people={mentionPeople}
-          disabled={busy}
+          disabled={false}
         />
         {takesFiles && boardId && (
           <div className="mt-2">
@@ -157,7 +174,6 @@ export function ActivityFeed({
               params={{ boardId, for: 'comment' }}
               href={adminAttachmentHref}
               unpick={unpickCommentFile}
-              disabled={busy}
               onBusyChange={setUploading}
               onChange={(ids) => setFiles(ids ?? [])}
             />
@@ -167,9 +183,9 @@ export function ActivityFeed({
           <button
             type="submit"
             className={formButtonClass}
-            disabled={busy || uploading || (!note.trim() && files.length === 0)}
+            disabled={uploading || (!note.trim() && files.length === 0)}
           >
-            {busy ? 'Posting…' : uploading ? 'Uploading…' : 'Comment'}
+            {uploading ? 'Uploading…' : 'Comment'}
           </button>
         </div>
       </form>
@@ -261,7 +277,11 @@ export function EventEntries({
       }
     >
       {[...visible].reverse().map((entry) => (
-        <li key={entry.id} className="flex gap-2 text-sm">
+        // A comment still on its way to the server sits dimmed until it lands.
+        <li
+          key={entry.id}
+          className={`flex gap-2 text-sm ${isTempId(entry.id) ? 'opacity-60' : ''}`}
+        >
           <time
             dateTime={entry.created_at}
             title={new Date(entry.created_at).toLocaleString()}
@@ -274,7 +294,9 @@ export function EventEntries({
             // links and checklists render; the outer margins are trimmed to
             // keep a one-line comment on one line's worth of space.
             <div className="min-w-0 flex-1 break-words">
-              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>
+              <span className="text-[var(--pyre-creme)]">
+                {entry.actor ? personName(entry.actor, people) : 'You'}
+              </span>
               {entry.note?.trim() && (
                 <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
                   <SopMarkdown content={entry.note} />
