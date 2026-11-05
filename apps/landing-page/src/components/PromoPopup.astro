@@ -205,7 +205,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
     <button
       data-popup-tab
       type="button"
-      aria-label={`Reopen offer: ${promoConfig.promoText}`}
+      aria-label={`Reopen: ${promoConfig.promoText}`}
       class="fixed right-0 top-1/2 -translate-y-1/2 z-50 hidden cursor-pointer flex flex-col items-center gap-0.5 rounded-l-full bg-[oklch(0.30_0.02_85)] border border-r-0 border-[var(--pyre-gold)] px-1.5 py-3 shadow-[-4px_0_12px_rgba(219,177,85,0.15)] transition-all duration-300 hover:bg-[var(--pyre-red)] hover:border-[var(--pyre-gold)] opacity-0"
     >
       {promoConfig.promoText.toUpperCase().split('').map(char =>
@@ -235,7 +235,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
 
     /**
      * Pick the first popup (in config order) whose date window is live and
-     * whose offer hasn't already been taken. Everything else is removed.
+     * that the visitor hasn't already completed. Everything else is removed.
      */
     function selectPopup(container: HTMLElement): HTMLElement | null {
       const candidates = Array.from(container.querySelectorAll<HTMLElement>('[data-promo-popup]'));
@@ -255,7 +255,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
         if (live && starts && now < new Date(starts)) live = false;
         if (live && expires && now > new Date(expires)) live = false;
 
-        // Offer already taken (form submitted successfully)
+        // Already completed (form submitted successfully)
         if (live) {
           try {
             if (localStorage.getItem('pyre-popup-taken-' + popupId) === '1') live = false;
@@ -399,7 +399,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
       }
 
       const removeAll = () => {
-        // Fully remove everything (offer taken)
+        // Fully remove everything (form submitted)
         try {
           localStorage.setItem(takenKey, '1');
         } catch {}
@@ -579,20 +579,20 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
                   (window as any).posthog.identify(email);
                   (window as any).posthog.people.set({
                     email: email,
-                    signup_source: 'intro_offer_popup',
+                    signup_source: 'mailing_list',
                     signup_date: new Date().toISOString(),
                   });
-                  (window as any).posthog.capture('Intro Offer Signup', {
+                  (window as any).posthog.capture('Mailing List Signup', {
                     email,
                     source: 'promo_popup',
                     ...attribution,
                   });
                 }
 
-                // Offer taken. With a redirect, send the visitor straight to
-                // checkout (same tab, so no popup blocker after the async
-                // JSONP callback) and show a fallback link meanwhile.
-                // Otherwise remove the popup after showing success (no tab).
+                // Signed up. With a redirect, send the visitor on (same tab,
+                // so no popup blocker after the async JSONP callback) and show
+                // a fallback link meanwhile. Otherwise remove the popup after
+                // showing success (no tab).
                 const redirectHref = popupForm.getAttribute('data-redirect-href');
                 if (redirectHref) {
                   try {
