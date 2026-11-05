@@ -4,14 +4,19 @@
 // page costs no extra request; from there a slow poll while the tab is
 // visible keeps it fresh, opening the popover fetches the rows, and the
 // NOTIFICATIONS_EVENT the inbox and thread islands fire after they mark
-// rows read updates it in place. Rows in the popover can be dismissed (the
-// button, or a left swipe) or swiped read and unread; a row read here stays
-// in the list until the next fetch so the swipe can be taken back. Header islands remount on every
-// ClientRouter navigation, so the poll timer never outlives a page.
+// rows read updates it in place. The rows go through the shared JSON cache,
+// so the popover reopens on the next page with what it showed on the last
+// one while a fresh list arrives. Rows in the popover can be dismissed (the
+// button, or a left swipe) or swiped read and unread — each shows at once
+// and is put back if the server refuses; a row read here stays in the list
+// until the next fetch so the swipe can be taken back. Header islands
+// remount on every ClientRouter navigation, so the poll timer never
+// outlives a page.
 // Popover mechanics follow AdminNav.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readError } from '@/lib/client/api';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import type { StaffNotificationRow } from '@/lib/db';
@@ -61,31 +66,45 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
   const [count, setCount] = useState(initialCount);
   const [open, setOpen] = useState(false);
   const { mounted, closing } = usePresence(open);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [feed, setFeed] = useState<FeedResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // The feed is only wanted once the popover opens or the poll first ticks:
+  // until then the server-painted count is all the page needs, and no
+  // request goes out for it.
+  const [wanted, setWanted] = useState(false);
+  const {
+    data: feed,
+    error: feedError,
+    loading,
+    reload: refetch,
+    setData: setFeed,
+  } = useCachedJson<FeedResponse>(wanted ? FEED_URL : null);
 
   // Whatever the feed says is the count now — the server prop was right at
   // render time, and any island that changes it fires the event below.
   const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(FEED_URL, { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as FeedResponse;
-      // The popover lists what was unread when it was fetched; rows read
-      // from it afterwards keep their place until the next fetch.
-      setFeed({ ...data, notifications: data.notifications.filter((n) => isUnread(n)) });
-      setCount(data.unreadCount);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    setWanted(true);
+    await refetch();
+  }, [refetch]);
+  const lastSeen = useRef<FeedResponse | null>(null);
+  useEffect(() => {
+    if (!feed || feed === lastSeen.current) return;
+    lastSeen.current = feed;
+    setCount(feed.unreadCount);
+  }, [feed]);
+  // The first read happens once the popover asks for it (the hook stands
+  // down while `wanted` is false, and only its own fetch can set this).
+  useEffect(() => {
+    if (feedError) setError(feedError);
+  }, [feedError]);
+
+  // The popover lists what was unread when it was last fetched; a row read
+  // from it afterwards keeps its place until the next fetch, so the swipe
+  // can be taken back. Those rows are remembered here and forgotten when a
+  // fetch lands (reload resolves once it has).
+  const touched = useRef(new Set<string>());
+  const rows = (feed?.notifications ?? []).filter((n) => isUnread(n) || touched.current.has(n.id));
 
   useEffect(() => {
     const onEvent = (event: Event) => {
@@ -116,26 +135,35 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
 
   const toggle = useCallback(() => {
     setOpen((v) => {
-      if (!v) void reload();
+      if (!v) {
+        touched.current.clear();
+        void reload().then(() => touched.current.clear());
+      }
       return !v;
     });
   }, [reload]);
 
   const markAllRead = async () => {
-    setBusy(true);
     setError(null);
-    try {
-      const data = await patch({ all: true, read: true });
-      setCount(data.unreadCount);
-      setFeed((prev) =>
-        prev ? { ...prev, unreadCount: data.unreadCount, notifications: [] } : prev
-      );
-      invalidateJson('/api/admin/notifications');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to mark read');
-    } finally {
-      setBusy(false);
-    }
+    const before = count;
+    setCount(0);
+    await optimistic(
+      setFeed,
+      (prev) => (prev ? { ...prev, unreadCount: 0, notifications: [] } : prev),
+      async () => {
+        const data = await patch({ all: true, read: true });
+        setCount(data.unreadCount);
+        return data;
+      },
+      {
+        reconcile: (prev, data) => (prev ? { ...prev, unreadCount: data.unreadCount } : prev),
+        onError: (message) => {
+          setCount(before);
+          setError(message || 'Failed to mark read');
+        },
+      }
+    );
+    invalidateJson('/api/admin/notifications');
   };
 
   const markOneRead = (n: StaffNotificationRow) => {
@@ -176,6 +204,7 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
 
   const toggleRead = (n: StaffNotificationRow, read: boolean) => {
     if (read === !isUnread(n)) return;
+    touched.current.add(n.id);
     setRow(n.id, { read_at: read ? new Date().toISOString() : null });
     setCount((c) => Math.max(0, c + (read ? -1 : 1)));
     void settle({ ids: [n.id], read }, 'Failed to update');
@@ -227,7 +256,6 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
             {count > 0 && (
               <button
                 type="button"
-                disabled={busy}
                 onClick={() => void markAllRead()}
                 className="font-mono text-[10px] uppercase tracking-wide text-white/50 hover:text-white disabled:opacity-40"
               >
@@ -241,7 +269,7 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
               <p className="px-3 py-4 text-center text-xs text-white/40">Loading…</p>
             ) : (
               <NotificationList
-                notifications={feed?.notifications ?? []}
+                notifications={rows}
                 compact
                 emptyText="No unread notifications."
                 onOpen={markOneRead}
