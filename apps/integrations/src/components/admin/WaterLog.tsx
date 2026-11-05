@@ -1059,8 +1059,26 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       }))
     )
       return;
+    // The entry leaves the log and the chart at once; a refused delete puts
+    // it back where it was.
     setDeletingId(record.id);
     setLogError('');
+    const inLog = records.some((r) => r.id === record.id);
+    const inChart = chartRecords.some((r) => r.id === record.id);
+    setRecords((prev) => prev.filter((r) => r.id !== record.id));
+    if (inLog) setTotal((prev) => Math.max(0, prev - 1));
+    setChartRecords((prev) => prev.filter((r) => r.id !== record.id));
+    const restore = () => {
+      const put = (prev: WaterTestRow[]) =>
+        prev.some((r) => r.id === record.id)
+          ? prev
+          : [...prev, record].sort((a, b) => b.created_at.localeCompare(a.created_at));
+      if (inLog) {
+        setRecords(put);
+        setTotal((prev) => prev + 1);
+      }
+      if (inChart) setChartRecords(put);
+    };
     try {
       const res = await fetch(`/api/admin/water-tests?id=${encodeURIComponent(record.id)}`, {
         method: 'DELETE',
@@ -1073,10 +1091,8 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      setRecords((prev) => prev.filter((r) => r.id !== record.id));
-      setTotal((prev) => Math.max(0, prev - 1));
-      setChartRecords((prev) => prev.filter((r) => r.id !== record.id));
     } catch (err) {
+      restore();
       setLogError(err instanceof Error ? err.message : 'Failed to delete entry');
     } finally {
       setDeletingId(null);

@@ -35,6 +35,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import { type DutyDropTarget, moveDuty } from '@/lib/schedule/duty-order';
 import { boardCollisions, useBoardSensors } from './boards/dnd';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -140,7 +141,7 @@ function bodyFor(form: DutyForm): Record<string, unknown> {
 }
 
 export function ShiftDutiesManager() {
-  const { data, error, loading, reload } = useCachedJson<DutiesResponse>(ENDPOINT);
+  const { data, error, loading, reload, setData } = useCachedJson<DutiesResponse>(ENDPOINT);
   const duties = useMemo(() => data?.duties ?? [], [data]);
   const uses = data?.uses ?? {};
   const sops = data?.sops ?? [];
@@ -192,25 +193,39 @@ export function ShiftDutiesManager() {
   );
   const sopTitle = (id: string | null) => sops.find((s) => s.id === id)?.title;
 
-  /** Run a mutation, then refetch the list here and on the board. */
-  const mutate = async (tag: string, run: () => Promise<unknown>): Promise<boolean> => {
+  /**
+   * Run a mutation and refetch the list afterwards — in the background when
+   * `update` has already shown the change (the server's answer settles any
+   * derived detail: sort order, the side rule), and only after the request
+   * otherwise. The board reads the same entry, so it refetches too. A refusal
+   * puts the list back and says why.
+   */
+  const mutate = async (
+    tag: string,
+    run: () => Promise<unknown>,
+    update?: (duties: DutyView[]) => DutyView[]
+  ): Promise<boolean> => {
     setBusy(tag);
     setMessage(null);
-    try {
-      await run();
-      invalidateJson(ENDPOINT);
-      await reload();
-      return true;
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not save');
-      return false;
-    } finally {
-      setBusy(null);
-    }
+    const result = await optimistic(
+      setData,
+      (prev) => (prev && update ? { ...prev, duties: update(prev.duties) } : prev),
+      run,
+      { onError: setMessage }
+    );
+    setBusy(null);
+    if (result === null) return false;
+    invalidateJson(ENDPOINT);
+    void reload();
+    return true;
   };
 
   const patch = (key: string, body: Record<string, unknown>) =>
-    mutate(key, () => sendJson(ENDPOINT, 'PATCH', { key, ...body }));
+    mutate(
+      key,
+      () => sendJson(ENDPOINT, 'PATCH', { key, ...body }),
+      (list) => list.map((d) => (d.key === key ? { ...d, ...(body as Partial<DutyView>) } : d))
+    );
 
   /** "duty:host" / "phase:session" — the drag ids. */
   const targetOf = (id: unknown): DutyDropTarget | null => {
@@ -294,10 +309,12 @@ export function ShiftDutiesManager() {
   const remove = async () => {
     if (!deleting) return;
     const key = deleting.key;
-    const ok = await mutate(key, () =>
-      sendJson(`${ENDPOINT}?key=${encodeURIComponent(key)}`, 'DELETE')
+    setDeleting(null);
+    await mutate(
+      key,
+      () => sendJson(`${ENDPOINT}?key=${encodeURIComponent(key)}`, 'DELETE'),
+      (list) => list.filter((d) => d.key !== key)
     );
-    if (ok) setDeleting(null);
   };
 
   /** "Anyone", or the people who can do it. */
@@ -371,7 +388,7 @@ export function ShiftDutiesManager() {
                 <button
                   type="button"
                   className={formButtonClass}
-                  disabled={busy !== null}
+                  disabled={busy === duty.key}
                   onClick={() => {
                     setEditing(duty.key);
                     setForm(formFor(duty, trainedOf(duty.key)));
@@ -382,7 +399,7 @@ export function ShiftDutiesManager() {
                 <button
                   type="button"
                   className={formButtonClass}
-                  disabled={busy !== null}
+                  disabled={busy === duty.key}
                   onClick={() => void patch(duty.key, { archived: !duty.archived })}
                 >
                   {duty.archived ? 'Restore' : 'Retire'}
@@ -391,7 +408,7 @@ export function ShiftDutiesManager() {
                   <button
                     type="button"
                     className={formButtonClass}
-                    disabled={busy !== null}
+                    disabled={busy === duty.key}
                     onClick={() => setDeleting(duty)}
                   >
                     Delete

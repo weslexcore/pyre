@@ -13,8 +13,9 @@ import { isSessionExpired, SessionExpired } from '@/components/admin/SessionExpi
 import { formButtonClass } from '@/components/admin/ui';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
 import { parseExternalUrl, qrFilename } from '@/lib/campaigns/links';
-import { readError } from '@/lib/client/api';
+import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import { DEFAULT_QR_STYLE } from '@/lib/qr/style';
 import { aliasError, normalizeAlias, SHORT_LINK_LIMITS } from '@/lib/shortlinks/alias';
 import type {
@@ -88,28 +89,35 @@ export function ShortLinks() {
     [setData]
   );
 
+  // Both edits land in the table at once and the request goes out behind
+  // them; a refusal puts the row back and reports why (and rejects, so the
+  // row's own editor knows not to close).
   const relabel = useCallback(
     async (code: string, label: string): Promise<void> => {
       setBusyCode(code);
       setActionError(null);
-      try {
-        const res = await fetch(`${LIST_URL}/${encodeURIComponent(code)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label }),
-        });
-        if (!res.ok) {
-          const message = campaignErrorMessage(await readError(res));
-          setActionError(message);
-          throw new Error(message);
+      const result = await optimistic(
+        setData,
+        (prev) =>
+          prev
+            ? { ...prev, links: prev.links.map((l) => (l.code === code ? { ...l, label } : l)) }
+            : prev,
+        () =>
+          sendJson<{ link: StandaloneShortLink }>(
+            `${LIST_URL}/${encodeURIComponent(code)}`,
+            'PATCH',
+            {
+              label,
+            }
+          ),
+        {
+          reconcile: (prev, { link }) =>
+            prev ? { ...prev, links: prev.links.map((l) => (l.code === code ? link : l)) } : prev,
+          onError: (message) => setActionError(campaignErrorMessage(message)),
         }
-        const json = (await res.json()) as { link: StandaloneShortLink };
-        setData((prev) =>
-          prev ? { ...prev, links: prev.links.map((l) => (l.code === code ? json.link : l)) } : prev
-        );
-      } finally {
-        setBusyCode(null);
-      }
+      );
+      setBusyCode(null);
+      if (result === null) throw new Error('That did not save');
     },
     [setData]
   );
@@ -118,22 +126,18 @@ export function ShortLinks() {
     async (code: string): Promise<void> => {
       setBusyCode(code);
       setActionError(null);
-      try {
-        const res = await fetch(`${LIST_URL}/${encodeURIComponent(code)}`, { method: 'DELETE' });
-        if (!res.ok) {
-          const message = campaignErrorMessage(await readError(res));
-          setActionError(message);
-          throw new Error(message);
-        }
-        setData((prev) =>
+      const result = await optimistic(
+        setData,
+        (prev) =>
           prev
             ? { ...prev, links: prev.links.filter((l) => l.code !== code), total: prev.total - 1 }
-            : prev
-        );
-        invalidateJson('/api/admin/campaigns');
-      } finally {
-        setBusyCode(null);
-      }
+            : prev,
+        () => sendJson(`${LIST_URL}/${encodeURIComponent(code)}`, 'DELETE'),
+        { onError: (message) => setActionError(campaignErrorMessage(message)) }
+      );
+      setBusyCode(null);
+      if (result === null) throw new Error('That did not delete');
+      invalidateJson('/api/admin/campaigns');
     },
     [setData]
   );

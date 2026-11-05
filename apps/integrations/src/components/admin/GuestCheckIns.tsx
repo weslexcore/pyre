@@ -35,6 +35,7 @@ import { buttonClass, cardClass, compactSelectClass, goldButtonClass } from '@/c
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import { timeAgo } from '@/lib/client/relativeTime';
 import { useDebounced } from '@/lib/client/useDebounced';
 import {
@@ -367,26 +368,36 @@ export function GuestCheckIns() {
   /** Run one change for a guest; resolves true when it saved. */
   async function act(
     guest: FloorGuest,
-    run: () => Promise<{ momenceSynced?: boolean }>
+    run: () => Promise<{ momenceSynced?: boolean }>,
+    update?: (guest: FloorGuest) => FloorGuest
   ): Promise<boolean> {
+    // The guest's row changes at once when the change is known in advance
+    // (checked in now, checked in no longer); the floor is read again behind
+    // it for the server's own times, and a refusal puts the row back.
     setBusy(guest.bookingId);
     setNotice(null);
-    try {
-      const result = await run();
-      if (result.momenceSynced === false) {
-        setNotice({
-          tone: 'warn',
-          text: `${guest.name}'s clock started, but Momence didn't take the check-in. Check them in there too.`,
-        });
-      }
-      await reload();
-      return true;
-    } catch (e) {
-      setNotice({ tone: 'error', text: e instanceof Error ? e.message : String(e) });
-      return false;
-    } finally {
-      setBusy(null);
+    const result = await optimistic(
+      setData,
+      (prev) =>
+        prev && update
+          ? {
+              ...prev,
+              guests: prev.guests.map((g) => (g.bookingId === guest.bookingId ? update(g) : g)),
+            }
+          : prev,
+      run,
+      { onError: (text) => setNotice({ tone: 'error', text }) }
+    );
+    setBusy(null);
+    if (result === null) return false;
+    if (result.momenceSynced === false) {
+      setNotice({
+        tone: 'warn',
+        text: `${guest.name}'s clock started, but Momence didn't take the check-in. Check them in there too.`,
+      });
     }
+    void reload();
+    return true;
   }
 
   // Every change names the view, so the route checks the booking against the
@@ -398,16 +409,41 @@ export function GuestCheckIns() {
   });
 
   const checkIn = (guest: FloorGuest) =>
-    act(guest, () => sendJson<{ momenceSynced: boolean }>(FLOOR_URL, 'POST', ids(guest)));
+    act(
+      guest,
+      () => sendJson<{ momenceSynced: boolean }>(FLOOR_URL, 'POST', ids(guest)),
+      (g) => ({
+        ...g,
+        checkedIn: true,
+        checkedInAt: new Date().toISOString(),
+        estimated: false,
+        checkedOutAt: null,
+      })
+    );
 
   // A guest checked in elsewhere has only an estimated time; send it along
   // so the first edit records the time they were already being shown.
+  // A new arrival time or length shows on the row at once; anything else
+  // waits for the floor to be read again.
   const patch = (guest: FloorGuest, changes: Record<string, unknown>) =>
-    act(guest, () =>
-      sendJson(FLOOR_URL, 'PATCH', {
-        ...ids(guest),
-        ...(guest.estimated && { checkedInAt: guest.checkedInAt }),
-        ...changes,
+    act(
+      guest,
+      () =>
+        sendJson(FLOOR_URL, 'PATCH', {
+          ...ids(guest),
+          ...(guest.estimated && { checkedInAt: guest.checkedInAt }),
+          ...changes,
+        }),
+      (g) => ({
+        ...g,
+        ...(typeof changes.checkedInAt === 'string' && {
+          checkedInAt: changes.checkedInAt,
+          estimated: false,
+        }),
+        ...(typeof changes.minutes === 'number' && {
+          minutes: changes.minutes,
+          customMinutes: true,
+        }),
       })
     );
 
@@ -465,7 +501,18 @@ export function GuestCheckIns() {
       return;
     }
     setEditing(null);
-    void act(guest, () => sendJson(`${FLOOR_URL}?${new URLSearchParams(ids(guest))}`, 'DELETE'));
+    void act(
+      guest,
+      () => sendJson(`${FLOOR_URL}?${new URLSearchParams(ids(guest))}`, 'DELETE'),
+      (g) => ({
+        ...g,
+        checkedIn: false,
+        checkedInAt: null,
+        estimated: false,
+        checkedOutAt: null,
+        checkpointsDone: {},
+      })
+    );
   };
 
   return (

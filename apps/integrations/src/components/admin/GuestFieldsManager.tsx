@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import type { GuestProfileFieldRow } from '@/lib/db';
 import {
   DEFAULT_SECTION,
@@ -73,37 +74,41 @@ export function GuestFieldsManager() {
     [fields]
   );
 
-  const replaceField = (next: GuestProfileFieldRow) =>
-    setData((prev) =>
-      prev ? { ...prev, fields: prev.fields.map((f) => (f.key === next.key ? next : f)) } : prev
-    );
-
   const afterChange = () => {
     // Profiles render from this list too.
     invalidateJson('/api/admin/guests');
   };
 
-  const patch = async (key: string, body: Record<string, unknown>) => {
+  // The row shows the change at once (`next` is the body as the row will
+  // carry it); the saved row replaces it when the server answers, and a
+  // refusal puts the old row back.
+  const patch = async (
+    key: string,
+    body: Record<string, unknown>,
+    next: Partial<GuestProfileFieldRow> = body as Partial<GuestProfileFieldRow>
+  ) => {
     setBusy(key);
     setMessage(null);
-    try {
-      const { field } = await sendJson<{ field: GuestProfileFieldRow }>(
-        '/api/admin/guest-fields',
-        'PATCH',
-        {
+    const result = await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? { ...prev, fields: prev.fields.map((f) => (f.key === key ? { ...f, ...next } : f)) }
+          : prev,
+      () =>
+        sendJson<{ field: GuestProfileFieldRow }>('/api/admin/guest-fields', 'PATCH', {
           key,
           ...body,
-        }
-      );
-      replaceField(field);
-      afterChange();
-      return true;
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not save');
-      return false;
-    } finally {
-      setBusy(null);
-    }
+        }),
+      {
+        reconcile: (prev, { field }) =>
+          prev ? { ...prev, fields: prev.fields.map((f) => (f.key === key ? field : f)) } : prev,
+        onError: setMessage,
+      }
+    );
+    setBusy(null);
+    if (result !== null) afterChange();
+    return result !== null;
   };
 
   /**
@@ -126,21 +131,35 @@ export function GuestFieldsManager() {
     const b = order.indexOf(other);
     [order[a], order[b]] = [order[b], order[a]];
 
+    // The two rows swap at once; the server's ranked list replaces the
+    // guess when it answers, and a refusal swaps them back.
+    const fullOrder = [...order, ...archived.map((f) => f.key)];
+    const rank = new Map(fullOrder.map((k, index) => [k, index]));
     setBusy(key);
     setMessage(null);
-    try {
-      const { fields: next } = await sendJson<{ fields: GuestProfileFieldRow[] }>(
-        '/api/admin/guest-fields',
-        'PATCH',
-        { order: [...order, ...archived.map((f) => f.key)] }
-      );
-      setData((prev) => (prev ? { ...prev, fields: next } : prev));
-      afterChange();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not reorder');
-    } finally {
-      setBusy(null);
-    }
+    const result = await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              fields: prev.fields.map((f) => ({
+                ...f,
+                sort_order: rank.get(f.key) ?? f.sort_order,
+              })),
+            }
+          : prev,
+      () =>
+        sendJson<{ fields: GuestProfileFieldRow[] }>('/api/admin/guest-fields', 'PATCH', {
+          order: fullOrder,
+        }),
+      {
+        reconcile: (prev, { fields: next }) => (prev ? { ...prev, fields: next } : prev),
+        onError: setMessage,
+      }
+    );
+    setBusy(null);
+    if (result !== null) afterChange();
   };
 
   const saveEdit = async (field: GuestProfileFieldRow) => {
@@ -152,7 +171,14 @@ export function GuestFieldsManager() {
       show_on_roster: edit.showOnRoster,
     };
     if (kindHasOptions(field.kind)) body.options = edit.options;
-    const ok = await patch(field.key, body);
+    // Options are typed as text and split server-side, so the row shows the
+    // saved list only once it comes back; the rest is shown at once.
+    const ok = await patch(field.key, body, {
+      label: edit.label,
+      section: edit.section,
+      hint: edit.hint || null,
+      show_on_roster: edit.showOnRoster,
+    });
     if (ok) {
       setEditing(null);
       setEdit(null);
@@ -161,21 +187,19 @@ export function GuestFieldsManager() {
 
   const remove = async () => {
     if (!deleting) return;
-    setBusy(deleting.key);
+    const gone = deleting.key;
+    setBusy(gone);
     setMessage(null);
-    try {
-      await sendJson(`/api/admin/guest-fields?key=${encodeURIComponent(deleting.key)}`, 'DELETE');
-      const gone = deleting.key;
-      setData((prev) =>
-        prev ? { ...prev, fields: prev.fields.filter((f) => f.key !== gone) } : prev
-      );
-      setDeleting(null);
-      afterChange();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not delete');
-    } finally {
-      setBusy(null);
-    }
+    setDeleting(null);
+    // The row goes at once; a refusal brings it back and says why.
+    const result = await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, fields: prev.fields.filter((f) => f.key !== gone) } : prev),
+      () => sendJson(`/api/admin/guest-fields?key=${encodeURIComponent(gone)}`, 'DELETE'),
+      { onError: setMessage }
+    );
+    setBusy(null);
+    if (result !== null) afterChange();
   };
 
   const renderField = (field: GuestProfileFieldRow) => {

@@ -11,8 +11,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
-import { readError } from '@/lib/client/api';
+import { readError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 import type {
   LostFoundAttachmentRow,
   LostFoundEventRow,
@@ -152,7 +153,7 @@ function landingNotice(): { notice: string | null; problem: string | null } {
 
 export function LostFoundDetail({ itemId }: { itemId: string }) {
   const url = itemId ? `/api/admin/lost-found?id=${itemId}` : null;
-  const { data, error, loading, reload } = useCachedJson<DetailResponse>(url);
+  const { data, error, loading, reload, setData } = useCachedJson<DetailResponse>(url);
 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(() => landingNotice().notice);
@@ -182,26 +183,33 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
     await reload();
   };
 
-  const setStatus = async (status: string) => {
+  /**
+   * An edit to the item shows at once (`next` is how the row will carry the
+   * body); the request goes out behind it, and a refusal puts the old row
+   * back. The list page and the event log read the server afterwards, in
+   * the background — the audit trail is the server's to write.
+   */
+  const patchItem = async (
+    body: Record<string, unknown>,
+    next: Partial<LostFoundItemRow>
+  ): Promise<boolean> => {
     setBusy(true);
     setActionError(null);
-    try {
-      const res = await fetch('/api/admin/lost-found', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, status }),
-      });
-      if (!res.ok) {
-        setActionError(await readError(res));
-        return;
-      }
-      await refresh();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-      setPending(null);
-    }
+    const result = await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, item: { ...prev.item, ...next } } : prev),
+      () => sendJson('/api/admin/lost-found', 'PATCH', { id: itemId, ...body }),
+      { onError: setActionError }
+    );
+    setBusy(false);
+    if (result === null) return false;
+    void refresh();
+    return true;
+  };
+
+  const setStatus = async (status: string) => {
+    await patchItem({ status }, { status: status as LostFoundItemRow['status'] });
+    setPending(null);
   };
 
   /**
@@ -210,28 +218,12 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
    * Sends nothing; the route moves the item out of the donation queue.
    */
   const setOwnerConfirmed = async (confirmed: boolean) => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch('/api/admin/lost-found', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, ownerConfirmed: confirmed }),
-      });
-      if (!res.ok) {
-        setActionError(await readError(res));
-        return;
-      }
+    if (await patchItem({ ownerConfirmed: confirmed }, { owner_confirmed: confirmed })) {
       setNotice(
         confirmed
           ? 'Marked as theirs. No email went out.'
           : "Unmarked — it's back in the queue with everything else."
       );
-      await refresh();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -265,26 +257,21 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
             storageLocation: draft.storageLocation,
           };
 
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch('/api/admin/lost-found', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, ...fields }),
-      });
-      if (!res.ok) {
-        setActionError(await readError(res));
-        return;
-      }
-      setNotice(editing === 'location' ? 'Moved.' : 'Saved.');
-      setEditing('none');
-      await refresh();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
+    const mode = editing;
+    setEditing('none');
+    const ok = await patchItem(
+      fields,
+      mode === 'location'
+        ? { storage_location: draft.storageLocation.trim() || null }
+        : {
+            title: draft.title.trim(),
+            description: draft.description.trim() || null,
+            storage_location: draft.storageLocation.trim() || null,
+          }
+    );
+    if (ok) setNotice(mode === 'location' ? 'Moved.' : 'Saved.');
+    // Refused: reopen the editor with what was typed, so nothing is lost.
+    else setEditing(mode);
   };
 
   const askOwner = async () => {

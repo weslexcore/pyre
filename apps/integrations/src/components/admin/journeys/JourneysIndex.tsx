@@ -11,6 +11,7 @@ import { Toggle } from '@/components/admin/Toggle';
 import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { timeAgo } from '@/lib/client/format';
+import { optimistic } from '@/lib/client/optimistic';
 import type { JourneyListResponse, JourneySummaryDto } from '@/lib/email/journeys/api-types';
 import {
   JOURNEY_ID_RE,
@@ -71,18 +72,26 @@ export function JourneysIndex() {
   const [query, setQuery] = useState('');
   const [orderError, setOrderError] = useState<string | null>(null);
 
+  // The switch flips at once; a refusal flips it back and says why. The
+  // editor's own cache entry for the journey is dropped so it sees the
+  // change too.
   const toggle = async (journey: JourneySummaryDto, enabled: boolean) => {
     setBusy(journey.id);
     setActionError(null);
-    try {
-      await sendJson(`/api/admin/journeys/${journey.id}`, 'PATCH', { enabled });
-      invalidateJson('/api/admin/journeys');
-      await reload();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
+    await optimistic(
+      setData,
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              journeys: prev.journeys.map((j) => (j.id === journey.id ? { ...j, enabled } : j)),
+            }
+          : prev,
+      () => sendJson(`/api/admin/journeys/${journey.id}`, 'PATCH', { enabled }),
+      { onError: setActionError }
+    );
+    invalidateJson(`/api/admin/journeys/${journey.id}`);
+    setBusy(null);
   };
 
   const all = data?.journeys ?? [];
