@@ -28,7 +28,9 @@ const banner: BannerConfig = {
   id: 'founding-unlimited-through-dec-31',
   text: founding.announcement,
   desktopText: founding.announcementDeadline,
-  href: founding.unlimited.href,
+  // The /unlimited landing page, not the Momence checkout: the page spells out
+  // the benefits and shows the price at its checkout step.
+  href: founding.landing.href,
   expiresAt: founding.endsAt,
   foundingCountdown: true,
   enabled: true,
