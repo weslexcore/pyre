@@ -6,9 +6,14 @@
 // schedule — so it's minted on first view rather than for the whole roster up
 // front, and Reset link is the revoke when one leaks or a phone is lost.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { buttonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
+
+const FEED_URL = '/api/admin/calendar-feed';
 
 interface FeedUrls {
   feedUrl: string;
@@ -21,29 +26,15 @@ interface FeedUrls {
 }
 
 export function CalendarSubscribe() {
-  const [urls, setUrls] = useState<FeedUrls | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Cached across the schedule tabs: the link is the same every visit, so
+  // it paints at once the second time around.
+  const { data: urls, error: loadError, setData: setUrls } = useCachedJson<FeedUrls>(FEED_URL);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? (urls ? null : loadError);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/admin/calendar-feed');
-        const body = await res.json();
-        if (cancelled) return;
-        if (!res.ok) setError(body.error ?? 'Could not load your calendar link');
-        else setUrls(body as FeedUrls);
-      } catch {
-        if (!cancelled) setError('Could not load your calendar link');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  // A reset has to wait: the new link only exists once the server minted it.
   const rotate = async () => {
     if (
       !(await confirmAction({
@@ -75,25 +66,19 @@ export function CalendarSubscribe() {
     }
   };
 
+  // The checkbox flips at once; the server's answer (the same URLs, with the
+  // choice recorded) replaces it, and a refusal flips it back.
   const setPaydays = async (enabled: boolean) => {
-    setBusy(true);
-    try {
-      const res = await fetch('/api/admin/calendar-feed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'payday', enabled }),
-      });
-      const body = await res.json();
-      if (!res.ok) setError(body.error ?? 'Could not save your payday choice');
-      else {
-        setUrls(body as FeedUrls);
-        setError(null);
+    setError(null);
+    await optimistic(
+      setUrls,
+      (prev) => (prev ? { ...prev, paydays: enabled } : prev),
+      () => sendJson<FeedUrls>(FEED_URL, 'POST', { action: 'payday', enabled }),
+      {
+        reconcile: (_prev, body) => body,
+        onError: (message) => setError(message || 'Could not save your payday choice'),
       }
-    } catch {
-      setError('Could not save your payday choice');
-    } finally {
-      setBusy(false);
-    }
+    );
   };
 
   const copy = async (value: string, key: string) => {
@@ -143,7 +128,6 @@ export function CalendarSubscribe() {
           <input
             type="checkbox"
             checked={urls.paydays}
-            disabled={busy}
             onChange={(e) => void setPaydays(e.target.checked)}
           />
           Include paydays in my calendar, as all-day events

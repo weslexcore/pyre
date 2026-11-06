@@ -10,7 +10,7 @@
 // with no campaign record can be added as campaigns from here in one click,
 // which is how the automated journeys become proper rows.
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import { SessionExpired } from '@/components/admin/SessionExpired';
 import { formButtonClass } from '@/components/admin/ui';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
@@ -18,7 +18,7 @@ import { goalMetricLabel, measurementsOf } from '@/lib/campaigns/goals';
 import { PLACEMENTS } from '@/lib/campaigns/placements';
 import { slugToName } from '@/lib/campaigns/slug';
 import type { CampaignGoal } from '@/lib/campaigns/types';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { BackLink } from './BackLink';
 
 interface CampaignRow {
@@ -114,42 +114,60 @@ const headCell = 'px-4 py-3';
 const numCell = 'px-4 py-3 text-right tabular-nums';
 
 export function CampaignPerformance() {
-  const [data, setData] = useState<PerformanceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<number>(30);
   const [view, setView] = useState<View>('campaign');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const fetchReport = useCallback(async (currentDays: number, fresh = false) => {
-    setLoading(true);
-    setError(null);
+  // One cache entry per window, so flipping between 7/30/90 days repaints
+  // from cache and revalidates behind it. The report is slow to build
+  // (PostHog), which is exactly when a stale paint beats a spinner.
+  const reportUrl = `/api/admin/campaign-performance?days=${days}`;
+  const {
+    data,
+    error: loadError,
+    loading,
+    refreshing,
+    setData,
+  } = useCachedJson<PerformanceResponse>(reportUrl);
+  const [freshError, setFreshError] = useState<string | null>(null);
+  const [fetchingFresh, setFetchingFresh] = useState(false);
+  const error =
+    freshError ??
+    (loadError === 'HTTP 401' || loadError === 'HTTP 403'
+      ? 'session_expired'
+      : loadError?.startsWith('HTTP ')
+        ? `Failed to fetch report (${loadError.slice(5)})`
+        : loadError
+          ? 'Network error'
+          : null);
+  const fetching = loading || refreshing || fetchingFresh;
+
+  // Refresh bypasses the server's own report cache too (fresh=1), so it is
+  // its own request rather than the hook's reload; the answer goes into the
+  // same cache entry the window reads.
+  const fetchFresh = useCallback(async () => {
+    setFetchingFresh(true);
+    setFreshError(null);
     try {
-      const res = await fetch(
-        `/api/admin/campaign-performance?days=${currentDays}${fresh ? '&fresh=1' : ''}`
-      );
+      const res = await fetch(`${reportUrl}&fresh=1`);
       if (res.status === 401 || res.status === 403) {
-        setError('session_expired');
+        setFreshError('session_expired');
         return;
       }
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(body?.error ?? `Failed to fetch report (${res.status})`);
+        setFreshError(body?.error ?? `Failed to fetch report (${res.status})`);
         return;
       }
-      setData(await res.json());
+      setData((await res.json()) as PerformanceResponse);
     } catch {
-      setError('Network error');
+      setFreshError('Network error');
     } finally {
-      setLoading(false);
+      setFetchingFresh(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchReport(days);
-  }, [days, fetchReport]);
+  }, [reportUrl, setData]);
 
   // Register a slug PostHog has seen as a campaign so it gets a real row.
   // Evergreen, pointing home: the automated journeys this exists for never
@@ -175,14 +193,14 @@ export function CampaignPerformance() {
           return;
         }
         invalidateJson('/api/admin/campaigns');
-        await fetchReport(days, true);
+        await fetchFresh();
       } catch {
         setAddError('Network error');
       } finally {
         setAdding(null);
       }
     },
-    [days, fetchReport]
+    [fetchFresh]
   );
 
   if (error === 'session_expired') {
@@ -276,11 +294,11 @@ export function CampaignPerformance() {
           </div>
           <button
             type="button"
-            onClick={() => fetchReport(days, true)}
-            disabled={loading}
+            onClick={() => void fetchFresh()}
+            disabled={fetching}
             className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Refresh'}
+            {fetching ? 'Loading...' : 'Refresh'}
           </button>
         </div>
       </div>
