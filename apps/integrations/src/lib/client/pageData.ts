@@ -14,13 +14,27 @@
 //
 // Client-bundle-safe: nothing here touches the server.
 
-import { addDays, todayEastern, weekStartOf } from '@pyre/schedule-core';
+import { addDays, lastConfirmedDate, todayEastern, weekStartOf } from '@pyre/schedule-core';
 
 /** Prefix of every route the admin islands read. */
 const API = '/api/admin';
 
 /** A page's first reads, given its pathname and query. */
 type Rule = (match: RegExpMatchArray, search: URLSearchParams) => string[];
+
+/** Today in the browser's own zone — the schedule islands key on this, not on Eastern. */
+function todayLocal(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+}
+
+/** How many days the month starting `monthStart` (YYYY-MM-01) has. */
+function daysInMonth(monthStart: string): number {
+  const [y, m] = monthStart.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
 
 /** The Monday-to-Sunday week around `date`, as the schedule board asks for it. */
 function weekRange(date: string): { start: string; end: string } {
@@ -38,17 +52,39 @@ function monthGrid(date: string): { start: string; end: string } {
 }
 
 const RULES: Array<[RegExp, Rule]> = [
-  // ScheduleBoard: the current week, drafts included; beside it the duty
-  // definitions and training the board decorates shifts with.
+  // ScheduleBoard, which keys its range on the browser's local date. The
+  // bare link opens the Set view (this Monday through the week the locked
+  // window ends in, live shifts only); a deep link with a date opens the
+  // week or month view, drafts included. Beside it, the duty definitions
+  // the board decorates shifts with.
   [
     /^\/admin\/schedule$/,
     (_m, search) => {
-      const date = search.get('date') ?? todayEastern();
-      const { start, end } = weekRange(date);
-      return [
-        `${API}/schedule-board?start=${start}&end=${end}&includeDrafts=1`,
-        `${API}/shift-duties`,
-      ];
+      const today = todayLocal();
+      const date = search.get('date');
+      const view = search.get('view') ?? (date ? 'week' : 'set');
+      let board: string | null = null;
+      if (view === 'set') {
+        const start = weekStartOf(today);
+        const end = addDays(weekStartOf(lastConfirmedDate(today)), 6);
+        board = `${API}/schedule-board?start=${start}&end=${end}`;
+      } else if (view === 'week') {
+        const { start, end } = weekRange(date ?? today);
+        board = `${API}/schedule-board?start=${start}&end=${end}&includeDrafts=1`;
+      } else if (view === 'month') {
+        const monthStart = `${(date ?? today).slice(0, 7)}-01`;
+        const end = addDays(monthStart, daysInMonth(monthStart) - 1);
+        board = `${API}/schedule-board?start=${monthStart}&end=${end}&includeDrafts=1`;
+      }
+      return [...(board ? [board] : []), `${API}/shift-duties`];
+    },
+  ],
+  // ScheduleTimeOff: six weeks ahead, from the browser's local date.
+  [
+    /^\/admin\/schedule\/availability$/,
+    () => {
+      const start = todayLocal();
+      return [`${API}/schedule-board?start=${start}&end=${addDays(start, 42)}`];
     },
   ],
   // ScheduleCalendar: this month's grid (shares the board cache with the week).
@@ -99,8 +135,12 @@ const RULES: Array<[RegExp, Rule]> = [
   [/^\/admin\/partners$/, () => [`${API}/partners`]],
   [/^\/admin\/referrals$/, () => [`${API}/referrals?`]],
   [/^\/admin\/email$/, () => [`${API}/email-stats?days=14`]],
-  [/^\/admin\/webhooks$/, () => [`${API}/webhook-stats?days=30`]],
+  [
+    /^\/admin\/webhooks$/,
+    () => [`${API}/webhook-logs?limit=50&offset=0`, `${API}/webhook-stats?days=30`],
+  ],
   [/^\/admin\/campaigns$/, () => [`${API}/campaigns?status=active`]],
+  [/^\/admin\/campaigns\/performance$/, () => [`${API}/campaign-performance?days=30`]],
   [/^\/admin\/campaigns\/shortlinks$/, () => [`${API}/shortlinks`]],
   [/^\/admin\/journeys$/, () => [`${API}/journeys`]],
 ];

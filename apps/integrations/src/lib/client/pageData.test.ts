@@ -18,17 +18,29 @@ describe('jsonUrlsFor', () => {
     expect(jsonUrlsFor('/admin/boards/')).toEqual(['/api/admin/boards']);
   });
 
-  it('builds the schedule board’s week from today, drafts included', () => {
-    const start = weekStartOf(todayEastern());
-    expect(jsonUrlsFor('/admin/schedule')).toEqual([
-      `/api/admin/schedule-board?start=${start}&end=${addDays(start, 6)}&includeDrafts=1`,
-      '/api/admin/shift-duties',
-    ]);
+  it('opens the schedule on the Set view: whole weeks, live shifts only', () => {
+    const [board, duties] = jsonUrlsFor('/admin/schedule');
+    expect(duties).toBe('/api/admin/shift-duties');
+    const match = board.match(/^\/api\/admin\/schedule-board\?start=(\S+)&end=(\S+)$/);
+    expect(match).not.toBeNull();
+    const [, start, end] = match as RegExpMatchArray;
+    expect(weekStartOf(start)).toBe(start);
+    expect(addDays(weekStartOf(end), 6)).toBe(end);
+    expect(end >= addDays(start, 13)).toBe(true);
   });
 
-  it('follows a deep link’s date on the schedule', () => {
-    const urls = jsonUrlsFor('/admin/schedule', new URLSearchParams('view=month&date=2026-11-18'));
-    expect(urls[0]).toBe('/api/admin/schedule-board?start=2026-11-16&end=2026-11-22&includeDrafts=1');
+  it('follows a deep link’s date and view on the schedule, drafts included', () => {
+    const week = jsonUrlsFor('/admin/schedule', new URLSearchParams('view=week&date=2026-11-18'));
+    expect(week[0]).toBe(
+      '/api/admin/schedule-board?start=2026-11-16&end=2026-11-22&includeDrafts=1'
+    );
+    const month = jsonUrlsFor('/admin/schedule', new URLSearchParams('view=month&date=2026-11-18'));
+    expect(month[0]).toBe(
+      '/api/admin/schedule-board?start=2026-11-01&end=2026-11-30&includeDrafts=1'
+    );
+    // A date alone means the week view.
+    const dated = jsonUrlsFor('/admin/schedule', new URLSearchParams('date=2026-11-18'));
+    expect(dated[0]).toBe(week[0]);
   });
 
   it('frames the calendar month as whole weeks', () => {
