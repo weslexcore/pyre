@@ -14,7 +14,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, inputClass } from '@/components/admin/ui';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { sendJson } from '@/lib/client/api';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { ScheduleShiftPrefs } from './ScheduleShiftPrefs';
@@ -64,10 +66,8 @@ function describeEntry(entry: TimeOffRow): string {
 }
 
 export function ScheduleTimeOff() {
-  const [data, setData] = useState<BoardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [actionError, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [showPast, setShowPast] = useState(false);
   // Manage-side people filter: whose entries to list (empty = everyone).
   const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
@@ -90,23 +90,16 @@ export function ScheduleTimeOff() {
   const rangeStart = useMemo(todayLocal, []);
   const rangeEnd = useMemo(() => addDays(rangeStart, 42), [rangeStart]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/schedule-board?start=${rangeStart}&end=${rangeEnd}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BoardData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [rangeStart, rangeEnd]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // The same payload the Calendar and Timesheet tabs cache, so coming here
+  // from either often paints without a request; a revisit always does.
+  const {
+    data,
+    error: loadError,
+    loading,
+    reload,
+    setData,
+  } = useCachedJson<BoardData>(`/api/admin/schedule-board?start=${rangeStart}&end=${rangeEnd}`);
+  const error = actionError ?? loadError;
 
   const canManage = data?.canManage ?? false;
   const selfId = data?.selfStaffId ?? null;
@@ -179,53 +172,93 @@ export function ScheduleTimeOff() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  // Other tabs' entries for the same payload (Calendar, Timesheet, the
+  // board) are keyed by other ranges: they have to go when time off
+  // changes, while this tab's own entry is updated in place.
+  const dropOtherRanges = () => {
+    invalidateJson('/api/admin/schedule-board?');
+    // The prefix covers this tab's entry too — write it straight back.
+    setData((prev) => prev);
+  };
+
+  // The entry lands in the list the moment Add (or Save changes) is pressed,
+  // with the form cleared behind it; the server's row replaces the pending
+  // one, and a refusal takes it back out and shows why.
   const submit = async () => {
     if (!staffId) {
       setError('Pick a person');
       return;
     }
-    setBusy(true);
+    setSubmitting(true);
     setError(null);
-    const res = await fetch('/api/admin/schedule-time-off', {
-      method: editingId ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...(editingId ? { id: editingId } : {}),
-        staffId,
-        kind,
-        // Only one date filled = a single-day entry; mirror it to the other.
-        startDate: startDate || endDate || null,
-        endDate: endDate || startDate || null,
-        daysOfWeek: kind === 'recurring' ? days : [],
-        startsAt: allDay ? null : startsAt || null,
-        endsAt: allDay ? null : endsAt || null,
-        note: note.trim() || null,
-        emergency,
-      }),
+    const id = editingId;
+    const body = {
+      ...(id ? { id } : {}),
+      staffId,
+      kind,
+      // Only one date filled = a single-day entry; mirror it to the other.
+      startDate: startDate || endDate || null,
+      endDate: endDate || startDate || null,
+      daysOfWeek: kind === 'recurring' ? days : [],
+      startsAt: allDay ? null : startsAt || null,
+      endsAt: allDay ? null : endsAt || null,
+      note: note.trim() || null,
+      emergency,
+    };
+    const pendingId = id ?? tempId();
+    const now = new Date().toISOString();
+    const pending = (prev: TimeOffRow | null): TimeOffRow => ({
+      id: pendingId,
+      staff_id: body.staffId,
+      kind: body.kind,
+      start_date: body.startDate,
+      end_date: body.endDate,
+      days_of_week: body.daysOfWeek,
+      starts_at: body.startsAt,
+      ends_at: body.endsAt,
+      note: body.note,
+      is_emergency: body.emergency,
+      created_by: prev?.created_by ?? (canManage ? 'admin' : 'staff'),
+      created_at: prev?.created_at ?? now,
+      updated_at: now,
     });
-    if (!res.ok) {
-      try {
-        setError(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
-      } catch {
-        setError(`HTTP ${res.status}`);
+    resetForm();
+    const result = await optimistic(
+      setData,
+      (prev) => {
+        if (!prev) return prev;
+        const timeOff = id
+          ? prev.timeOff.map((e) => (e.id === id ? pending(e) : e))
+          : [...prev.timeOff, pending(null)];
+        return { ...prev, timeOff };
+      },
+      () =>
+        sendJson<{ entry: TimeOffRow }>(
+          '/api/admin/schedule-time-off',
+          id ? 'PATCH' : 'POST',
+          body
+        ),
+      {
+        reconcile: (prev, { entry }) =>
+          prev
+            ? { ...prev, timeOff: prev.timeOff.map((e) => (e.id === pendingId ? entry : e)) }
+            : prev,
+        onError: setError,
       }
-    } else {
-      // Time off rides along in the schedule-board payload the Calendar and
-      // Timesheet tabs cache, so their entries have to go with it.
-      invalidateJson('/api/admin/schedule-board');
-      resetForm();
-      await load();
-    }
-    setBusy(false);
+    );
+    setSubmitting(false);
+    if (result) dropOtherRanges();
   };
 
   const remove = async (id: string) => {
-    setBusy(true);
     if (id === editingId) resetForm();
-    await fetch(`/api/admin/schedule-time-off?id=${id}`, { method: 'DELETE' });
-    invalidateJson('/api/admin/schedule-board');
-    await load();
-    setBusy(false);
+    const result = await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, timeOff: prev.timeOff.filter((e) => e.id !== id) } : prev),
+      () => sendJson(`/api/admin/schedule-time-off?id=${id}`, 'DELETE'),
+      { onError: setError }
+    );
+    if (result) dropOtherRanges();
   };
 
   const entryRow = (entry: TimeOffRow) => (
@@ -246,7 +279,6 @@ export function ScheduleTimeOff() {
           <button
             type="button"
             className="font-mono text-xs text-white/50 underline hover:text-white"
-            disabled={busy}
             onClick={() => startEditing(entry)}
           >
             edit
@@ -254,7 +286,6 @@ export function ScheduleTimeOff() {
           <button
             type="button"
             className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
-            disabled={busy}
             onClick={() => void remove(entry.id)}
           >
             remove
@@ -264,7 +295,7 @@ export function ScheduleTimeOff() {
     </li>
   );
 
-  if (loading && !data) return <p className="font-mono text-sm text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
 
   return (
     <div className="space-y-6">
@@ -306,7 +337,7 @@ export function ScheduleTimeOff() {
           staff={data.staff}
           canManage={canManage}
           selfId={selfId}
-          onSaved={() => void load()}
+          onSaved={() => void reload()}
         />
       )}
 
@@ -444,7 +475,7 @@ export function ScheduleTimeOff() {
             )}
           </div>
 
-          <EmergencyToggle checked={emergency} onChange={setEmergency} disabled={busy} />
+          <EmergencyToggle checked={emergency} onChange={setEmergency} />
 
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -458,12 +489,12 @@ export function ScheduleTimeOff() {
               type="button"
               className={buttonClass}
               onClick={() => void submit()}
-              disabled={busy}
+              disabled={submitting}
             >
               {editingId ? 'Save changes' : 'Add'}
             </button>
             {editingId && (
-              <button type="button" className={buttonClass} onClick={resetForm} disabled={busy}>
+              <button type="button" className={buttonClass} onClick={resetForm}>
                 Cancel edit
               </button>
             )}

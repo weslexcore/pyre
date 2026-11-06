@@ -64,6 +64,7 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass } from '@/components/admin/ui';
 import { clearBackup, readBackup, writeBackup } from '@/lib/client/autosave';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { tempId } from '@/lib/client/optimistic';
 import type {
   HoursChangeRequestRow,
   ScheduleDraftMessageRow,
@@ -391,6 +392,52 @@ async function api(
   }
 }
 
+// The shapes a board mutation takes on the client before the server answers
+// (the `apply` half of run() below): the same rows the reload will bring,
+// minus what only the server works out.
+const withShift =
+  (shiftId: string, change: (shift: BoardShift) => BoardShift) =>
+  (board: BoardData): BoardData => ({
+    ...board,
+    shifts: board.shifts.map((shift) => (shift.id === shiftId ? change(shift) : shift)),
+  });
+
+const withoutShift =
+  (shiftId: string) =>
+  (board: BoardData): BoardData => ({
+    ...board,
+    shifts: board.shifts.filter((shift) => shift.id !== shiftId),
+  });
+
+const withoutAssignment =
+  (assignmentId: string) =>
+  (board: BoardData): BoardData => ({
+    ...board,
+    shifts: board.shifts.map((shift) => ({
+      ...shift,
+      assignments: shift.assignments.filter((a) => a.id !== assignmentId),
+    })),
+  });
+
+const withAssignment =
+  (assignmentId: string, change: (a: ShiftAssignmentRow) => ShiftAssignmentRow) =>
+  (board: BoardData): BoardData => ({
+    ...board,
+    shifts: board.shifts.map((shift) => ({
+      ...shift,
+      assignments: shift.assignments.map((a) => (a.id === assignmentId ? change(a) : a)),
+    })),
+  });
+
+/** An input's HH:MM as the rows carry it (HH:MM:SS). */
+const toTime = (t: string): string => (t.length === 5 ? `${t}:00` : t);
+
+type BoardApply = (current: BoardData) => BoardData;
+type BoardRun = (
+  action: () => Promise<{ error?: string }>,
+  apply?: BoardApply
+) => Promise<string | null>;
+
 /** Where a draft or refine run in flight is kept, so a reload resumes the wait. */
 const PENDING_DRAFT_KEY = 'schedule-draft-run';
 /** How long to wait on the agent before giving up on a run. */
@@ -415,9 +462,9 @@ export function ScheduleBoard() {
   const [monthStart, setMonthStart] = useState(() =>
     monthStartOf(initialLink.month ?? initialLink.date ?? todayLocal())
   );
-  const [data, setData] = useState<BoardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Set by a mutation that the server refused; the fetch's own error is
+  // folded in below.
+  const [actionError, setError] = useState<string | null>(null);
   // Every shift starts expanded so assigned hours are visible without
   // clicking through (managers included); this tracks the ones the viewer
   // closed. Manage controls stay behind the per-shift Edit button below.
@@ -484,9 +531,11 @@ export function ScheduleBoard() {
   const [standingDraft, setStandingDraft] = useState('');
   const [standingBusy, setStandingBusy] = useState(false);
 
-  // The commitment horizon (admin setting, two weeks by default). Read from
-  // the last payload, so the Set view's range follows a change on reload.
-  const horizonDays = data?.settings?.confirmedHorizonDays ?? CONFIRMED_HORIZON_DAYS;
+  // The commitment horizon (admin setting, two weeks by default). Taken
+  // from each payload as it lands (below), so the Set view's range follows a
+  // change on reload — it is part of the URL the board reads, so it cannot
+  // be read off the data that URL returns.
+  const [horizonDays, setHorizonDays] = useState(CONFIRMED_HORIZON_DAYS);
   // The Set view's last day: the last set-in-stone date.
   const setEnd = lastConfirmedDate(todayLocal(), horizonDays);
   // The Monday week the Set view is scrolled to (the topmost day section on
@@ -523,27 +572,29 @@ export function ScheduleBoard() {
     return { start: weekStart, end: addDays(weekStart, 6) };
   }, [view, weekStart, monthStart, setEnd]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/admin/schedule-board?start=${range.start}&end=${range.end}${
-          view === 'week' || view === 'month' ? '&includeDrafts=1' : ''
-        }`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BoardData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [range, view]);
+  // The board's one read, cached by URL: a week already visited repaints at
+  // once and revalidates behind, the Calendar and Timesheet tabs share the
+  // entries whose ranges line up, and lib/client/pageData warms the current
+  // week's entry (this exact URL shape) when a link to the board is hovered.
+  const boardUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}${
+    view === 'week' || view === 'month' ? '&includeDrafts=1' : ''
+  }`;
+  const {
+    data,
+    error: loadError,
+    loading,
+    refreshing,
+    reload,
+    setData,
+  } = useCachedJson<BoardData>(boardUrl);
+  const error = actionError ?? loadError;
+  // The sync and draft flows below refetch by name; they mean a forced read.
+  const load = reload;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const horizon = data?.settings?.confirmedHorizonDays;
+    if (horizon !== undefined) setHorizonDays(horizon);
+  }, [data]);
 
   // Guest signups per shift, from Momence. Fetched beside the board rather
   // than inside it: a slow host API must not delay the schedule paint, and a
@@ -916,18 +967,42 @@ export function ScheduleBoard() {
     });
   }, []);
 
+  // Every board mutation goes through here. With `apply`, the change shows
+  // on the board before the request leaves (an assignment gone the moment
+  // "remove" is tapped), the board stays live meanwhile, and the reload that
+  // follows only brings what the server derives (coverage, hours, sync
+  // flags); a refusal puts the snapshot back and shows why. Without it —
+  // creates whose rows the server shapes, batch actions — the board waits
+  // on the reload as before, with the controls held.
   const run = useCallback(
-    async (action: () => Promise<{ error?: string }>) => {
-      setBusy(true);
+    async (
+      action: () => Promise<{ error?: string }>,
+      apply?: (current: BoardData) => BoardData
+    ) => {
       setError(null);
+      if (apply) {
+        let snapshot: BoardData | null = null;
+        setData((current) => {
+          snapshot = current;
+          return current ? apply(current) : current;
+        });
+        const { error: actionError } = await action();
+        if (actionError) {
+          setData(() => snapshot);
+          setError(actionError);
+          return actionError;
+        }
+        void reload();
+        return null;
+      }
+      setBusy(true);
       const { error: actionError } = await action();
-      await load();
-      // After the reload — load() clears the error banner as it starts.
+      await reload();
       if (actionError) setError(actionError);
       setBusy(false);
       return actionError ?? null;
     },
-    [load]
+    [reload, setData]
   );
 
   const openNewShift = (date: string) => {
@@ -1182,7 +1257,7 @@ export function ScheduleBoard() {
   const weekLabel = `${formatChipDate(weekStart)} – ${formatChipDate(addDays(weekStart, 6))}`;
   const hoursWeekLabel = `${formatChipDate(hoursWeek)} – ${formatChipDate(addDays(hoursWeek, 6))}`;
 
-  if (loading && !data) {
+  if (loading) {
     return <p className="font-mono text-sm text-white/40">Loading schedule…</p>;
   }
 
@@ -1367,9 +1442,7 @@ export function ScheduleBoard() {
             </span>
           )}
           {busy && <span className="font-mono text-xs text-white/40">Saving…</span>}
-          {!busy && loading && data && (
-            <span className="font-mono text-xs text-white/40">Loading…</span>
-          )}
+          {!busy && refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
         </div>
 
         {/* The range in view gets its own line between the view controls and
@@ -1548,10 +1621,18 @@ export function ScheduleBoard() {
                   checked={settings.shiftRequestsEnabled}
                   disabled={busy}
                   onChange={(e) =>
-                    void run(() =>
-                      api('POST', '/api/admin/schedule-settings', {
-                        key: 'shift_requests',
-                        enabled: e.target.checked,
+                    void run(
+                      () =>
+                        api('POST', '/api/admin/schedule-settings', {
+                          key: 'shift_requests',
+                          enabled: e.target.checked,
+                        }),
+                      (board) => ({
+                        ...board,
+                        settings: {
+                          ...(board.settings ?? DEFAULT_SETTINGS),
+                          shiftRequestsEnabled: e.target.checked,
+                        },
                       })
                     )
                   }
@@ -1564,10 +1645,18 @@ export function ScheduleBoard() {
                   checked={settings.subRequestsEnabled}
                   disabled={busy}
                   onChange={(e) =>
-                    void run(() =>
-                      api('POST', '/api/admin/schedule-settings', {
-                        key: 'sub_requests',
-                        enabled: e.target.checked,
+                    void run(
+                      () =>
+                        api('POST', '/api/admin/schedule-settings', {
+                          key: 'sub_requests',
+                          enabled: e.target.checked,
+                        }),
+                      (board) => ({
+                        ...board,
+                        settings: {
+                          ...(board.settings ?? DEFAULT_SETTINGS),
+                          subRequestsEnabled: e.target.checked,
+                        },
                       })
                     )
                   }
@@ -1581,10 +1670,18 @@ export function ScheduleBoard() {
                   checked={settings.hoursChangesEnabled}
                   disabled={busy}
                   onChange={(e) =>
-                    void run(() =>
-                      api('POST', '/api/admin/schedule-settings', {
-                        key: 'hours_changes',
-                        enabled: e.target.checked,
+                    void run(
+                      () =>
+                        api('POST', '/api/admin/schedule-settings', {
+                          key: 'hours_changes',
+                          enabled: e.target.checked,
+                        }),
+                      (board) => ({
+                        ...board,
+                        settings: {
+                          ...(board.settings ?? DEFAULT_SETTINGS),
+                          hoursChangesEnabled: e.target.checked,
+                        },
                       })
                     )
                   }
@@ -1757,13 +1854,13 @@ export function ScheduleBoard() {
             />
           ))}
 
-          {view === 'uncovered' && days.length === 0 && !loading && (
+          {view === 'uncovered' && days.length === 0 && !refreshing && (
             <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
               Every shift through {range.end} is fully staffed.
             </p>
           )}
 
-          {view === 'requests' && days.length === 0 && !loading && (
+          {view === 'requests' && days.length === 0 && !refreshing && (
             <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
               No outstanding shift, sub, or hours change requests — all caught up.
             </p>
@@ -2194,12 +2291,30 @@ export function ScheduleBoard() {
                         )
                       }
                       onUnassign={(id) =>
-                        void run(() =>
-                          api('DELETE', `/api/admin/duty-assignments?id=${encodeURIComponent(id)}`)
+                        void run(
+                          () =>
+                            api(
+                              'DELETE',
+                              `/api/admin/duty-assignments?id=${encodeURIComponent(id)}`
+                            ),
+                          (board) => ({
+                            ...board,
+                            dutyAssignments: board.dutyAssignments?.filter((d) => d.id !== id),
+                          })
                         )
                       }
                       onDone={(id, done) =>
-                        void run(() => api('PATCH', '/api/admin/duty-assignments', { id, done }))
+                        void run(
+                          () => api('PATCH', '/api/admin/duty-assignments', { id, done }),
+                          (board) => ({
+                            ...board,
+                            dutyAssignments: board.dutyAssignments?.map((d) =>
+                              d.id === id
+                                ? { ...d, done_at: done ? new Date().toISOString() : null }
+                                : d
+                            ),
+                          })
+                        )
                       }
                       onDraft={(id, accept) =>
                         void proposalAction({
@@ -2237,7 +2352,7 @@ function ShiftForm({
   busy: boolean;
   /** Present when editing an existing shift — enables cancel/delete actions. */
   shift?: BoardShift;
-  run?: (action: () => Promise<{ error?: string }>) => Promise<unknown>;
+  run?: BoardRun;
   /** First tentative date — past it an unconfirmed shift can be confirmed by hand. */
   firstTentative?: string;
 }) {
@@ -2345,11 +2460,10 @@ function ShiftForm({
               disabled={busy}
               onClick={() => {
                 onCancel();
-                void run(() =>
-                  api('PATCH', '/api/admin/shifts', {
-                    id: shift.id,
-                    status: shift.status === 'cancelled' ? 'active' : 'cancelled',
-                  })
+                const status = shift.status === 'cancelled' ? 'active' : 'cancelled';
+                void run(
+                  () => api('PATCH', '/api/admin/shifts', { id: shift.id, status }),
+                  withShift(shift.id, (s) => ({ ...s, status }))
                 );
               }}
             >
@@ -2367,11 +2481,13 @@ function ShiftForm({
                 }
                 onClick={() => {
                   onCancel();
-                  void run(() =>
-                    api('PATCH', '/api/admin/shifts', {
-                      id: shift.id,
-                      confirmed: !shift.confirmed_at,
-                    })
+                  const confirmed = !shift.confirmed_at;
+                  void run(
+                    () => api('PATCH', '/api/admin/shifts', { id: shift.id, confirmed }),
+                    withShift(shift.id, (s) => ({
+                      ...s,
+                      confirmed_at: confirmed ? new Date().toISOString() : null,
+                    }))
                   );
                 }}
               >
@@ -2392,7 +2508,10 @@ function ShiftForm({
                 )
                   return;
                 onCancel();
-                void run(() => api('DELETE', `/api/admin/shifts?id=${shift.id}`));
+                void run(
+                  () => api('DELETE', `/api/admin/shifts?id=${shift.id}`),
+                  withoutShift(shift.id)
+                );
               }}
             >
               Delete
@@ -2430,7 +2549,7 @@ function ShiftDetail({
   staffById: Map<string, StaffRow>;
   weekHours: Record<string, number>;
   busy: boolean;
-  run: (action: () => Promise<{ error?: string }>) => Promise<string | null>;
+  run: BoardRun;
   canManage: boolean;
   /** Whether duty chips link to their SOP, or render as plain labels. */
   canViewSops: boolean;
@@ -2583,7 +2702,10 @@ function ShiftDetail({
     ) {
       return;
     }
-    void run(() => api('DELETE', `/api/admin/shift-sub?id=${sub.id}`));
+    void run(
+      () => api('DELETE', `/api/admin/shift-sub?id=${sub.id}`),
+      (board) => ({ ...board, subRequests: board.subRequests?.filter((r) => r.id !== sub.id) })
+    );
   };
 
   const takeSub = async (sub: SubRequestRow) => {
@@ -2700,8 +2822,18 @@ function ShiftDetail({
                         title="Withdraw your hours change request"
                         disabled={busy}
                         onClick={() =>
-                          void run(() =>
-                            api('DELETE', `/api/admin/hours-change-requests?id=${hoursChange.id}`)
+                          void run(
+                            () =>
+                              api(
+                                'DELETE',
+                                `/api/admin/hours-change-requests?id=${hoursChange.id}`
+                              ),
+                            (board) => ({
+                              ...board,
+                              hoursChangeRequests: board.hoursChangeRequests?.filter(
+                                (r) => r.id !== hoursChange.id
+                              ),
+                            })
                           )
                         }
                       >
@@ -2812,7 +2944,10 @@ function ShiftDetail({
                         className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
                         disabled={busy}
                         onClick={() =>
-                          void run(() => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`))
+                          void run(
+                            () => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`),
+                            withoutAssignment(a.id)
+                          )
                         }
                       >
                         remove
@@ -3050,8 +3185,14 @@ function ShiftDetail({
                     assignment={a}
                     date={shift.shift_date}
                     onSave={(fields) =>
-                      run(() =>
-                        api('PATCH', '/api/admin/shift-assignments', { id: a.id, ...fields })
+                      run(
+                        () => api('PATCH', '/api/admin/shift-assignments', { id: a.id, ...fields }),
+                        withAssignment(a.id, (row) => ({
+                          ...row,
+                          starts_at: toTime(fields.startsAt),
+                          ends_at: toTime(fields.endsAt),
+                          duties: fields.duties,
+                        }))
                       )
                     }
                   />
@@ -3259,7 +3400,13 @@ function ShiftDetail({
                   className={buttonClass}
                   disabled={busy}
                   onClick={() =>
-                    void run(() => api('DELETE', `/api/admin/shift-requests?id=${selfRequest.id}`))
+                    void run(
+                      () => api('DELETE', `/api/admin/shift-requests?id=${selfRequest.id}`),
+                      (board) => ({
+                        ...board,
+                        shiftRequests: board.shiftRequests?.filter((r) => r.id !== selfRequest.id),
+                      })
+                    )
                   }
                 >
                   Withdraw request
@@ -3383,11 +3530,34 @@ function ShiftDetail({
                     ].join('; ') || undefined
                   }
                   onClick={() =>
-                    void run(() =>
-                      api('POST', '/api/admin/shift-assignments', {
-                        shiftId: shift.id,
-                        staffId: s.id,
-                      })
+                    void run(
+                      () =>
+                        api('POST', '/api/admin/shift-assignments', {
+                          shiftId: shift.id,
+                          staffId: s.id,
+                        }),
+                      // The hours the server gives (arrive-before / leave-after
+                      // the sessions) land with the reload; until then the
+                      // person holds the shift's window.
+                      withShift(shift.id, (sh) => ({
+                        ...sh,
+                        assignments: [
+                          ...sh.assignments,
+                          {
+                            id: tempId(),
+                            shift_id: sh.id,
+                            staff_id: s.id,
+                            starts_at: sh.starts_at,
+                            ends_at: sh.ends_at,
+                            duties: [],
+                            notes: null,
+                            proposal_id: null,
+                            is_draft: false,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          },
+                        ],
+                      }))
                     )
                   }
                 >
@@ -3456,7 +3626,10 @@ function ShiftDetail({
                 ) {
                   return;
                 }
-                void run(() => api('DELETE', `/api/admin/shift-assignments?shiftId=${shift.id}`));
+                void run(
+                  () => api('DELETE', `/api/admin/shift-assignments?shiftId=${shift.id}`),
+                  withShift(shift.id, (s) => ({ ...s, assignments: [] }))
+                );
               }}
             >
               Clear
@@ -3483,7 +3656,7 @@ function OnCallPicker({
   shift: BoardShift;
   staff: StaffRow[];
   busy: boolean;
-  run: (action: () => Promise<{ error?: string }>) => Promise<string | null>;
+  run: BoardRun;
 }) {
   const people = onCallPeople(staff);
   const value = shift.on_call_manual ? (shift.on_call_staff_id ?? 'none') : 'auto';
@@ -3506,14 +3679,22 @@ function OnCallPicker({
         disabled={busy}
         onChange={(e) => {
           const next = e.target.value;
-          void run(() =>
-            api(
-              'PATCH',
-              '/api/admin/shift-on-call',
-              next === 'auto'
-                ? { id: shift.id, auto: true }
-                : { id: shift.id, staffId: next === 'none' ? null : next }
-            )
+          void run(
+            () =>
+              api(
+                'PATCH',
+                '/api/admin/shift-on-call',
+                next === 'auto'
+                  ? { id: shift.id, auto: true }
+                  : { id: shift.id, staffId: next === 'none' ? null : next }
+              ),
+            // Back on auto, the rule's pick arrives with the reload.
+            withShift(shift.id, (s) => ({
+              ...s,
+              on_call_manual: next !== 'auto',
+              on_call_staff_id:
+                next === 'auto' ? s.on_call_staff_id : next === 'none' ? null : next,
+            }))
           );
         }}
       >

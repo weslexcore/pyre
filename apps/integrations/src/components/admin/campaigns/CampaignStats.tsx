@@ -30,6 +30,7 @@ import {
 } from '@/lib/campaigns/link-performance';
 import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type { LinkRow, UtmCampaign } from '@/lib/campaigns/types';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { cardClass, SectionTitle } from '../incidentUi';
 import { linkTitle } from './campaignUi';
 import { eventLabel, useEvents } from './DestinationPicker';
@@ -75,46 +76,53 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
   const today = useMemo(() => todayYmd(), []);
   const window = useMemo(() => goalWindow(campaign, today), [campaign, today]);
 
-  const reportVersion = useRef(0);
-  const [data, setData] = useState<PerformanceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // Goals are read against the whole run; without any, 30 days is the habit.
   const [days, setDays] = useState<number>(campaign.goals.length > 0 ? window.days : 30);
 
-  const fetchReport = useCallback(
-    async (currentDays: number, fresh = false) => {
-      const version = ++reportVersion.current;
-      setData((current) => (current?.days === currentDays ? current : null));
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(
-          `/api/admin/campaign-performance?days=${currentDays}&campaign=${encodeURIComponent(slug)}${fresh ? '&fresh=1' : ''}`
-        );
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          if (version === reportVersion.current)
-            setError(body?.error ?? `Failed to fetch report (${res.status})`);
-          return;
-        }
-        const report = (await res.json()) as PerformanceResponse;
-        if (version === reportVersion.current) setData(report);
-      } catch {
-        if (version === reportVersion.current) setError('Network error');
-      } finally {
-        if (version === reportVersion.current) setLoading(false);
-      }
-    },
-    [slug]
-  );
+  // One cache entry per (campaign, window): reopening a campaign, or
+  // flipping back to a window already seen, repaints at once. The hook only
+  // ever settles the newest request, which is the race guard the old
+  // version counter provided.
+  const reportUrl = `/api/admin/campaign-performance?days=${days}&campaign=${encodeURIComponent(slug)}`;
+  const {
+    data: cachedReport,
+    error: loadError,
+    loading,
+    refreshing,
+    setData,
+  } = useCachedJson<PerformanceResponse>(reportUrl);
+  // Never render another window's numbers while this one's are on the way.
+  const data = cachedReport?.days === days ? cachedReport : null;
+  const [freshError, setFreshError] = useState<string | null>(null);
+  const [fetchingFresh, setFetchingFresh] = useState(false);
+  const error =
+    freshError ??
+    (loadError?.startsWith('HTTP ')
+      ? `Failed to fetch report (${loadError.slice(5)})`
+      : loadError
+        ? 'Network error'
+        : null);
+  const fetching = loading || refreshing || fetchingFresh;
 
-  useEffect(() => {
-    void fetchReport(days);
-    return () => {
-      reportVersion.current += 1;
-    };
-  }, [days, fetchReport]);
+  // Refresh bypasses the server's own report cache too (fresh=1), so it is
+  // its own request; the answer goes into the entry this window reads.
+  const fetchFresh = useCallback(async () => {
+    setFetchingFresh(true);
+    setFreshError(null);
+    try {
+      const res = await fetch(`${reportUrl}&fresh=1`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setFreshError(body?.error ?? `Failed to fetch report (${res.status})`);
+        return;
+      }
+      setData((await res.json()) as PerformanceResponse);
+    } catch {
+      setFreshError('Network error');
+    } finally {
+      setFetchingFresh(false);
+    }
+  }, [reportUrl, setData]);
 
   const sessionKey = campaignSessionIds(campaign).join(',');
   const events = useEvents();
@@ -279,13 +287,13 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
           <button
             type="button"
             onClick={() => {
-              void fetchReport(days, true);
+              void fetchFresh();
               void fetchEventBookings(true);
             }}
-            disabled={loading}
+            disabled={fetching}
             className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Loading…' : 'Refresh'}
+            {fetching ? 'Loading…' : 'Refresh'}
           </button>
         </div>
       </div>

@@ -1,8 +1,9 @@
 // Webhook execution log, ported from the landing-page admin. Auth is handled
 // server-side by AdminLayout; a 401/403 from the API mid-session renders a
 // re-login prompt instead of a client-side gate.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SessionExpired } from '@/components/admin/SessionExpired';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import { WebhookHealthPanel } from './WebhookHealthPanel';
 
 interface TraceStep {
@@ -302,9 +303,6 @@ export function WebhookDashboard({
 }: {
   siteOrigin?: string;
 }) {
-  const [data, setData] = useState<LogsResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [search, setSearch] = useState('');
@@ -316,41 +314,37 @@ export function WebhookDashboard({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const limit = 50;
 
-  const fetchLogs = useCallback(async (currentOffset: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/webhook-logs?limit=${limit}&offset=${currentOffset}`);
-      if (res.status === 401 || res.status === 403) {
-        setError('session_expired');
-        return;
-      }
-      if (!res.ok) {
-        setError(`Failed to fetch logs (${res.status})`);
-        return;
-      }
-      const json: LogsResponse = await res.json();
-      setData(json);
-      setRefreshSignal((s) => s + 1);
-    } catch {
-      setError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // One cache entry per page of the log: paging back repaints at once, and
+  // a return to the dashboard paints the last page seen while it refetches.
+  const {
+    data,
+    error: loadError,
+    loading,
+    refreshing,
+    reload,
+  } = useCachedJson<LogsResponse>(`/api/admin/webhook-logs?limit=${limit}&offset=${offset}`);
+  const error =
+    loadError === 'HTTP 401' || loadError === 'HTTP 403'
+      ? 'session_expired'
+      : loadError?.startsWith('HTTP ')
+        ? `Failed to fetch logs (${loadError.slice(5)})`
+        : loadError
+          ? 'Network error'
+          : null;
+  const fetching = loading || refreshing;
 
   useEffect(() => {
-    fetchLogs(offset);
-  }, [offset, fetchLogs]);
+    if (data) setRefreshSignal((s) => s + 1);
+  }, [data]);
 
   useEffect(() => {
     if (autoRefresh) {
-      intervalRef.current = setInterval(() => fetchLogs(offset), 30_000);
+      intervalRef.current = setInterval(() => void reload(), 30_000);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [autoRefresh, offset, fetchLogs]);
+  }, [autoRefresh, reload]);
 
   if (error === 'session_expired') {
     return <SessionExpired returnTo="/admin/webhooks" />;
@@ -391,11 +385,11 @@ export function WebhookDashboard({
         </label>
         <button
           type="button"
-          onClick={() => fetchLogs(offset)}
-          disabled={loading}
+          onClick={() => void reload()}
+          disabled={fetching}
           className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
         >
-          {loading ? 'Loading...' : 'Refresh'}
+          {fetching ? 'Loading...' : 'Refresh'}
         </button>
       </div>
 

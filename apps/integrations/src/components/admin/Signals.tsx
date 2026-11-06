@@ -276,6 +276,22 @@ export function useClassifications(
     async (id: string, extra?: Record<string, unknown>) => {
       setRerunning(id);
       setError(null);
+      // "Reading…" the moment the button is pressed: the poll tolerates a
+      // row that does not exist yet (UNFILED_GRACE_MS), and a refused run
+      // puts the previous answer back below.
+      let previous: ClassificationView | undefined;
+      setClassifications((prev) => {
+        previous = prev[id];
+        return {
+          ...prev,
+          [id]: {
+            state: 'pending',
+            signals: [],
+            requestedAt: new Date().toISOString(),
+            classifiedAt: null,
+          },
+        };
+      });
       try {
         const res = await fetch('/api/admin/classifications', {
           method: 'POST',
@@ -290,6 +306,11 @@ export function useClassifications(
         merge(id, data.classification);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not run the classifier');
+        setClassifications((prev) => {
+          if (previous) return { ...prev, [id]: previous };
+          const { [id]: _gone, ...rest } = prev;
+          return rest;
+        });
       } finally {
         setRerunning(null);
       }

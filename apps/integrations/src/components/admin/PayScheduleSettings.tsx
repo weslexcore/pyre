@@ -15,12 +15,17 @@ import {
 } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
 import { compactInputClass, compactSelectClass, goldButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import { optimistic } from '@/lib/client/optimistic';
 
 interface PayScheduleResponse {
   schedule: PaySchedule | null;
   upcoming: string[];
   error?: string;
 }
+
+const PAY_SCHEDULE_URL = '/api/admin/pay-schedule';
 
 const DEFAULT_SCHEDULE: PaySchedule = {
   enabled: true,
@@ -78,67 +83,61 @@ function withFrequency(draft: PaySchedule, frequency: PayFrequency): PaySchedule
 }
 
 export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
-  const [saved, setSaved] = useState<PaySchedule | null>(null);
+  // Cached like the rest of the settings panel: reopening it paints the
+  // schedule at once. The saved schedule and the next paydays live in the
+  // cache entry; the draft is this panel's own.
+  const { data, error: loadError, setData } = useCachedJson<PayScheduleResponse>(PAY_SCHEDULE_URL);
+  const saved = data?.schedule ?? null;
+  const upcoming = data?.upcoming ?? [];
   const [draft, setDraft] = useState<PaySchedule | null>(null);
-  const [upcoming, setUpcoming] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The draft starts from the first load only: a revalidation landing
+  // mid-edit must not wipe what is being typed.
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/admin/pay-schedule');
-        const body = (await res.json()) as PayScheduleResponse;
-        if (cancelled) return;
-        if (!res.ok) {
-          setError(body.error ?? 'Could not load the pay schedule');
-          return;
-        }
-        setSaved(body.schedule);
-        setDraft(body.schedule ?? { ...DEFAULT_SCHEDULE, anchorDate: todayLocal() });
-        setUpcoming(body.upcoming);
-      } catch {
-        if (!cancelled) setError('Could not load the pay schedule');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (data && draft === null) {
+      setDraft(data.schedule ?? { ...DEFAULT_SCHEDULE, anchorDate: todayLocal() });
+    }
+  }, [data, draft]);
 
   if (!draft) {
     return (
-      <p className="font-mono text-xs text-white/40">{error ?? 'Loading the pay schedule…'}</p>
+      <p className="font-mono text-xs text-white/40">
+        {error ?? loadError ?? 'Loading the pay schedule…'}
+      </p>
     );
   }
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const weekly = draft.frequency === 'weekly' || draft.frequency === 'biweekly';
 
+  // The draft becomes the schedule the moment Save is pressed; the server's
+  // answer brings the paydays it works out from it (the client has no
+  // holiday calendar), and a refusal puts the old schedule back.
   const save = async () => {
+    const next = draft;
     setBusy(true);
     setError(null);
-    try {
-      const res = await fetch('/api/admin/pay-schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      });
-      const body = (await res.json()) as PayScheduleResponse;
-      if (!res.ok || !body.schedule) {
-        setError(body.error ?? `HTTP ${res.status}`);
-        return;
+    const body = await optimistic(
+      setData,
+      (prev) => (prev ? { ...prev, schedule: next } : prev),
+      () => sendJson<PayScheduleResponse>(PAY_SCHEDULE_URL, 'POST', next),
+      {
+        reconcile: (prev, result) =>
+          result.schedule
+            ? { ...prev, schedule: result.schedule, upcoming: result.upcoming }
+            : prev,
+        onError: (message) => setError(message || 'Could not save the pay schedule'),
       }
-      setSaved(body.schedule);
-      setDraft(body.schedule);
-      setUpcoming(body.upcoming);
-      onSaved();
-    } catch {
-      setError('Could not save the pay schedule');
-    } finally {
-      setBusy(false);
+    );
+    setBusy(false);
+    if (!body?.schedule) {
+      if (body) setError(body.error ?? 'Could not save the pay schedule');
+      return;
     }
+    setDraft(body.schedule);
+    onSaved();
   };
 
   const setDay = (index: number, day: number) => {
@@ -153,7 +152,6 @@ export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
         <input
           type="checkbox"
           checked={draft.enabled}
-          disabled={busy}
           onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
         />
         Show paydays on the schedule (and in the calendars of people who choose to include them)
@@ -163,7 +161,6 @@ export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
         <select
           className={compactSelectClass}
           value={draft.frequency}
-          disabled={busy}
           onChange={(e) => setDraft(withFrequency(draft, e.target.value as PayFrequency))}
         >
           {PAY_FREQUENCIES.map((f) => (
@@ -180,7 +177,6 @@ export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
               type="date"
               className={compactInputClass}
               value={draft.anchorDate ?? ''}
-              disabled={busy}
               onChange={(e) => setDraft({ ...draft, anchorDate: e.target.value || null })}
             />
           </>
@@ -194,7 +190,6 @@ export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
                 <select
                   className={compactSelectClass}
                   value={day}
-                  disabled={busy}
                   onChange={(e) => setDay(i, Number(e.target.value))}
                 >
                   {DAY_OPTIONS.map((d) => (
@@ -214,7 +209,6 @@ export function PayScheduleSettings({ onSaved }: { onSaved: () => void }) {
         <select
           className={compactSelectClass}
           value={draft.shiftRule}
-          disabled={busy}
           onChange={(e) => setDraft({ ...draft, shiftRule: e.target.value as PaydayShiftRule })}
         >
           {PAYDAY_SHIFT_RULES.map((r) => (
