@@ -89,12 +89,15 @@ const unlimited = {
     ],
   },
 
+  /**
+   * Short "not ready to commit?" band that hands off to the /intro landing
+   * page, which does the selling. `steps` are not rendered here any more;
+   * the homepage offer section (offer.ts) still shares them.
+   */
   intro: {
     eyebrow: 'Not ready to commit?',
     heading: `Start with ${INTRO_WEEKS} weeks unlimited`,
     body: `${introOffer.pitch.charAt(0).toUpperCase()}${introOffer.pitch.slice(1)}, with everything members get. Try the full experience before you decide — and if you join during your intro, we'll take $${introOffer.membershipDiscount} off your first month.`,
-    perks: introOffer.perks,
-    finePrint: 'Available once per customer.',
     steps: [
       {
         title: 'Grab the intro',
