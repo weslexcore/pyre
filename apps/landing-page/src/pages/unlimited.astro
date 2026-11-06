@@ -5,8 +5,8 @@ import { Image } from 'astro:assets';
 import heroImg from '../assets/images/837A0206.webp';
 import introImg from '../assets/images/837A0269.webp';
 import communityImg from '../assets/images/community_3.webp';
-import joinImg from '../assets/images/cold_smile.webp';
 import Button from '../components/Button.astro';
+import CheckoutBackground from '../components/CheckoutBackground.astro';
 import CtaTracking from '../components/CtaTracking.astro';
 import FoundingCountdown from '../components/FoundingCountdown.astro';
 import GoogleRatingBadge from '../components/GoogleRatingBadge.astro';
@@ -256,16 +256,7 @@ const faqSchema = {
       data-sticky-bar-hide
       class="relative py-20 md:py-32 px-4 border-t border-current/10 text-center overflow-hidden scroll-mt-20"
     >
-      <Image
-        src={joinImg}
-        alt=""
-        widths={[768, 1280, 1920]}
-        sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover object-[center_45%] md:right-auto md:-left-[50%] md:w-[150%] md:max-w-none"
-        loading="lazy"
-        decoding="async"
-      />
-      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-blue)]/95 to-[var(--pyre-blue)]/70"></div>
+      <CheckoutBackground />
       <div class="relative z-10 max-w-2xl mx-auto">
         <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
           {join.eyebrow}

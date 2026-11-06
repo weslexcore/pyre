@@ -1,0 +1,30 @@
+---
+// Art-directed photo behind the checkout step on /unlimited and /intro, with
+// the blue gradient overlay. Phones get the outdoor shower shot; screens from
+// the `md` breakpoint up get the smiling cold plunge shot, which is a portrait
+// photo, so it is widened and shifted left there to keep the face beside the
+// price card rather than behind it. Rendered as a <picture> so each device
+// only downloads its own photo.
+import { getImage } from 'astro:assets';
+import desktopImg from '../assets/images/cold_smile.webp';
+import mobileImg from '../assets/images/837A0262.webp';
+
+const mobile = await getImage({ src: mobileImg, widths: [480, 768, 1024], format: 'webp' });
+const desktop = await getImage({ src: desktopImg, widths: [1280, 1920, 2560], format: 'webp' });
+---
+
+<picture>
+  <source media="(min-width: 768px)" srcset={desktop.srcSet.attribute} sizes="150vw" />
+  <img
+    src={mobile.src}
+    srcset={mobile.srcSet.attribute}
+    sizes="100vw"
+    alt=""
+    width={mobile.attributes.width}
+    height={mobile.attributes.height}
+    loading="lazy"
+    decoding="async"
+    class="absolute inset-0 w-full h-full object-cover object-center md:object-[center_45%] md:right-auto md:-left-[50%] md:w-[150%] md:max-w-none"
+  />
+</picture>
+<div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-blue)]/95 to-[var(--pyre-blue)]/70"></div>
