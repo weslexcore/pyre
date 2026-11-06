@@ -91,6 +91,7 @@ Bring a swimsuit, a water bottle, and an optional robe or sandals. We provide to
 
 ${introOffer.sentence}: ${introOffer.perks.join(', ')}. Available once per customer. ${introMembershipPerk}
 
+Details: ${baseUrl}/intro
 Buy: ${introOffer.href}
 
 ## Credits
@@ -102,6 +103,8 @@ ${creditsSection}
 ## Memberships
 
 ${membership.subtitle}
+
+Details: ${baseUrl}/unlimited
 
 ${membershipSection}
 

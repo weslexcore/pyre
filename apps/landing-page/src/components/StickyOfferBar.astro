@@ -1,21 +1,49 @@
 ---
 // Mobile-only bottom bar that keeps an offer one tap away. It appears once the
 // visitor scrolls past the first screen (the homepage hero has its own CTAs),
-// hides while the homepage offer section is on screen, and switches from the
-// intro offer to the founding membership once the visitor has scrolled past
-// the membership section. The founding variant is dropped after the founding
-// offer ends. With `mode="founding"` (the /unlimited page) it leads with the
-// founding membership the whole way and falls back to the intro after it ends.
+// hides while the homepage offer section (or any `data-sticky-bar-hide`
+// element) is on screen, and switches from the intro offer to the founding
+// membership once the visitor has scrolled past the membership section. The
+// founding variant is dropped after the founding offer ends. With
+// `mode="founding"` (the /unlimited page) it leads with the founding
+// membership the whole way and falls back to the intro after it ends; with
+// `mode="intro"` (the /intro page) it only ever shows the intro. Neither
+// variant shows a price: the links lead to the landing pages, or, via
+// `introHref` / `foundingHref`, to a landing page's own checkout step.
 import stickyOfferBar from '../lib/stickyOfferBar';
 
 interface Props {
-  mode?: 'intro-then-founding' | 'founding';
+  mode?: 'intro-then-founding' | 'founding' | 'intro';
   /** Tracking placement prefix: "<prefix>_intro" / "<prefix>_founding". */
   placementPrefix?: string;
+  /** Override the intro link and button label, e.g. "#claim" / "Claim" on the /intro page itself. */
+  introHref?: string;
+  introAction?: string;
+  /** Override the founding link and button label, e.g. "#join" / "Join" on the /unlimited page itself. */
+  foundingHref?: string;
+  foundingAction?: string;
 }
 
-const { mode = 'intro-then-founding', placementPrefix = 'sticky_bar' } = Astro.props;
-const { intro, founding, endsAt } = stickyOfferBar;
+const {
+  mode = 'intro-then-founding',
+  placementPrefix = 'sticky_bar',
+  introHref,
+  introAction,
+  foundingHref,
+  foundingAction,
+} = Astro.props;
+const { endsAt } = stickyOfferBar;
+const intro = {
+  ...stickyOfferBar.intro,
+  href: introHref ?? stickyOfferBar.intro.href,
+  action: introAction ?? stickyOfferBar.intro.action,
+};
+const founding = {
+  ...stickyOfferBar.founding,
+  href: foundingHref ?? stickyOfferBar.founding.href,
+  action: foundingAction ?? stickyOfferBar.founding.action,
+};
+const isExternal = (href: string) => /^https?:\/\//.test(href);
 ---
 
 <div
@@ -31,8 +59,8 @@ const { intro, founding, endsAt } = stickyOfferBar;
   ].map((option) => (
     <a
       href={option.href}
-      target="_blank"
-      rel="noopener noreferrer"
+      target={isExternal(option.href) ? '_blank' : undefined}
+      rel={isExternal(option.href) ? 'noopener noreferrer' : undefined}
       tabindex="-1"
       aria-label={option.ariaLabel}
       data-sticky-variant={option.variant}
@@ -59,16 +87,18 @@ const { intro, founding, endsAt } = stickyOfferBar;
     const foundingLink = bar.querySelector<HTMLElement>('[data-sticky-variant="founding"]');
     const foundingLive = Date.now() < Date.parse(bar.dataset.endsAt ?? '');
     const membership = document.getElementById('membership');
-    const offerSection = document.getElementById('offer');
+    const hideWhenVisible = document.querySelectorAll<HTMLElement>('#offer, [data-sticky-bar-hide]');
 
-    let offerInView = false;
+    const inView = new Set<Element>();
     let visible = false;
 
     const foundingFirst = bar.dataset.mode === 'founding';
+    const introOnly = bar.dataset.mode === 'intro';
 
     function setVariant() {
       const showFounding =
         foundingLive &&
+        !introOnly &&
         (foundingFirst || (!!membership && membership.getBoundingClientRect().top < 0));
       introLink?.classList.toggle('hidden', showFounding);
       introLink?.classList.toggle('flex', !showFounding);
@@ -89,17 +119,20 @@ const { intro, founding, endsAt } = stickyOfferBar;
     function update() {
       const pastFirstScreen = window.scrollY > window.innerHeight * 0.8;
       const popupOpen = document.body.style.overflow === 'hidden';
-      setVisible(pastFirstScreen && !offerInView && !popupOpen);
+      setVisible(pastFirstScreen && inView.size === 0 && !popupOpen);
       setVariant();
     }
 
     let observer: IntersectionObserver | undefined;
-    if (offerSection) {
+    if (hideWhenVisible.length > 0) {
       observer = new IntersectionObserver((entries) => {
-        offerInView = entries.some((entry) => entry.isIntersecting);
+        for (const entry of entries) {
+          if (entry.isIntersecting) inView.add(entry.target);
+          else inView.delete(entry.target);
+        }
         update();
       });
-      observer.observe(offerSection);
+      hideWhenVisible.forEach((el) => observer!.observe(el));
     }
 
     let ticking = false;

@@ -8,7 +8,7 @@ import giftCards from './gift-cards';
 import location from './location';
 import { founding } from './membership';
 import { withBase } from './paths';
-import { introOffer, introPriceNote } from './sessions';
+import { introOffer } from './sessions';
 
 export interface HiLink {
   id: string;
@@ -32,9 +32,6 @@ export interface HiContent {
     pillLabel: string;
     title: string;
     subtitle: string;
-    price: number;
-    originalPrice?: number;
-    priceNote: string;
     cta: {
       label: string;
       href: string;
@@ -63,7 +60,7 @@ export interface HiContent {
 const hi: HiContent = {
   meta: {
     title: 'Pyre Sauna + Cold Plunge | Richmond, VA',
-    description: `Richmond's community sauna + cold plunge. First time? ${introOffer.sentence}. Book a session, browse events, or grab a gift card.`,
+    description: `Richmond's community sauna + cold plunge. First time? Start with ${introOffer.pitch}. Book a session, browse events, or grab a gift card.`,
   },
   header: {
     logo: { src: logoImg, alt: 'Pyre Sauna + Cold Plunge' },
@@ -73,13 +70,11 @@ const hi: HiContent = {
   hero: {
     pillLabel: 'First time?',
     title: `Intro // ${introOffer.headline}`,
-    subtitle: `Unlimited sauna + cold plunge for 2 weeks, plus ${introOffer.perks.slice(1).join(' and ')}.`,
-    price: introOffer.price,
-    priceNote: introPriceNote,
+    subtitle: `Unlimited sauna + cold plunge for 2 weeks, plus ${introOffer.perks.slice(1).join(' and ')}. Available once per customer.`,
     cta: {
-      label: 'Claim Intro Offer',
-      href: introOffer.href,
-      ariaLabel: `Claim the intro offer — ${introOffer.sentence.toLowerCase()}`,
+      label: introOffer.landing.label,
+      href: introOffer.landing.href,
+      ariaLabel: `See the intro offer: ${introOffer.pitch}`,
     },
   },
   events: {
@@ -97,7 +92,7 @@ const hi: HiContent = {
     {
       id: 'membership',
       label: 'Memberships',
-      sublabel: `$${founding.fromPrice}/mo unlimited, locked for life — through ${founding.deadline}`,
+      sublabel: `Unlimited, locked in for life — through ${founding.deadline}`,
       href: founding.details.href,
       ariaLabel: 'View Pyre membership options',
     },

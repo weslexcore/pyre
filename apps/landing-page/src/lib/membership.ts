@@ -56,14 +56,22 @@ export const founding = {
   /** Monthly price: "$199/mo". */
   fromPrice: UNLIMITED.price,
   eyebrow: 'Founding Membership',
-  /** The /unlimited landing page with every membership detail. */
+  /** The /unlimited landing page with every membership detail. The price is shown there, at checkout. */
   details: { label: "See everything that's included", href: withBase('/unlimited') },
+  /** Primary call to action on promo surfaces: sends people to /unlimited rather than straight to checkout. */
+  landing: { label: 'Explore Founding Membership', href: withBase('/unlimited') },
+  /** Momence checkout, linked only from the /unlimited checkout step. */
+  checkout: {
+    label: 'Claim Founding Membership',
+    href: UNLIMITED.href,
+    ariaLabel: `Claim the Founding Unlimited membership: $${UNLIMITED.price} per month for life`,
+  },
   /** Availability line: "Only available through Dec 31". */
   availability: `Only available through ${FOUNDING_DEADLINE}`,
   /** One-line pitch, used on partner pages. */
   pitch: `Unlimited access at $${UNLIMITED.price}/mo, locked in for life. The founding rate is only available through ${FOUNDING_DEADLINE}.`,
-  /** Announcement used by the site banner. */
-  announcement: `Founding Unlimited Membership — $${UNLIMITED.price}/mo for life (normally $${UNLIMITED.originalPrice}).`,
+  /** Announcement used by the site banner. No price: the banner links to /unlimited, which shows it at checkout. */
+  announcement: 'Founding Unlimited Membership: your rate locked in for life.',
   /** Deadline sentence after the banner announcement; hidden on mobile, where the day countdown covers it. */
   announcementDeadline: `Only available through ${FOUNDING_DEADLINE}.`,
 };

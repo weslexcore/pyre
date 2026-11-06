@@ -1,3 +1,4 @@
+import { withBase } from './paths';
 import type { ActionRef } from './types';
 
 /** A monthly subscription to the same number of credits as a pack, shown beside it. */
@@ -25,6 +26,14 @@ export interface SessionItem {
   /** When set, the row compares the one-time pack with this subscription. */
   subscription?: SessionSubscription;
   href?: string;
+  /**
+   * The row sells a landing page, not a checkout: the price is hidden and the
+   * button opens `href` in the same tab. Used by the intro offer, whose price
+   * is only shown on /intro at the checkout step.
+   */
+  landing?: boolean;
+  /** Button label; defaults to "Buy". */
+  ctaLabel?: string;
 }
 
 export interface SessionsContent {
@@ -56,7 +65,12 @@ export const introOffer = {
   /** Sentence form, written to open a sentence: "Get 2 weeks of unlimited sauna + cold plunge for $50." */
   sentence: 'Get 2 weeks of unlimited sauna + cold plunge for $50',
   perks: ['Unlimited credits', '1 guest pass', '15% off drinks + merch'],
+  /** Price-free pitch, written to open a sentence: "2 weeks of unlimited sauna + cold plunge". */
+  pitch: '2 weeks of unlimited sauna + cold plunge',
+  /** Momence checkout. Only the /intro checkout step links here; every other surface sends people to `landing`. */
   href: 'https://momence.com/m/966626',
+  /** The /intro landing page that spells out the offer. The price is shown there, at checkout. */
+  landing: { label: 'See the Intro Offer', href: withBase('/intro') },
 };
 
 /** Price caption: "for 2 weeks unlimited". */
@@ -85,7 +99,9 @@ const sessions: SessionsContent = {
       price: introOffer.price,
       description: `New here? Unlimited sauna + cold plunge for 2 weeks, plus 1 guest pass and 15% off drinks + merch. Available once per customer.`,
       highlighted: true,
-      href: introOffer.href,
+      href: introOffer.landing.href,
+      landing: true,
+      ctaLabel: 'Learn more',
     },
     {
       id: 'single',

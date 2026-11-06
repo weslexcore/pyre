@@ -117,12 +117,15 @@ import SectionDivider from './SectionDivider.astro';
             </div>
           ) : (
           <div class="flex items-center justify-between lg:justify-end gap-4">
-            <div class={`flex items-baseline gap-2 font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
-              {item.originalPrice && (
-                <span class="text-lg lg:text-base opacity-50 line-through">${item.originalPrice}</span>
-              )}
-              <span>${item.price}</span>
-            </div>
+            {/* Landing rows (the intro) hide the price: it is shown on their page, at checkout. */}
+            {!item.landing && (
+              <div class={`flex items-baseline gap-2 font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                {item.originalPrice && (
+                  <span class="text-lg lg:text-base opacity-50 line-through">${item.originalPrice}</span>
+                )}
+                <span>${item.price}</span>
+              </div>
+            )}
             {item.href && (
               <a
                 href={item.href}
@@ -132,10 +135,10 @@ import SectionDivider from './SectionDivider.astro';
                     ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'
                     : 'bg-current/10 hover:bg-current/20 border border-current/30'
                 }`}
-                target="_blank"
-                rel="noopener noreferrer"
+                target={item.landing ? undefined : '_blank'}
+                rel={item.landing ? undefined : 'noopener noreferrer'}
               >
-                Buy
+                {item.ctaLabel ?? 'Buy'}
               </a>
             )}
           </div>

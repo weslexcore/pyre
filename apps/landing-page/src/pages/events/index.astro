@@ -116,7 +116,7 @@ const description =
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Booking</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Sessions are bookable online — browse upcoming sessions and filter by session type above. New to Pyre? <a href={introOffer.href} target="_blank" rel="noopener noreferrer" data-track-placement="events_faq_intro" class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">{introOffer.sentence}</a> — the best way to try it.
+                Sessions are bookable online — browse upcoming sessions and filter by session type above. New to Pyre? <a href={introOffer.landing.href} data-track-placement="events_faq_intro" class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">Start with {introOffer.pitch}</a> — the best way to try it.
               </p>
             </div>
           </div>
@@ -147,7 +147,7 @@ const description =
           <div>
             <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Do you offer membership?</h3>
             <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-              Yes. Founding Unlimited is ${founding.unlimited.price}/mo for life (normally ${founding.unlimited.originalPrice}): unlimited sessions, 4 guest passes a month and 15% off merch, drinks and private rentals. {founding.availability}. <a href={founding.details.href} class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">See everything that's included.</a>
+              Yes. Founding Unlimited locks in your monthly rate for life: unlimited sessions, 4 guest passes a month and 15% off merch, drinks and private rentals. {founding.availability}. <a href={founding.details.href} class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">See everything that's included.</a>
             </p>
           </div>
         </div>

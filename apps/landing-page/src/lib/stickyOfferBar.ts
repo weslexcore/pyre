@@ -1,4 +1,6 @@
 // Copy for the mobile sticky offer bar (components/StickyOfferBar.astro).
+// Neither variant shows a price: both send people to a landing page (/intro,
+// /unlimited) that spells out the offer and shows the price at checkout.
 import { founding } from './membership';
 import { introOffer } from './sessions';
 
@@ -7,17 +9,17 @@ const stickyOfferBar = {
   endsAt: founding.endsAt,
   intro: {
     eyebrow: 'New here?',
-    label: `${introOffer.headline} · $${introOffer.price}`,
-    action: 'Claim',
-    href: introOffer.href,
-    ariaLabel: `Buy the intro offer: ${introOffer.sentence.toLowerCase()}`,
+    label: introOffer.headline,
+    action: 'See offer',
+    href: introOffer.landing.href,
+    ariaLabel: `See the intro offer: ${introOffer.pitch}`,
   },
   founding: {
     eyebrow: `Founding rate ends ${founding.deadline}`,
-    label: `Unlimited · $${founding.unlimited.price}/mo for life`,
-    action: 'Join',
-    href: founding.unlimited.href,
-    ariaLabel: `Claim the Founding Unlimited membership: $${founding.unlimited.price} per month for life`,
+    label: 'Unlimited, locked in for life',
+    action: 'Explore',
+    href: founding.landing.href,
+    ariaLabel: 'Explore the Founding Unlimited membership',
   },
 };
 

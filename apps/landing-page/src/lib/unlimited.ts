@@ -1,14 +1,15 @@
 // Copy for the /unlimited landing page: sells the Founding Unlimited
-// membership, and funnels anyone not ready to commit into the intro offer
-// (which itself discounts the first month of membership). Prices, links and
-// the deadline come from membership.ts / sessions.ts so they stay in sync with
-// the rest of the site.
-import { founding } from './membership';
+// membership benefits first, and shows the price only in the checkout step at
+// the bottom of the page (`join`). Anyone not ready to commit is sent to the
+// /intro landing page. Prices, links and the deadline come from membership.ts
+// and sessions.ts so they stay in sync with the rest of the site.
+import membership, { founding } from './membership';
 import { introOffer, SINGLE_CREDIT_PRICE } from './sessions';
 
-const { price, originalPrice, href } = founding.unlimited;
+const { price, originalPrice } = founding.unlimited;
 
 const GUEST_PASSES = 4;
+const INTRO_WEEKS = introOffer.days / 7;
 
 export interface UnlimitedBenefit {
   title: string;
@@ -17,32 +18,33 @@ export interface UnlimitedBenefit {
 
 const unlimited = {
   meta: {
-    title: `Founding Unlimited Membership | $${price}/mo for Life | Pyre Sauna`,
-    description: `Unlimited sauna + cold plunge in Richmond, VA. Lock in the founding rate of $${price}/mo for life (normally $${originalPrice}) — only through ${founding.deadline}. New here? ${introOffer.sentence}.`,
+    title: 'Founding Unlimited Membership | Unlimited Sauna + Cold Plunge | Pyre Sauna',
+    description: `Unlimited sauna + cold plunge in Richmond, VA, with your founding rate locked in for life. Only available through ${founding.deadline}. New here? Start with ${introOffer.pitch}.`,
   },
 
   hero: {
     eyebrow: founding.eyebrow,
     title: 'Unlimited sauna + cold plunge',
-    subtitle: `Make heat, cold and community part of your week. Lock in $${price}/mo for life — normally $${originalPrice}.`,
+    subtitle:
+      'Make heat, cold and community part of your week. Join as a founding member and your monthly rate is locked in for life.',
     pill: founding.availability,
     primaryCta: {
-      label: 'Claim Founding Membership',
-      href,
-      ariaLabel: `Claim the Founding Unlimited membership — $${price} per month for life`,
+      label: 'Become a Founding Member',
+      href: '#join',
+      ariaLabel: 'Jump to the founding membership checkout',
     },
     secondaryCta: {
-      label: `New here? Try ${introOffer.days / 7} weeks for $${introOffer.price}`,
-      href: '#intro',
+      label: `New here? Try ${INTRO_WEEKS} weeks unlimited`,
+      href: introOffer.landing.href,
       ariaLabel: 'See the intro offer',
     },
   },
 
   /** Short proof points under the hero. */
   stats: [
-    { value: `$${price}`, label: 'per month, for life' },
-    { value: `$${(originalPrice - price) * 12}`, label: 'saved every year vs. standard' },
     { value: `${GUEST_PASSES}`, label: 'guest passes every month' },
+    { value: '15%', label: 'off merch, drinks + rentals' },
+    { value: founding.deadline, label: 'last day to lock in the founding rate' },
   ],
 
   included: {
@@ -71,40 +73,32 @@ const unlimited = {
       },
       {
         title: 'Founding rate for life',
-        body: `Your $${price}/mo never goes up, as long as you stay a member. Standard Unlimited will be $${originalPrice}/mo.`,
+        body: `Your monthly rate never goes up, as long as you stay a member. Standard Unlimited will cost more after ${founding.deadline}; founding members never pay it.`,
       },
     ] satisfies UnlimitedBenefit[],
   },
 
   founding: {
     heading: 'Why founding?',
-    body: `Founding members are the people who help us build Pyre from day one. As a thank-you, your rate is locked at $${price}/mo for as long as you're a member — $${originalPrice - price} less every month than standard Unlimited. The founding rate is only available through ${founding.deadline}, and it won't come back.`,
-    compare: [
-      { label: 'Founding Unlimited', price, note: 'Locked for life', highlighted: true },
-      {
-        label: 'Standard Unlimited',
-        price: originalPrice,
-        note: `After ${founding.deadline}`,
-        highlighted: false,
-      },
+    body: `Founding members are the people who help us build Pyre from day one. As a thank-you, your monthly rate is locked in for as long as you're a member, below what standard Unlimited will cost. The founding rate is only available through ${founding.deadline}, and it won't come back.`,
+    points: [
+      'Your rate is locked in for life',
+      'Never pay the standard Unlimited rate',
+      'Pausing never changes your rate',
+      `Only available through ${founding.deadline}`,
     ],
   },
 
   intro: {
     eyebrow: 'Not ready to commit?',
-    heading: `Start with ${introOffer.days / 7} weeks unlimited`,
-    body: `${introOffer.sentence}. Try the full member experience before you decide — and if you join during your intro, we'll take $${introOffer.membershipDiscount} off your first month.`,
-    price: introOffer.price,
-    priceNote: `for ${introOffer.days} days unlimited`,
-    perks: [
-      ...introOffer.perks,
-      `$${introOffer.membershipDiscount} off your first month of membership`,
-    ],
+    heading: `Start with ${INTRO_WEEKS} weeks unlimited`,
+    body: `${introOffer.pitch.charAt(0).toUpperCase()}${introOffer.pitch.slice(1)}, with everything members get. Try the full experience before you decide — and if you join during your intro, we'll take $${introOffer.membershipDiscount} off your first month.`,
+    perks: introOffer.perks,
     finePrint: 'Available once per customer.',
     steps: [
       {
-        title: `Grab the intro`,
-        body: `$${introOffer.price} for ${introOffer.days} days of unlimited sauna + cold plunge.`,
+        title: 'Grab the intro',
+        body: `${introOffer.days} days of unlimited sauna + cold plunge, plus a guest pass.`,
       },
       {
         title: 'Build the habit',
@@ -116,9 +110,9 @@ const unlimited = {
       },
     ],
     cta: {
-      label: 'Claim Intro Offer',
-      href: introOffer.href,
-      ariaLabel: `Claim the intro offer — ${introOffer.sentence.toLowerCase()}`,
+      label: introOffer.landing.label,
+      href: introOffer.landing.href,
+      ariaLabel: `See the intro offer: ${introOffer.pitch}`,
     },
   },
 
@@ -131,7 +125,7 @@ const unlimited = {
     items: [
       {
         question: "What do you mean by 'for life'?",
-        answer: `Your $${price}/mo founding rate never goes up for as long as you keep your membership. Standard Unlimited will be $${originalPrice}/mo, and even if that price rises over the years, yours stays at $${price}. Pausing your membership doesn't affect your rate. If you cancel, the founding rate ends, and rejoining later would be at the standard price.`,
+        answer: `Your founding rate never goes up for as long as you keep your membership. Standard Unlimited costs more, and even if that price rises over the years, yours stays where it started. Pausing your membership doesn't affect your rate. If you cancel, the founding rate ends, and rejoining later would be at the standard rate.`,
       },
       {
         question: 'What counts as unlimited?',
@@ -153,18 +147,36 @@ const unlimited = {
       },
       {
         question: "I've never been. Where should I start?",
-        answer: `Start with the intro: ${introOffer.sentence.charAt(0).toLowerCase()}${introOffer.sentence.slice(1)}. Join as a member during your intro and take $${introOffer.membershipDiscount} off your first month.`,
+        answer: `Start with the intro: ${introOffer.pitch}. Join as a member during your intro and take $${introOffer.membershipDiscount} off your first month.`,
       },
       {
         question: 'When does the founding rate end?',
-        answer: `The founding rate is only available through ${founding.deadline}. After that, Unlimited is $${originalPrice}/mo.`,
+        answer: `The founding rate is only available through ${founding.deadline}. After that, Unlimited is sold at the standard rate.`,
       },
     ],
   },
 
-  closing: {
-    heading: `Lock in $${price}/mo for life`,
-    body: `${founding.availability}. Join now, or start with the intro and decide in ${introOffer.days / 7} weeks.`,
+  /** Checkout step: the only place on the page that shows the price. */
+  join: {
+    eyebrow: 'Ready to join?',
+    heading: 'Lock in your founding rate',
+    body: `${founding.availability}. Checkout takes about a minute, and your first session can be today.`,
+    price,
+    originalPrice,
+    period: '/mo for life',
+    savings: `Save $${(originalPrice - price) * 12} a year vs. standard Unlimited`,
+    recap: [
+      'Unlimited sauna + cold plunge',
+      `${GUEST_PASSES} guest passes every month`,
+      'Rate locked in for life',
+    ],
+    cta: founding.checkout,
+    finePrint: membership.note,
+    intro: {
+      label: `Not ready? Start with ${INTRO_WEEKS} weeks unlimited`,
+      href: introOffer.landing.href,
+      ariaLabel: 'See the intro offer',
+    },
   },
 };
 

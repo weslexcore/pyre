@@ -79,14 +79,7 @@ import { introMembershipPerk } from '../lib/sessions';
           >
             {hi.hero.title}
           </h1>
-          <p class="text-sm opacity-80 mb-4">{hi.hero.subtitle}</p>
-          <div class="flex items-baseline justify-center gap-2 mb-5">
-            <span class="font-primary-semibold text-4xl text-[var(--pyre-muted-gold)] leading-none">
-              ${hi.hero.price}
-            </span>
-            {hi.hero.originalPrice && <s class="text-sm opacity-60">${hi.hero.originalPrice}</s>}
-            <span class="text-sm opacity-70">{hi.hero.priceNote}</span>
-          </div>
+          <p class="text-sm opacity-80 mb-5">{hi.hero.subtitle}</p>
           <a
             href={hi.hero.cta.href}
             aria-label={hi.hero.cta.ariaLabel}

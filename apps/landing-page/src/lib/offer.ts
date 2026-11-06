@@ -1,11 +1,11 @@
 // Copy for the homepage offer section: how a first visit leads to membership,
-// plus the intro and founding offers side by side. Steps, perks and prices are
-// shared with the /unlimited page (unlimited.ts) so the two never drift apart.
+// plus the intro and founding offers side by side. Neither card shows a price:
+// each sends people to its landing page (/intro, /unlimited), which spells out
+// the offer and shows the price at checkout. Steps and perks are shared with
+// the /unlimited page (unlimited.ts) so the two never drift apart.
 import { founding } from './membership';
-import { introMembershipPerk, introOffer, introPriceNote } from './sessions';
+import { introMembershipPerk, introOffer } from './sessions';
 import unlimited from './unlimited';
-
-const { price, originalPrice, href } = founding.unlimited;
 
 const offer = {
   eyebrow: 'New here? Start here',
@@ -15,36 +15,31 @@ const offer = {
   intro: {
     label: 'Intro',
     name: introOffer.headline,
-    price: introOffer.price,
-    priceNote: introPriceNote,
+    tagline: 'The full member experience, with no commitment.',
     perks: introOffer.perks,
     perk: introMembershipPerk,
     finePrint: 'Available once per customer.',
     cta: {
-      label: 'Claim Intro Offer',
-      href: introOffer.href,
-      ariaLabel: `Buy the intro offer: ${introOffer.sentence.toLowerCase()}`,
+      label: introOffer.landing.label,
+      href: introOffer.landing.href,
+      ariaLabel: `See the intro offer: ${introOffer.pitch}`,
     },
   },
 
   founding: {
     label: founding.eyebrow,
     name: 'Founding Unlimited',
-    price,
-    originalPrice,
-    period: '/mo for life',
-    savings: `Save $${originalPrice - price}/mo forever`,
+    tagline: 'Your monthly rate, locked in for life.',
     perks: [
       'Unlimited sauna + cold plunge',
       '4 guest passes every month',
       'Pause up to 3 months a year',
     ],
     cta: {
-      label: 'Claim Founding Membership',
-      href,
-      ariaLabel: `Claim the Founding Unlimited membership: $${price} per month for life`,
+      label: founding.landing.label,
+      href: founding.landing.href,
+      ariaLabel: 'Explore the Founding Unlimited membership and everything it includes',
     },
-    details: founding.details,
   },
 };
 

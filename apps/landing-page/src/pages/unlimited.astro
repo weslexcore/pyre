@@ -5,7 +5,7 @@ import { Image } from 'astro:assets';
 import heroImg from '../assets/images/837A0206.webp';
 import introImg from '../assets/images/837A0269.webp';
 import communityImg from '../assets/images/community_3.webp';
-import closingImg from '../assets/images/plunging.webp';
+import joinImg from '../assets/images/plunging.webp';
 import Button from '../components/Button.astro';
 import CtaTracking from '../components/CtaTracking.astro';
 import FoundingCountdown from '../components/FoundingCountdown.astro';
@@ -13,13 +13,15 @@ import GoogleRatingBadge from '../components/GoogleRatingBadge.astro';
 import SectionDivider from '../components/SectionDivider.astro';
 import StickyOfferBar from '../components/StickyOfferBar.astro';
 import Layout from '../layouts/main.astro';
-import membership from '../lib/membership';
 import testimonials from '../lib/testimonials';
 import unlimited from '../lib/unlimited';
 
-const { hero, stats, included, founding, intro, faqs, closing } = unlimited;
+// Benefits first; the price appears only in the `join` (checkout) section at the bottom.
+const { hero, stats, included, founding, intro, faqs, join } = unlimited;
 const quotes = testimonials.items.filter((t) => t.highlight).slice(0, 3);
 const [featuredQuote, ...otherQuotes] = quotes;
+
+const check = 'M5 13l4 4L19 7';
 
 const faqSchema = {
   '@context': 'https://schema.org',
@@ -42,7 +44,7 @@ const faqSchema = {
 >
   <script is:inline type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
 
-  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)] scroll-smooth">
     <!-- Hero -->
     <section class="relative w-full min-h-[90dvh] flex items-center justify-center overflow-hidden">
       <Image
@@ -128,7 +130,7 @@ const faqSchema = {
             <li class="border border-[var(--pyre-muted-gold)]/25 rounded-lg p-6 md:p-7 bg-[var(--pyre-creme)]/[0.03] transition-colors duration-300 hover:border-[var(--pyre-muted-gold)]/60">
               <div class="flex items-start gap-3">
                 <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
                 </svg>
                 <div>
                   <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-[0.12em] text-[var(--pyre-muted-gold)] mb-2">{benefit.title}</h3>
@@ -192,7 +194,7 @@ const faqSchema = {
       </section>
     )}
 
-    <!-- Founding vs standard -->
+    <!-- Why founding -->
     <section id="founding" aria-labelledby="founding-heading" class="border-t border-current/10 py-16 md:py-24 px-4">
       <div class="max-w-4xl mx-auto md:grid md:grid-cols-2 md:gap-12 md:items-center">
         <div class="mb-8 md:mb-0 text-center md:text-left">
@@ -212,30 +214,17 @@ const faqSchema = {
           </Button>
         </div>
 
-        <ul class="space-y-3">
-          {founding.compare.map((plan) => (
-            <li
-              class={`flex items-center justify-between gap-4 rounded-lg p-5 md:p-6 border ${
-                plan.highlighted
-                  ? 'border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5'
-                  : 'border-current/20 opacity-60'
-              }`}
-            >
-              <div>
-                <p class="font-mono-bold text-sm uppercase tracking-wide">{plan.label}</p>
-                <p class="text-xs opacity-70 mt-0.5">{plan.note}</p>
-              </div>
-              <p class="whitespace-nowrap">
-                <span class={`font-primary-semibold text-3xl md:text-4xl leading-none ${plan.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
-                  ${plan.price}
-                </span>
-                <span class="text-sm opacity-70">/mo</span>
-              </p>
+        <ul class="rounded-lg border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 p-6 md:p-8 space-y-4">
+          {founding.points.map((point) => (
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
+              </svg>
+              <span class="font-mono-bold text-sm md:text-base uppercase tracking-wide">{point}</span>
             </li>
           ))}
         </ul>
       </div>
-      {membership.note && <p class="mt-8 text-xs md:text-sm opacity-60 text-center italic">{membership.note}</p>}
     </section>
 
     <!-- Intro funnel -->
@@ -275,15 +264,11 @@ const faqSchema = {
         </ol>
 
         <div class="max-w-md mx-auto border-2 border-[var(--pyre-gold)] bg-[var(--pyre-black)]/85 rounded-lg p-6 md:p-8 text-center shadow-2xl">
-          <div class="flex items-baseline justify-center gap-2 mb-4">
-            <span class="font-primary-semibold text-5xl text-[var(--pyre-muted-gold)] leading-none">${intro.price}</span>
-            <span class="text-sm opacity-70">{intro.priceNote}</span>
-          </div>
           <ul class="space-y-2 mb-6 text-left inline-block">
             {intro.perks.map((perk) => (
               <li class="flex items-start gap-2 text-sm">
                 <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
                 </svg>
                 <span>{perk}</span>
               </li>
@@ -291,7 +276,7 @@ const faqSchema = {
           </ul>
           <Button
             href={intro.cta.href}
-            variant="primary"
+            variant="outline"
             size="lg"
             ariaLabel={intro.cta.ariaLabel}
             data-track-placement="unlimited_intro"
@@ -326,10 +311,15 @@ const faqSchema = {
       </div>
     </section>
 
-    <!-- Closing CTA -->
-    <section aria-labelledby="closing-heading" class="relative py-20 md:py-32 px-4 border-t border-current/10 text-center overflow-hidden">
+    <!-- Checkout: the only place on the page that shows the price -->
+    <section
+      id="join"
+      aria-labelledby="join-heading"
+      data-sticky-bar-hide
+      class="relative py-20 md:py-32 px-4 border-t border-current/10 text-center overflow-hidden scroll-mt-20"
+    >
       <Image
-        src={closingImg}
+        src={joinImg}
         alt=""
         widths={[768, 1280, 1920]}
         sizes="100vw"
@@ -339,37 +329,63 @@ const faqSchema = {
       />
       <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-blue)]/95 to-[var(--pyre-blue)]/70"></div>
       <div class="relative z-10 max-w-2xl mx-auto">
-        <h2 id="closing-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4">
-          {closing.heading}
+        <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+          {join.eyebrow}
+        </p>
+        <h2 id="join-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4">
+          {join.heading}
         </h2>
-        <p class="text-base md:text-lg opacity-90 mb-4">{closing.body}</p>
+        <p class="text-base md:text-lg opacity-90 mb-4">{join.body}</p>
         <FoundingCountdown class="mb-8" />
-        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+
+        <div class="max-w-md mx-auto border-2 border-[var(--pyre-gold)] bg-[var(--pyre-black)]/85 rounded-lg p-6 md:p-8 shadow-2xl">
+          <div class="flex items-baseline justify-center gap-2 flex-wrap mb-2">
+            <span class="text-lg opacity-50 line-through">${join.originalPrice}</span>
+            <span class="font-primary-semibold text-5xl text-[var(--pyre-muted-gold)] leading-none">${join.price}</span>
+            <span class="text-sm opacity-70">{join.period}</span>
+          </div>
+          <p class="inline-block rounded-full bg-[var(--pyre-muted-gold)]/15 px-2.5 py-1 font-mono-bold text-[10px] md:text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-5">
+            {join.savings}
+          </p>
+          <ul class="space-y-2 mb-6 text-left inline-block">
+            {join.recap.map((item) => (
+              <li class="flex items-start gap-2 text-sm">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={check} />
+                </svg>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
           <Button
-            href={hero.primaryCta.href}
+            href={join.cta.href}
             variant="primary"
             size="lg"
-            ariaLabel={hero.primaryCta.ariaLabel}
-            data-track-placement="unlimited_closing"
+            ariaLabel={join.cta.ariaLabel}
+            data-track-placement="unlimited_join"
+            class="w-full"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            {hero.primaryCta.label}
+            {join.cta.label}
           </Button>
-          <Button
-            href={intro.cta.href}
-            variant="outline"
-            size="lg"
-            ariaLabel={intro.cta.ariaLabel}
-            data-track-placement="unlimited_closing_intro"
-          >
-            {intro.cta.label}
-          </Button>
+          {join.finePrint && <p class="mt-3 text-xs opacity-60 italic">{join.finePrint}</p>}
         </div>
+
+        <a
+          href={join.intro.href}
+          aria-label={join.intro.ariaLabel}
+          data-track-placement="unlimited_join_intro"
+          class="mt-8 inline-block text-sm underline underline-offset-4 opacity-80 hover:opacity-100"
+        >
+          {join.intro.label}
+        </a>
       </div>
     </section>
   </div>
 
-  <!-- Layout skips the sticky bar on hidePromos pages; this page wants it, founding first -->
-  <StickyOfferBar mode="founding" placementPrefix="unlimited_sticky_bar" />
+  <!-- Layout skips the sticky bar on hidePromos pages; this page wants it, founding first, pointing at the checkout step -->
+  <StickyOfferBar mode="founding" foundingHref="#join" foundingAction="Join" placementPrefix="unlimited_sticky_bar" />
 </Layout>
 
 <CtaTracking />

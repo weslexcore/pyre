@@ -1,6 +1,8 @@
 ---
 // Homepage offer section: the intro → member path in three steps, then the
-// intro offer and the Founding Unlimited membership side by side.
+// intro offer and the Founding Unlimited membership side by side. Neither card
+// shows a price: each links to its landing page (/intro, /unlimited), which
+// spells out the offer and shows the price at checkout.
 import offer from '../lib/offer';
 import FoundingCountdown from './FoundingCountdown.astro';
 import SectionDivider from './SectionDivider.astro';
@@ -39,10 +41,7 @@ const check = 'M5 13l4 4L19 7';
     <div class="flex flex-col rounded-lg border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10 p-5">
       <p class="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)]">{intro.label}</p>
       <h3 class="font-mono-bold text-lg uppercase tracking-wide mt-1">{intro.name}</h3>
-      <div class="flex items-baseline gap-2 mt-3">
-        <span class="font-primary-semibold text-4xl leading-none text-[var(--pyre-muted-gold)]">${intro.price}</span>
-        <span class="text-sm opacity-70">{intro.priceNote}</span>
-      </div>
+      <p class="mt-2 text-sm opacity-80">{intro.tagline}</p>
       <ul class="space-y-2 mt-4 mb-4 flex-grow">
         {intro.perks.map((perk) => (
           <li class="flex items-start gap-2 text-sm">
@@ -56,8 +55,6 @@ const check = 'M5 13l4 4L19 7';
       <p class="text-xs text-[var(--pyre-muted-gold)] mb-4">{intro.perk}</p>
       <a
         href={intro.cta.href}
-        target="_blank"
-        rel="noopener noreferrer"
         aria-label={intro.cta.ariaLabel}
         data-track-placement="home_offer_intro"
         class="inline-flex w-full items-center justify-center rounded-md bg-[var(--pyre-muted-gold)] px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-black)] transition-colors hover:bg-[var(--pyre-gold)]"
@@ -74,14 +71,7 @@ const check = 'M5 13l4 4L19 7';
         <FoundingCountdown />
       </div>
       <h3 class="font-mono-bold text-lg uppercase tracking-wide mt-1">{founding.name}</h3>
-      <div class="flex items-baseline gap-2 mt-3 flex-wrap">
-        <span class="text-lg opacity-50 line-through">${founding.originalPrice}</span>
-        <span class="font-primary-semibold text-4xl leading-none">${founding.price}</span>
-        <span class="text-sm opacity-70">{founding.period}</span>
-      </div>
-      <p class="mt-2 inline-flex self-start rounded-full bg-current/10 px-2 py-0.5 font-mono-bold text-xs uppercase tracking-wide">
-        {founding.savings}
-      </p>
+      <p class="mt-2 text-sm opacity-80">{founding.tagline}</p>
       <ul class="space-y-2 mt-4 mb-4 flex-grow">
         {founding.perks.map((perk) => (
           <li class="flex items-start gap-2 text-sm">
@@ -94,20 +84,11 @@ const check = 'M5 13l4 4L19 7';
       </ul>
       <a
         href={founding.cta.href}
-        target="_blank"
-        rel="noopener noreferrer"
         aria-label={founding.cta.ariaLabel}
         data-track-placement="home_offer_founding"
         class="inline-flex w-full items-center justify-center rounded-md border-2 border-current px-4 py-3 font-mono-bold text-sm uppercase tracking-wide transition-colors hover:bg-[var(--pyre-creme)] hover:text-[var(--pyre-black)]"
       >
         {founding.cta.label}
-      </a>
-      <a
-        href={founding.details.href}
-        data-track-placement="home_offer_founding_details"
-        class="mt-2 text-center text-xs underline underline-offset-4 opacity-70 hover:opacity-100"
-      >
-        {founding.details.label}
       </a>
     </div>
   </div>

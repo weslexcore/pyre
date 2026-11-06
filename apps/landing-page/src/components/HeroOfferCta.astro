@@ -1,5 +1,7 @@
 ---
 // Intro offer + booking CTAs shown in both the mobile and desktop homepage heroes.
+// The intro button leads to the /intro landing page (no price here); only
+// off-site links open in a new tab.
 import heroOffer from '../lib/hero';
 
 interface Props {
@@ -8,6 +10,7 @@ interface Props {
 }
 
 const { role } = Astro.props;
+const primaryExternal = /^https?:\/\//.test(heroOffer.primary.href);
 ---
 
 <div class="flex flex-col gap-3">
@@ -17,8 +20,8 @@ const { role } = Astro.props;
   <div class="flex flex-wrap items-start gap-3">
     <a
       href={heroOffer.primary.href}
-      target="_blank"
-      rel="noopener noreferrer"
+      target={primaryExternal ? '_blank' : undefined}
+      rel={primaryExternal ? 'noopener noreferrer' : undefined}
       aria-label={heroOffer.primary.ariaLabel}
       data-track-placement={`home_hero_intro_${role}`}
       class="inline-flex items-center justify-center rounded-md bg-[var(--pyre-muted-gold)] px-5 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-black)] transition-colors hover:bg-[var(--pyre-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-creme)]/60"
