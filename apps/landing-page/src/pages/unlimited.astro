@@ -227,40 +227,6 @@ const faqSchema = {
       </div>
     </section>
 
-    <!-- Not ready to commit? Hands off to the /intro landing page, which does the selling. -->
-    <section id="intro" aria-labelledby="intro-heading" class="relative border-t border-current/10 py-16 md:py-20 px-4 overflow-hidden scroll-mt-20">
-      <Image
-        src={introImg}
-        alt=""
-        widths={[768, 1280, 1920]}
-        sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-        decoding="async"
-      />
-      <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div>
-
-      <div class="relative z-10 max-w-2xl mx-auto text-center">
-        <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
-          {intro.eyebrow}
-        </p>
-        <h2 id="intro-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3">
-          {intro.heading}
-        </h2>
-        <p class="text-base md:text-lg opacity-85 mb-8">{intro.body}</p>
-        <Button
-          href={intro.cta.href}
-          variant="outline"
-          size="lg"
-          ariaLabel={intro.cta.ariaLabel}
-          data-track-placement="unlimited_intro"
-          class="w-full sm:w-auto"
-        >
-          {intro.cta.label}
-        </Button>
-      </div>
-    </section>
-
     <!-- FAQ -->
     <section id="faq" aria-labelledby="faq-heading" class="border-t border-[var(--pyre-muted-gold)]/20 bg-[var(--pyre-black)] py-16 md:py-24 px-4">
       <div class="max-w-3xl mx-auto">
@@ -343,15 +309,40 @@ const faqSchema = {
           </Button>
           {join.finePrint && <p class="mt-3 text-xs opacity-60 italic">{join.finePrint}</p>}
         </div>
+      </div>
+    </section>
 
-        <a
-          href={join.intro.href}
-          aria-label={join.intro.ariaLabel}
-          data-track-placement="unlimited_join_intro"
-          class="mt-8 inline-block text-sm underline underline-offset-4 opacity-80 hover:opacity-100"
+    <!-- Still not sure? Sits after the ask and hands off to the /intro landing page, which does the selling. -->
+    <section id="intro" aria-labelledby="intro-heading" data-sticky-bar-hide class="relative border-t border-current/10 py-16 md:py-20 px-4 overflow-hidden scroll-mt-20">
+      <Image
+        src={introImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div>
+
+      <div class="relative z-10 max-w-2xl mx-auto text-center">
+        <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+          {intro.eyebrow}
+        </p>
+        <h2 id="intro-heading" class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3">
+          {intro.heading}
+        </h2>
+        <p class="text-base md:text-lg opacity-85 mb-8">{intro.body}</p>
+        <Button
+          href={intro.cta.href}
+          variant="outline"
+          size="lg"
+          ariaLabel={intro.cta.ariaLabel}
+          data-track-placement="unlimited_intro"
+          class="w-full sm:w-auto"
         >
-          {join.intro.label}
-        </a>
+          {intro.cta.label}
+        </Button>
       </div>
     </section>
   </div>

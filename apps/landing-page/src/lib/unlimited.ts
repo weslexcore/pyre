@@ -90,14 +90,14 @@ const unlimited = {
   },
 
   /**
-   * Short "not ready to commit?" band that hands off to the /intro landing
-   * page, which does the selling. `steps` are not rendered here any more;
-   * the homepage offer section (offer.ts) still shares them.
+   * Short "still not sure?" band after the checkout step that hands off to
+   * the /intro landing page, which does the selling. `steps` are not rendered
+   * here any more; the homepage offer section (offer.ts) still shares them.
    */
   intro: {
-    eyebrow: 'Not ready to commit?',
+    eyebrow: 'Still not sure?',
     heading: `Start with ${INTRO_WEEKS} weeks unlimited`,
-    body: `${introOffer.pitch.charAt(0).toUpperCase()}${introOffer.pitch.slice(1)}, with everything members get. Try the full experience before you decide — and if you join during your intro, we'll take $${introOffer.membershipDiscount} off your first month.`,
+    body: `Try the full member experience for ${INTRO_WEEKS} weeks before you decide. Join during your intro and we'll take $${introOffer.membershipDiscount} off your first month.`,
     steps: [
       {
         title: 'Grab the intro',
@@ -175,11 +175,6 @@ const unlimited = {
     ],
     cta: founding.checkout,
     finePrint: membership.note,
-    intro: {
-      label: `Not ready? Start with ${INTRO_WEEKS} weeks unlimited`,
-      href: introOffer.landing.href,
-      ariaLabel: 'See the intro offer',
-    },
   },
 };
 
