@@ -2,7 +2,9 @@
 // and every email each person got from it — delivered, opened, clicked — with
 // a step-by-step log. Also where to add someone by hand or take someone out,
 // and, for whitelisted test addresses, walk them through the journey without
-// waiting (run the next step now, move to a step, start over).
+// waiting (run the next step now, move to a step, start over). At the bottom:
+// the newest people a purchase or booking handed to the journey that it
+// turned away, with why, each one a click from being added by hand.
 
 import { useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
@@ -13,6 +15,7 @@ import { fmtDateTime } from '@/lib/client/format';
 import type {
   EnrollmentDto,
   EnrollmentsResponse,
+  NotEnrolledDto,
   StepEventDto,
 } from '@/lib/email/journeys/api-types';
 import type { JourneyDefinition } from '@/lib/email/journeys/schema';
@@ -43,6 +46,7 @@ export function PeoplePanel({
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [showRefused, setShowRefused] = useState(false);
 
   const params = new URLSearchParams();
   if (status !== 'all') params.set('status', status);
@@ -53,15 +57,14 @@ export function PeoplePanel({
   const stepName = (key: string | null) =>
     key ? definition.steps.find((s) => s.key === key)?.name || key : '';
 
-  const enroll = async () => {
-    if (!toAdd) return;
+  const enroll = async (memberId: number) => {
     setMessage(null);
     setAdding(true);
     try {
       const result = await sendJson<{ message: string }>(
         `/api/admin/journeys/${journeyId}/enrollments`,
         'POST',
-        { action: 'enroll', memberId: toAdd.memberId }
+        { action: 'enroll', memberId }
       );
       setMessage({ ok: true, text: result.message });
       setToAdd(null);
@@ -120,7 +123,7 @@ export function PeoplePanel({
           <button
             type="button"
             className={buttonClass}
-            onClick={() => void enroll()}
+            onClick={() => toAdd && void enroll(toAdd.memberId)}
             disabled={!toAdd || adding}
           >
             {adding ? 'Adding...' : 'Add to journey'}
@@ -260,6 +263,93 @@ export function PeoplePanel({
       {data?.truncated && (
         <p className="text-xs text-white/40">Showing the newest 200. Search to narrow.</p>
       )}
+
+      {data &&
+        (data.notEnrolled.length > 0 ||
+          definition.trigger.type === 'session-booked' ||
+          definition.trigger.type === 'purchased') && (
+          <TurnedAway
+            rows={data.notEnrolled}
+            open={showRefused}
+            onToggle={() => setShowRefused(!showRefused)}
+            adding={adding}
+            onAdd={(memberId) => void enroll(memberId)}
+          />
+        )}
+    </div>
+  );
+}
+
+/**
+ * People a purchase or booking handed to the journey that it did not enroll:
+ * the entry rule did not hold, test mode, not their first booking, already in
+ * it. Each one can be added by hand from here (the same manual add as above,
+ * so the journey's re-entry rule does not apply).
+ */
+function TurnedAway({
+  rows,
+  open,
+  onToggle,
+  adding,
+  onAdd,
+}: {
+  rows: NotEnrolledDto[];
+  open: boolean;
+  onToggle: () => void;
+  adding: boolean;
+  onAdd: (memberId: number) => void;
+}) {
+  return (
+    <div className="rounded border border-white/10 bg-white/[0.03]">
+      <button
+        type="button"
+        className="flex w-full flex-wrap items-center gap-x-3 px-3 py-2 text-left"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <span className="text-sm">Turned away at the door</span>
+        <span className="font-mono text-[11px] text-white/50">
+          {rows.length === 0
+            ? 'nobody yet'
+            : `${rows.length}${rows.length >= 50 ? '+' : ''} newest${open ? '' : ' - show'}`}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-white/10 px-3 py-2">
+          <p className="text-xs text-white/50">
+            Handed to this journey by a purchase or booking and not enrolled. Adding someone starts
+            them at the first step now, whatever the reason was.
+          </p>
+          {rows.length === 0 ? (
+            <p className="mt-2 text-xs text-white/40">Nobody has been turned away.</p>
+          ) : (
+            <ul className="mt-2 flex flex-col gap-0.5 text-xs">
+              {rows.map((r) => (
+                <li
+                  key={`${r.memberId}-${r.at}`}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1"
+                >
+                  <span className="w-28 shrink-0 font-mono text-[11px] text-white/35">
+                    {fmtDateTime(r.at)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.email || `member ${r.memberId}`}
+                  </span>
+                  <span className="text-white/45">- {r.reason}</span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={adding}
+                    onClick={() => onAdd(r.memberId)}
+                  >
+                    Add to journey
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -273,6 +363,7 @@ const EVENT_LABELS: Record<StepEventDto['kind'], string> = {
   completed: 'Finished the journey',
   moved: 'Moved to this step',
   restarted: 'Run restarted',
+  'not-enrolled': 'Turned away',
 };
 
 /** Every step outcome for this run, oldest first. */

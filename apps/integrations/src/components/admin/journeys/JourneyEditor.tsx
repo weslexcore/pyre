@@ -391,6 +391,7 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
       {tab === 'performance' && (
         <PerformancePanel
           journeyId={journey.id}
+          trigger={journey.definition.trigger.type}
           campaignSlug={journey.definition.campaign}
           campaigns={data.campaigns}
           onOpenSettings={() => setTab('overview')}

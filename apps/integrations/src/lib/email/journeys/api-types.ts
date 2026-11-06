@@ -98,10 +98,20 @@ export interface StepEventDto {
     | 'exited'
     | 'completed'
     | 'moved'
-    | 'restarted';
+    | 'restarted'
+    | 'not-enrolled';
   stepKey: string | null;
   /** In words (see lib/email/journeys/reasons.ts). */
   detail: string;
+  at: string;
+}
+
+/** Someone a purchase or booking handed to the journey that it did not enroll. */
+export interface NotEnrolledDto {
+  memberId: number;
+  email: string;
+  /** In words (see lib/email/journeys/reasons.ts). */
+  reason: string;
   at: string;
 }
 
@@ -109,6 +119,8 @@ export interface EnrollmentsResponse {
   enrollments: EnrollmentDto[];
   counts: { active: number; completed: number; exited: number };
   truncated: boolean;
+  /** The newest refusals (last 50), newest first; narrowed by the email search like enrollments. */
+  notEnrolled: NotEnrolledDto[];
 }
 
 export interface PreviewResponse {
@@ -158,6 +170,9 @@ export interface JourneyPerformanceResponse {
   /** In the journey right now (any start date). */
   active: number;
   leaveReasons: { reason: string; count: number }[];
+  /** People a purchase or booking handed to the journey that it did not enroll, in this period. */
+  turnedAway: number;
+  turnedAwayReasons: { reason: string; count: number }[];
   totals: { sent: number; delivered: number; opened: number; clicked: number; bounced: number };
   steps: StepPerformance[];
   /** The step log only exists from when it shipped; skip counts before then are unknown. */
