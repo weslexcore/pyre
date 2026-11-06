@@ -19,6 +19,10 @@ const FIXED: Record<string, string> = {
   'not-yet-due': 'not due yet',
   'frequency-cap': 'they already got a marketing email recently',
   'not-whitelisted': 'not on the test whitelist',
+  'not-first-booking': 'not their first booking',
+  'already-enrolled': 'already in this journey, or went through it before',
+  'cooling-down': 'finished this journey too recently to re-enter',
+  'check-failed': 'the entry check could not be run',
   unsubscribed: 'unsubscribed',
   'journey-retired': 'the journey was retired',
   'skipped:already-sent': 'already sent to them earlier in this run',
@@ -30,12 +34,24 @@ const FIXED: Record<string, string> = {
   'skipped:unsubscribe-url-unavailable': 'not delivered - no unsubscribe link could be made',
 };
 
+/** The other way round: "has-credits" <-> "not-has-credits". */
+function flipped(code: string): string {
+  return code.startsWith('not-') ? code.slice(4) : `not-${code}`;
+}
+
 /** "skip:not-attended-trigger-session" -> "did not check in to the session". */
 export function describeReason(code: string | null): string {
   if (!code) return '';
   if (FIXED[code]) return FIXED[code];
   if (code.startsWith('skip:')) return conditionWords(code.slice(5));
   if (code.startsWith('exit:')) return conditionWords(code.slice(5));
+  // Turned away at the door: the code names the entry condition that did not
+  // hold, so the words describe them as they were — "has no active intro offer".
+  if (code.startsWith('enroll-if:'))
+    return conditionWords(flipped(code.slice('enroll-if:'.length)));
+  if (code.startsWith('check-failed:')) {
+    return `${FIXED['check-failed']}: ${code.slice('check-failed:'.length)}`;
+  }
   if (code.startsWith('missing-merge-field:')) {
     return `no value for ${code
       .slice('missing-merge-field:'.length)

@@ -222,11 +222,24 @@ export async function firstMatch(
   return null;
 }
 
-export async function allMatch(ctx: JourneyContext, conditions: Condition[]): Promise<boolean> {
+/** The first condition that does not hold, or null when they all do. Sequential like firstMatch. */
+export async function firstFailing(
+  ctx: JourneyContext,
+  conditions: Condition[]
+): Promise<Condition | null> {
   for (const c of conditions) {
-    if (!(await checkCondition(ctx, c))) return false;
+    if (!(await checkCondition(ctx, c))) return c;
   }
-  return true;
+  return null;
+}
+
+export async function allMatch(ctx: JourneyContext, conditions: Condition[]): Promise<boolean> {
+  return (await firstFailing(ctx, conditions)) === null;
+}
+
+/** A condition as a reason code: "has-credits", or "not-has-credits" when the editor negates it. */
+export function conditionCode(c: Condition): string {
+  return `${c.negate ? 'not-' : ''}${c.type}`;
 }
 
 // --- Merge values ---

@@ -1,6 +1,7 @@
 // Who is in a journey: GET lists enrollments (newest first, filterable by
-// status and email) with each person's sends and step log from this journey;
-// POST enrolls someone, takes someone out, or — for whitelisted test
+// status and email) with each person's sends and step log from this journey,
+// plus the newest people a purchase or booking handed to it that it turned
+// away (so an admin can find one and add them by hand); POST enrolls someone, takes someone out, or — for whitelisted test
 // addresses only — runs their next step now, moves them to a step, or
 // restarts their run.
 
@@ -10,6 +11,7 @@ import { getEmailGate } from '@/lib/email/dev-mode';
 import type {
   EnrollmentDto,
   EnrollmentsResponse,
+  NotEnrolledDto,
   StepEventDto,
 } from '@/lib/email/journeys/api-types';
 import {
@@ -28,6 +30,7 @@ export const prerender = false;
 
 const PAGE = '/admin/journeys';
 const LIMIT = 200;
+const NOT_ENROLLED_LIMIT = 50;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const OUTCOME_MESSAGES: Record<string, string> = {
@@ -57,19 +60,32 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
     if (status === 'active' || status === 'completed' || status === 'exited') {
       query = query.eq('status', status);
     }
-    if (q) query = query.ilike('email', `%${q.replace(/[%_]/g, '')}%`);
+    const emailLike = q ? `%${q.replace(/[%_]/g, '')}%` : null;
+    if (emailLike) query = query.ilike('email', emailLike);
 
-    const [rowsRes, countsRes, gate] = await Promise.all([
+    // Turned away at the door: no enrollment row, so the step log carries the email.
+    let refused = ready.db
+      .from('journey_step_events')
+      .select('member_id, email, detail, created_at')
+      .eq('journey_id', journeyId)
+      .eq('kind', 'not-enrolled')
+      .order('created_at', { ascending: false })
+      .limit(NOT_ENROLLED_LIMIT);
+    if (emailLike) refused = refused.ilike('email', emailLike);
+
+    const [rowsRes, countsRes, refusedRes, gate] = await Promise.all([
       query,
       ready.db
         .from('journey_enrollments')
         .select('status')
         .eq('journey_id', journeyId)
         .limit(50_000),
+      refused,
       getEmailGate(),
     ]);
     if (rowsRes.error) throw new Error(rowsRes.error.message);
     if (countsRes.error) throw new Error(countsRes.error.message);
+    if (refusedRes.error) throw new Error(refusedRes.error.message);
 
     const rows = (rowsRes.data as JourneyEnrollmentRow[]).slice(0, LIMIT);
     const memberIds = [...new Set(rows.map((r) => r.member_id))];
@@ -160,10 +176,25 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
       };
     });
 
+    const notEnrolled: NotEnrolledDto[] = (
+      refusedRes.data as {
+        member_id: number;
+        email: string | null;
+        detail: string | null;
+        created_at: string;
+      }[]
+    ).map((r) => ({
+      memberId: r.member_id,
+      email: r.email ?? '',
+      reason: describeReason(r.detail),
+      at: r.created_at,
+    }));
+
     const body: EnrollmentsResponse = {
       enrollments,
       counts,
       truncated: (rowsRes.data as unknown[]).length > LIMIT,
+      notEnrolled,
     };
     return json(body);
   } catch (e) {

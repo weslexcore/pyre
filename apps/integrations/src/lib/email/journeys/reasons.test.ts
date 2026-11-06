@@ -19,6 +19,20 @@ describe('describeReason', () => {
     expect(describeReason('frequency-cap:2026-10-14T13:00:00.000Z')).toMatch(/recently/);
   });
 
+  it('says why someone was turned away at the door', () => {
+    // The code names the entry condition that did not hold; the words say what was true.
+    expect(describeReason('enroll-if:has-active-intro')).toBe('has no active intro offer');
+    expect(describeReason('enroll-if:not-has-active-membership')).toBe('has an active membership');
+    expect(describeReason('not-first-booking')).toBe('not their first booking');
+    expect(describeReason('not-whitelisted')).toBe('not on the test whitelist');
+    expect(describeReason('already-enrolled')).toMatch(/already in this journey/);
+    expect(describeReason('cooling-down')).toMatch(/too recently/);
+    expect(describeReason('check-failed:Momence 503')).toBe(
+      'the entry check could not be run: Momence 503'
+    );
+    expect(describeReason('check-failed')).toBe('the entry check could not be run');
+  });
+
   it('names who did something by hand', () => {
     expect(describeReason('removed-by:wes@pyresauna.com')).toBe('removed by wes@pyresauna.com');
     expect(describeReason('manual:wes@pyresauna.com')).toBe('added by wes@pyresauna.com');

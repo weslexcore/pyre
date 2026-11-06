@@ -1,7 +1,8 @@
 // The Performance tab: how a journey is doing without leaving it. Two halves:
 //   * Emails — people entering, finishing and leaving (and why), and each
 //     step's sends, deliveries, opens, clicks and skips, from the journey's
-//     own send log and step log.
+//     own send log and step log. For event-triggered journeys, also who a
+//     purchase or booking handed to the journey that it turned away, and why.
 //   * Website results — visits, signups, bookings and purchases its links
 //     brought in, read against the linked campaign's goals: the Campaigns
 //     tool's own CampaignStats panel, for the journey's linked campaign.
@@ -14,6 +15,7 @@ import type { CampaignDetailResponse } from '@/lib/campaigns/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { fmtShortDate } from '@/lib/client/format';
 import type { JourneyPerformanceResponse } from '@/lib/email/journeys/api-types';
+import type { Trigger } from '@/lib/email/journeys/schema';
 import { Section } from './Field';
 import { buttonClass, pct, pillClass } from './journeyUi';
 import type { CampaignChoice } from './OverviewPanel';
@@ -73,11 +75,14 @@ function RateBar({ part, whole }: { part: number; whole: number }) {
 
 export function PerformancePanel({
   journeyId,
+  trigger,
   campaignSlug,
   campaigns,
   onOpenSettings,
 }: {
   journeyId: string;
+  /** The saved definition's trigger: only purchases and bookings turn people away at the door. */
+  trigger: Trigger['type'];
   /** The saved definition's linked campaign. */
   campaignSlug: string | undefined;
   campaigns: CampaignChoice[];
@@ -89,6 +94,7 @@ export function PerformancePanel({
     { maxAgeMs: 60_000 }
   );
   const campaign = campaignSlug ? campaigns.find((c) => c.slug === campaignSlug) : undefined;
+  const eventTriggered = trigger === 'session-booked' || trigger === 'purchased';
 
   return (
     <div className="flex flex-col gap-4">
@@ -191,19 +197,25 @@ export function PerformancePanel({
           </Section>
 
           <Section title="Why people left early">
-            {data.leaveReasons.length === 0 ? (
-              <p className="text-sm text-white/45">Nobody left early in this period.</p>
-            ) : (
-              <ul className="flex flex-col gap-1 text-sm">
-                {data.leaveReasons.map((r) => (
-                  <li key={r.reason} className="flex gap-3">
-                    <span className="w-10 text-right font-mono text-white/70">{r.count}</span>
-                    <span className="text-white/80">{r.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ReasonList reasons={data.leaveReasons} empty="Nobody left early in this period." />
           </Section>
+
+          {(eventTriggered || data.turnedAway > 0) && (
+            <Section
+              title="Turned away at the door"
+              description={
+                eventTriggered
+                  ? `People a ${trigger === 'purchased' ? 'purchase' : 'booking'} handed to this journey that it did not enroll, and why. Find them on the People tab to add them by hand.`
+                  : 'From when this journey was triggered by purchases or bookings.'
+              }
+            >
+              <p className="font-mono text-2xl text-[var(--pyre-creme)]">{data.turnedAway}</p>
+              <ReasonList
+                reasons={data.turnedAwayReasons}
+                empty="Nobody was turned away in this period."
+              />
+            </Section>
+          )}
         </>
       )}
 
@@ -227,6 +239,26 @@ export function PerformancePanel({
         )}
       </Section>
     </div>
+  );
+}
+
+function ReasonList({
+  reasons,
+  empty,
+}: {
+  reasons: { reason: string; count: number }[];
+  empty: string;
+}) {
+  if (reasons.length === 0) return <p className="text-sm text-white/45">{empty}</p>;
+  return (
+    <ul className="flex flex-col gap-1 text-sm">
+      {reasons.map((r) => (
+        <li key={r.reason} className="flex gap-3">
+          <span className="w-10 text-right font-mono text-white/70">{r.count}</span>
+          <span className="text-white/80">{r.reason}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

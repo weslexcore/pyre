@@ -23,7 +23,9 @@ import type {
 import {
   allMatch,
   buildContext,
+  conditionCode,
   type EnrollmentContext,
+  firstFailing,
   firstMatch,
   type JourneyContext,
   type MemberIdentity,
@@ -338,22 +340,36 @@ export async function enrollFromEvent(event: TriggerEvent): Promise<void> {
   const context = bookingContext(event);
   const anchorAt = event.sessionEndsAt ? Date.parse(event.sessionEndsAt) : Date.now();
   let firstBooking: Promise<boolean | null> | null = null;
+  // Looked up once for every journey that asks. Fails safe — null (unknown)
+  // means no enrollment.
+  const isFirstBooking = async () => {
+    firstBooking ??= isMemberFirstBooking(String(event.memberId), event.sessionBookingId);
+    return (await firstBooking) === true;
+  };
 
   for (const journey of journeys) {
     const trigger = journey.definition.trigger as Extract<Trigger, { type: 'session-booked' }>;
+    let refusal: string | null;
     try {
-      if (journey.testMode && !gate.isAllowed(event.email)) continue;
-      if (trigger.firstBookingOnly) {
-        firstBooking ??= isMemberFirstBooking(String(event.memberId), event.sessionBookingId);
-        // Fails safe — null (unknown) means no enrollment.
-        if ((await firstBooking) !== true) continue;
+      if (journey.testMode && !gate.isAllowed(event.email)) {
+        refusal = 'not-whitelisted';
+      } else if (trigger.firstBookingOnly && !(await isFirstBooking())) {
+        refusal = 'not-first-booking';
+      } else {
+        const ctx = buildContext(event, { enrollment: context });
+        const failed = await firstFailing(ctx, journey.definition.enrollIf);
+        refusal = failed
+          ? `enroll-if:${conditionCode(failed)}`
+          : refusalFor(
+              journey,
+              await enrollMember(journey, event, { anchorAt, context, ctx, gate })
+            );
       }
-      const ctx = buildContext(event, { enrollment: context });
-      if (!(await allMatch(ctx, journey.definition.enrollIf))) continue;
-      await enrollMember(journey, event, { anchorAt, context, ctx, gate });
     } catch (error) {
       log.warn(`Event enrollment check failed for ${journey.id}`, error);
+      refusal = `check-failed:${errorMessage(error)}`;
     }
+    if (refusal) await logNotEnrolled(journey, event, refusal);
   }
 }
 
@@ -380,14 +396,44 @@ async function enrollFromPurchase(event: PurchaseTriggerEvent): Promise<void> {
   const ctx = buildContext(event, { freshPacks: true });
 
   for (const journey of journeys) {
+    let refusal: string | null;
     try {
-      if (journey.testMode && !gate.isAllowed(event.email)) continue;
-      if (!(await allMatch(ctx, journey.definition.enrollIf))) continue;
-      await enrollMember(journey, event, { ctx, gate });
+      if (journey.testMode && !gate.isAllowed(event.email)) {
+        refusal = 'not-whitelisted';
+      } else {
+        const failed = await firstFailing(ctx, journey.definition.enrollIf);
+        refusal = failed
+          ? `enroll-if:${conditionCode(failed)}`
+          : refusalFor(journey, await enrollMember(journey, event, { ctx, gate }));
+      }
     } catch (error) {
       log.warn(`Purchase enrollment check failed for ${journey.id}`, error);
+      refusal = `check-failed:${errorMessage(error)}`;
     }
+    if (refusal) await logNotEnrolled(journey, event, refusal);
   }
+}
+
+/**
+ * An enrollMember outcome as a not-enrolled reason, or null when there is
+ * nothing to record: they enrolled, or the journey itself is the problem
+ * (no steps, storage down), which is for the logs, not the People tab.
+ */
+function refusalFor(journey: JourneyRecord, outcome: EnrollOutcome): string | null {
+  switch (outcome) {
+    case 'enrolled':
+    case 'unavailable':
+      return null;
+    case 'no-steps':
+      log.warn(`${journey.id} has no steps to enroll into`);
+      return null;
+    default:
+      return outcome;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 // --- Sweep enrollment (cron job) ---
@@ -824,7 +870,7 @@ async function runDueStep(
 
   const exit = await firstMatch(memberCtx, journey.definition.exitIf);
   if (exit) {
-    const reason = `exit:${exit.negate ? 'not-' : ''}${exit.type}`;
+    const reason = `exit:${conditionCode(exit)}`;
     if (!dryRun) await exitJourney(journey, row, reason, step.key);
     return { kind: 'exited', reason };
   }
@@ -850,7 +896,7 @@ async function runDueStep(
 
   const skip = await firstMatch(memberCtx, step.skipIf);
   if (skip) {
-    const reason = `skip:${skip.negate ? 'not-' : ''}${skip.type}`;
+    const reason = `skip:${conditionCode(skip)}`;
     if (!dryRun) await advance(journey, row, step, memberCtx, reason);
     return { kind: 'advanced', reason };
   }
@@ -1062,7 +1108,8 @@ export type StepEventKind =
   | 'exited'
   | 'completed'
   | 'moved'
-  | 'restarted';
+  | 'restarted'
+  | 'not-enrolled';
 
 /** Best-effort: a failed log write never fails the step it describes. */
 async function logEvent(
@@ -1082,6 +1129,37 @@ async function logEvent(
     detail: detail?.slice(0, 500) ?? null,
   });
   if (error) log.warn(`Step log write failed for ${row.id}: ${error.message}`);
+}
+
+/**
+ * A Momence event handed this member to the journey and the journey turned
+ * them away. No enrollment row exists, so the row carries their email for the
+ * People tab. Best-effort like logEvent: never fails the trigger. Sweeps do
+ * not log these (they re-check everyone every tick).
+ */
+async function logNotEnrolled(
+  journey: Pick<JourneyRecord, 'id'>,
+  who: Pick<MemberIdentity, 'memberId' | 'email'>,
+  reason: string
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  try {
+    const { error } = await db.from('journey_step_events').insert({
+      enrollment_id: null,
+      journey_id: journey.id,
+      member_id: who.memberId,
+      email: who.email.toLowerCase(),
+      step_key: null,
+      kind: 'not-enrolled',
+      detail: reason.slice(0, 500),
+    });
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    log.warn(
+      `Not-enrolled log write failed for ${journey.id} member ${who.memberId}: ${errorMessage(error)}`
+    );
+  }
 }
 
 async function transition(

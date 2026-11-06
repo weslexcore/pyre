@@ -1,6 +1,8 @@
 // How one journey is doing over the last 7 / 30 / 90 days: people entering,
 // finishing and leaving (and why), and each step's emails — sent, delivered,
-// opened, clicked, bounced — plus how often each step was skipped and why.
+// opened, clicked, bounced — plus how often each step was skipped and why,
+// and how many people a purchase or booking handed to the journey that it
+// turned away at the door, and why.
 // The website side (visits, bookings, purchases) comes from the journey's
 // linked campaign in the shared campaign performance report; the Performance
 // tab shows both.
@@ -37,7 +39,7 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
     const definition = toRecord(row).record?.definition;
     const id = row.id;
 
-    const [entered, ended, active, sends, events, firstEvent] = await Promise.all([
+    const [entered, ended, active, sends, events, refused, firstEvent] = await Promise.all([
       ready.db
         .from('journey_enrollments')
         .select('id', { count: 'exact', head: true })
@@ -71,13 +73,20 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
         .limit(ROW_LIMIT),
       ready.db
         .from('journey_step_events')
+        .select('detail')
+        .eq('journey_id', id)
+        .eq('kind', 'not-enrolled')
+        .gte('created_at', since)
+        .limit(ROW_LIMIT),
+      ready.db
+        .from('journey_step_events')
         .select('created_at')
         .eq('journey_id', id)
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle(),
     ]);
-    for (const res of [entered, ended, active, sends, events, firstEvent]) {
+    for (const res of [entered, ended, active, sends, events, refused, firstEvent]) {
       if (res.error) throw new Error(res.error.message);
     }
 
@@ -165,6 +174,15 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
     }
     for (const [key, reasons] of skipCounts) stepFor(key).skipReasons = topReasons(reasons, 3);
 
+    const refusedRows = (refused.data ?? []) as { detail: string | null }[];
+    const refusalCounts = new Map<string, number>();
+    for (const r of refusedRows) {
+      // Every failed check has its own message; group them under one heading.
+      const code = (r.detail ?? 'unknown').replace(/^check-failed:.*/, 'check-failed');
+      const reason = describeReason(code);
+      refusalCounts.set(reason, (refusalCounts.get(reason) ?? 0) + 1);
+    }
+
     const body: JourneyPerformanceResponse = {
       days,
       entered: entered.count ?? 0,
@@ -172,6 +190,8 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
       left,
       active: active.count ?? 0,
       leaveReasons: topReasons(leaveCounts),
+      turnedAway: refusedRows.length,
+      turnedAwayReasons: topReasons(refusalCounts),
       totals,
       steps: [...byStep.values()],
       stepLogSince: (firstEvent.data as { created_at: string } | null)?.created_at ?? null,
