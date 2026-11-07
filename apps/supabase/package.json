@@ -12,7 +12,7 @@
     "new": "supabase migration new --workdir ..",
     "check:migrations": "bash scripts/check-migration-timestamps.sh",
     "db:diff": "supabase db diff",
-    "db:push": "supabase db push",
+    "db:push": "supabase db push --linked",
     "gen:types": "supabase gen types typescript --local --schema public"
   },
   "devDependencies": {
