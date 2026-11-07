@@ -12,11 +12,16 @@
 // A created note is announced on the document (SHIFT_NOTE_CREATED_EVENT), so
 // the log on /admin/shift-notes picks up a note written from the header modal
 // without a reload, the same way it picks up one written inline.
+//
+// The note can @-mention anyone who will be able to read it — everyone with
+// the page, or the admins when it is marked admins only
+// (lib/shift-notes/mentions). The holders are fetched the first time the
+// field is focused, since the header's composer sits on every admin page.
 
 import { todayEastern } from '@pyre/schedule-core';
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
-import { LinkTextarea } from '@/components/admin/LinkTextarea';
+import { MentionTextarea } from '@/components/admin/MentionTextarea';
 import {
   buttonClass,
   compactInputClass,
@@ -25,7 +30,9 @@ import {
 } from '@/components/admin/ui';
 import type { ClassificationView } from '@/lib/classify/view';
 import { readError } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
+import type { MentionCandidate } from '@/lib/mentions';
 import {
   ACCEPT_ATTRIBUTE,
   checkFile,
@@ -33,6 +40,7 @@ import {
   formatBytes,
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
+import { noteMentionPeople, SHIFT_NOTE_MENTION_PEOPLE_URL } from '@/lib/shift-notes/mentions';
 import { NOTE_BODY_MAX } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 
@@ -152,6 +160,17 @@ export function ShiftNoteComposer({
   const [adminOnly, setAdminOnly] = useState(false);
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [waitingUploads, setWaitingUploads] = useState(false);
+
+  // Who the note may @-mention: the page's holders, read once the field is
+  // focused, narrowed to the admins while "only admins can see this" is on.
+  const [wantsPeople, setWantsPeople] = useState(false);
+  const holders = useCachedJson<{ people: MentionCandidate[] }>(
+    wantsPeople ? SHIFT_NOTE_MENTION_PEOPLE_URL : null
+  );
+  const mentionPeople = noteMentionPeople(holders.data?.people ?? [], {
+    author_email: '',
+    admin_only: adminOnly,
+  });
 
   // Mirror of `staged` that updates synchronously, so code that just awaited
   // something (submit, upload settle) reads current chips, not a stale render.
@@ -331,16 +350,18 @@ export function ShiftNoteComposer({
         <label htmlFor={`${fieldId}-body`} className={microLabelClass}>
           What's worth noting
         </label>
-        <LinkTextarea
+        <MentionTextarea
           id={`${fieldId}-body`}
           ref={textareaRef}
           aria-describedby={`${fieldId}-hint`}
           rows={6}
           className={`${compactInputClass} block min-h-40 w-full px-3.5 py-3 text-base leading-relaxed sm:text-sm`}
-          placeholder="Cold plunge is warming up // running low on towels // etc. "
+          placeholder="Cold plunge is warming up // running low on towels // @ to mention someone"
           maxLength={NOTE_BODY_MAX}
           value={draftBody}
           onChange={setDraftBody}
+          people={mentionPeople}
+          onFocus={() => setWantsPeople(true)}
         />
       </div>
 

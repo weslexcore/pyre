@@ -24,13 +24,15 @@
 
 import type { APIRoute } from 'astro';
 import { hasIncidentsManage } from '@/components/admin/adminTools';
+import { listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { IncidentAttachmentRow, IncidentRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { loadIncidentEvents, logIncidentEvent } from '@/lib/incidents/log';
-import { isUrgent, notifyIncident } from '@/lib/incidents/notify';
+import { incidentMentionPeople } from '@/lib/incidents/mentions';
+import { isUrgent, notifyIncident, notifyIncidentNote } from '@/lib/incidents/notify';
 import {
   INCIDENT_AREAS,
   INCIDENT_CATEGORIES,
@@ -46,6 +48,7 @@ import {
   normalizeIncidentSubmission,
   REVIEW_ONLY_FIELDS,
 } from '@/lib/incidents/validate';
+import { mentionedAddresses } from '@/lib/mentions';
 // Generic despite the path — the roster name directory landed with the SOP
 // tools and is not SOP-specific. Worth moving to lib/people once that work
 // settles.
@@ -115,12 +118,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     ]);
 
     // Names for exactly the people this report mentions, so the record reads
-    // "Sunny checked the guest" rather than an email local part.
+    // "Sunny checked the guest" rather than an email local part — and for
+    // whoever the follow-up notes @-mention.
     const people = await getPeopleNames([
       incident.reported_by,
       incident.reviewed_by ?? '',
       incident.resolved_by ?? '',
       ...events.map((e) => e.actor),
+      ...events.flatMap((e) => mentionedAddresses(e.note ?? '')),
       ...attachments.map((a) => a.uploaded_by),
     ]);
 
@@ -129,6 +134,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       attachments,
       events,
       people,
+      // Who a follow-up note may @-mention: the report's readers.
+      mentionPeople: incidentMentionPeople((await listStaff()) ?? [], incident),
       canManage,
       canAmend: canManage || withinAmendWindow(incident, email),
       self: email,
@@ -335,6 +342,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, FIELD_LIMITS.note) : '';
     if (!note) return json({ error: 'note cannot be empty' }, 400);
     await logIncidentEvent(db, { incidentId: id, action: 'note_added', actor: email, note });
+    // Whoever the note @-mentions (among the report's readers) hears about it.
+    await notifyIncidentNote(db, incident, note, email);
     return json({ incident, events: await loadIncidentEvents(db, id) });
   }
 

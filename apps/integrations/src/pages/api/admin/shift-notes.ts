@@ -50,8 +50,9 @@ import {
 } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
+import { mentionedAddresses } from '@/lib/mentions';
 import { deleteBySource } from '@/lib/notifications/notify';
-import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
+import { notifyShiftNoteMentions, notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
   canEditNote,
   canSeeNote,
@@ -118,14 +119,23 @@ async function sweepStagedAttachments(db: NonNullable<ReturnType<typeof getDb>>)
   }
 }
 
-/** The name directory for everyone a set of notes (and their replies) mentions. */
+/**
+ * The name directory for everyone a set of notes (and their replies) names:
+ * who wrote, edited, and triaged them, and whoever their text @-mentions.
+ */
 function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
   return getPeopleNames([
-    ...notes.flatMap((n) => [n.author_email, n.updated_by ?? '', n.status_by ?? '']),
+    ...notes.flatMap((n) => [
+      n.author_email,
+      n.updated_by ?? '',
+      n.status_by ?? '',
+      ...mentionedAddresses(n.body),
+    ]),
     ...replies.flatMap((r) => [
       r.author_email ?? '',
       r.updated_by ?? '',
       r.data?.requested_by ?? '',
+      ...mentionedAddresses(r.body),
     ]),
   ]);
 }
@@ -363,6 +373,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
   }
 
+  // Whoever the note @-mentions hears about it; nobody else is pushed a new note.
+  await notifyShiftNoteMentions(db, note, email);
+
   return json(
     {
       note,
@@ -475,8 +488,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (entry) activity.push(entry);
   }
 
-  // Triage is news to the author; an edit of their own text is not.
+  // Triage is news to the author; an edit of their own text is not — except
+  // to anyone the new text @-mentions for the first time.
   if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
+  if (patch.body !== undefined) await notifyShiftNoteMentions(db, note, email, existing.body);
   // New text gets read again; a date or status change leaves it alone.
   const classified = patch.body !== undefined ? classifyNote(note, gate) : {};
   return json({ note, activity, people: await peopleFor([note], activity), ...classified });

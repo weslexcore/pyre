@@ -675,6 +675,7 @@ export interface AdminMessageReplyRow {
 export type NotificationKind =
   | 'admin_message'
   | 'message_reply'
+  | 'mention'
   | 'sop_updated'
   | 'schedule_change'
   | 'shift_note_reply'

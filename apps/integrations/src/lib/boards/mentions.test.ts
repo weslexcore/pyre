@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RosterRow } from '@/lib/notifications/recipients';
-import { mentionedEmails, mentionPeople, mentionQuery } from './mentions';
+import { mentionPeople } from './mentions';
 
 const person = (id: string, overrides: Partial<RosterRow> = {}): RosterRow => ({
   id,
@@ -42,25 +42,5 @@ describe('board mentions', () => {
       'unscheduled-legacy@pyre.test',
       'unscheduled-member@pyre.test',
     ]);
-  });
-
-  it('recognizes explicit mentions with punctuation, normalizes and deduplicates them', () => {
-    const people = [
-      { name: 'A', email: 'a@pyre.test' },
-      { name: 'B', email: 'b@pyre.test' },
-    ];
-    expect(mentionedEmails('Hi @A@pyre.test, (@b@pyre.test)! @a@pyre.test.', people)).toEqual([
-      'a@pyre.test',
-      'b@pyre.test',
-    ]);
-    expect(
-      mentionedEmails('a@pyre.test x@a@pyre.test @unknown@pyre.test @a@pyre.test.evil', people)
-    ).toEqual([]);
-  });
-
-  it('finds a query at the caret without treating normal email as a trigger', () => {
-    expect(mentionQuery('Hi @May after', 7)).toEqual({ start: 3, query: 'may' });
-    expect(mentionQuery('Hi @', 4)).toEqual({ start: 3, query: '' });
-    expect(mentionQuery('a@pyre.test', 11)).toBeNull();
   });
 });

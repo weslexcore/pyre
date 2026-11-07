@@ -61,6 +61,7 @@ import type {
   ShiftNoteRow,
   ShiftNoteStatus,
 } from '@/lib/db';
+import { type MentionCandidate, namesOf } from '@/lib/mentions';
 import {
   canEditNote,
   canReply,
@@ -76,12 +77,13 @@ import {
   downscaleImage,
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
+import { noteMentionPeople, SHIFT_NOTE_MENTION_PEOPLE_URL } from '@/lib/shift-notes/mentions';
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { matchesTerm } from '@/lib/sops/search';
 import { BulkClassify } from './BulkClassify';
 import { FilterMultiSelect } from './FilterMultiSelect';
-import { LinkTextarea } from './LinkTextarea';
+import { MentionTextarea } from './MentionTextarea';
 import {
   buttonClass,
   type CreatedShiftNote,
@@ -230,6 +232,11 @@ export function ShiftNotes() {
   // folded into that state when it lands, and the state is mirrored back
   // into the cache so what was changed here is what shows on return.
   const log = useCachedJson<LogResponse>(LOG_URL);
+  // Who a note or a reply may @-mention: the page's holders, narrowed per
+  // note by who can read it (lib/shift-notes/mentions). Their names also
+  // draw the mentions in text the server hasn't named yet.
+  const holders = useCachedJson<{ people: MentionCandidate[] }>(SHIFT_NOTE_MENTION_PEOPLE_URL);
+  const mentionCandidates = holders.data?.people ?? [];
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
   const [attachments, setAttachments] = useState<Record<string, ShiftNoteAttachmentRow[]>>({});
   // Each note's thread, in writing order (only the replies this viewer may see).
@@ -765,6 +772,11 @@ export function ShiftNotes() {
   // is exactly what matched.
   const term = query.trim();
 
+  const mentionNames = useMemo(
+    () => ({ ...namesOf(mentionCandidates), ...names }),
+    [mentionCandidates, names]
+  );
+
   const visible = useMemo(() => {
     return notes.filter((note) => {
       if (personFilter.size > 0 && !personFilter.has(note.author_email)) {
@@ -1051,11 +1063,13 @@ export function ShiftNotes() {
                       onChange={(e) => setEditDate(e.target.value)}
                     />
                   </label>
-                  <LinkTextarea
+                  <MentionTextarea
                     className={textareaClass}
                     maxLength={NOTE_BODY_MAX}
                     value={editBody}
                     onChange={setEditBody}
+                    people={noteMentionPeople(mentionCandidates, note)}
+                    aria-label="Edit note"
                   />
                   <div className="flex gap-2">
                     <button
@@ -1077,6 +1091,7 @@ export function ShiftNotes() {
                   highlight={term}
                   lineBreaks
                   className={NOTE_MARKDOWN_CLASS}
+                  mentions={mentionNames}
                 />
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
@@ -1274,11 +1289,15 @@ export function ShiftNotes() {
                         </div>
                         {replyEditId === reply.id ? (
                           <div className="mt-2 space-y-2">
-                            <LinkTextarea
+                            <MentionTextarea
                               className={replyTextareaClass}
                               maxLength={REPLY_BODY_MAX}
                               value={replyEditBody}
                               onChange={setReplyEditBody}
+                              people={noteMentionPeople(mentionCandidates, note, {
+                                privateReply: reply.is_private,
+                              })}
+                              aria-label="Edit reply"
                             />
                             <div className="flex gap-2">
                               <button
@@ -1303,6 +1322,7 @@ export function ShiftNotes() {
                             content={reply.body}
                             lineBreaks
                             className={REPLY_MARKDOWN_CLASS}
+                            mentions={mentionNames}
                           />
                         )}
                       </div>
@@ -1310,16 +1330,22 @@ export function ShiftNotes() {
                   )}
                   {canReply(note, viewer) && (
                     <div className="space-y-2">
-                      <LinkTextarea
+                      <MentionTextarea
+                        id={`note-${note.id}-reply`}
                         className={replyTextareaClass}
                         placeholder={
-                          viewer.isAdmin ? 'Reply to this note…' : 'Reply to the admins…'
+                          viewer.isAdmin
+                            ? 'Reply to this note… (@ to mention someone)'
+                            : 'Reply to the admins… (@ to mention someone)'
                         }
                         maxLength={REPLY_BODY_MAX}
                         value={replyDrafts[note.id] ?? ''}
                         onChange={(next) =>
                           setReplyDrafts((prev) => ({ ...prev, [note.id]: next }))
                         }
+                        people={noteMentionPeople(mentionCandidates, note, {
+                          privateReply: viewer.isAdmin && !!replyPrivate[note.id],
+                        })}
                         aria-label={`Reply to ${personName(note.author_email, names)}'s note`}
                       />
                       <div className="flex flex-wrap items-center gap-3">

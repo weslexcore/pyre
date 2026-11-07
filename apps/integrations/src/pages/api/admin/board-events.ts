@@ -36,6 +36,7 @@ import {
   isUuidParam,
   json,
 } from '@/lib/http/route';
+import { mentionedAddresses } from '@/lib/mentions';
 import { notifyGoalComment } from '@/lib/notifications/goals';
 import { markSourceRead } from '@/lib/notifications/notify';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -104,7 +105,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
   return json({
     events,
-    people: await getPeopleNames(events.map((event) => event.actor)),
+    // Names for the actors, and for whoever the comments @-mention.
+    people: await getPeopleNames([
+      ...events.map((event) => event.actor),
+      ...events.flatMap((event) => mentionedAddresses(event.note ?? '')),
+    ]),
     mentionPeople: cardId || goalId ? mentionPeople((await listStaff()) ?? [], slugs) : [],
     ...(cardId ? { attachments: (await loadCommentAttachments(db, cardId)).map(summaryOf) } : {}),
   });
