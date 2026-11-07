@@ -19,11 +19,18 @@
 // search: every text node is a direct string child of one of the overridden
 // elements below, so marking string children in each override covers the
 // whole document.
+//
+// `mentions` is the name directory for the @-mentions the text may carry
+// (messages, replies, notes, comments): each `@<email>` it has a name for is
+// drawn as a chip reading "@Name" (lib/mentions, components/admin/Mentions).
 import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { markdownWithMentions, mentionFromHref } from '@/lib/mentions';
 import { sopSlugFromHref } from '@/lib/sops/links';
+import type { PeopleNames } from '@/lib/sops/names';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import { MentionChip } from './Mentions';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
 
@@ -145,6 +152,7 @@ export const SopMarkdown = memo(function SopMarkdown({
   onSopLink,
   lineBreaks = false,
   className = '',
+  mentions,
 }: {
   content: string;
   highlight?: string;
@@ -153,9 +161,12 @@ export const SopMarkdown = memo(function SopMarkdown({
   lineBreaks?: boolean;
   /** Extra classes on the wrapper, e.g. to trim the outer margins in a card. */
   className?: string;
+  /** Names for the people the text @-mentions, drawn as chips (see the header). */
+  mentions?: PeopleNames;
 }) {
   const term = highlight?.trim() ?? '';
   const active = term.length >= MIN_QUERY_LENGTH;
+  const source = renderable(mentions ? markdownWithMentions(content, mentions) : content);
 
   // Marks the string children of one element; element children are left for
   // their own overrides.
@@ -233,6 +244,8 @@ export const SopMarkdown = memo(function SopMarkdown({
           ),
           pre: CopyableCodeBlock,
           a: ({ children, href }) => {
+            const mention = mentionFromHref(href);
+            if (mention) return <MentionChip email={mention}>{hl(children)}</MentionChip>;
             const slug = sopSlugFromHref(href);
             if (slug && onSopLink) {
               return (
@@ -280,7 +293,7 @@ export const SopMarkdown = memo(function SopMarkdown({
           em: ({ children }) => <em className="italic">{hl(children)}</em>,
         }}
       >
-        {lineBreaks ? keepLineBreaks(renderable(content)) : renderable(content)}
+        {lineBreaks ? keepLineBreaks(source) : source}
       </ReactMarkdown>
     </div>
   );

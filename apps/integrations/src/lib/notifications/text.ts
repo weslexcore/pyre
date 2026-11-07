@@ -222,6 +222,26 @@ export function goalCompletedText(input: {
   };
 }
 
+/**
+ * Somebody named the reader with @ — `where` says in what: 'a reply on
+ * "Towel count"', 'a shift note for Sat, Sep 20', 'a comment on "Call the
+ * caterer"'. The body is the words, with each mention read as a name.
+ */
+export function mentionText(input: { actorName: string; where: string; excerpt: string }): {
+  title: string;
+  body: string;
+} {
+  return {
+    title: `${input.actorName} mentioned you in ${input.where}`,
+    body: input.excerpt,
+  };
+}
+
+/** `"Towel count"` — a title quoted and short enough to sit inside a sentence. */
+export function quotedTitle(title: string): string {
+  return `"${shortTitle(title)}"`;
+}
+
 export function boardCommentText(input: {
   subjectTitle: string;
   commenterName: string;

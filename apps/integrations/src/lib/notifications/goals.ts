@@ -11,7 +11,8 @@
 //     tool exists for, so it carries the note they wrote. The link opens the
 //     board that serves the goal, or the goals overview for a goal no board
 //     serves.
-//   * a comment reaches its assignees and explicitly mentioned people with access.
+//   * a comment reaches its assignees; anyone it @-mentions (with access to
+//     the board) hears about the mention instead (lib/notifications/mentions).
 //   * a lead from the web reaches whoever holds that board (boardRecipients),
 //     which for the rental pipeline is the community manager and the
 //     founders, and for nobody else at all.
@@ -23,10 +24,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { notifyRecipients } from '@/lib/boards/forms';
-import { mentionedEmails, mentionPeople } from '@/lib/boards/mentions';
+import { mentionPeople } from '@/lib/boards/mentions';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
 import { ALL_TASKS_HREF, goalOverviewHref } from '@/lib/goals/types';
+import { mentionsAsNames, namesOf } from '@/lib/mentions';
 import { accessOf } from '@/lib/notifications/recipients';
+import { notifyMentions, withoutMentioned } from './mentions';
 import { createNotifications } from './notify';
 import {
   boardRecipients,
@@ -41,6 +44,7 @@ import {
   cardCompletedText,
   goalCompletedText,
   intakeCardText,
+  quotedTitle,
 } from './text';
 import { daysFromNow, excerpt } from './types';
 
@@ -189,7 +193,10 @@ export async function notifyGoalCompleted(
   });
 }
 
-/** A comment reaches its assignees and mentioned users with access. */
+/**
+ * A comment reaches its assignees — except anyone it @-mentions, who hears
+ * about the mention itself (one row per person per comment).
+ */
 export async function notifyCardComment(
   db: SupabaseClient,
   card: CardSubject,
@@ -198,22 +205,35 @@ export async function notifyCardComment(
   actorEmail: string
 ): Promise<void> {
   const rows = (await listStaff()) ?? [];
-  const mentions = mentionedEmails(note, mentionPeople(rows, [board.slug]));
-  await createNotifications(db, [...card.assignee_emails.map(normalize), ...mentions], {
+  const people = mentionPeople(rows, [board.slug]);
+  const href = cardHrefFor(rows, board.slug, card.id);
+  const source = { type: 'board_card', id: card.id };
+  const mentioned = await notifyMentions(db, {
+    text: note,
+    people,
+    actorEmail,
+    where: `a comment on ${quotedTitle(card.title)}`,
+    href,
+    source,
+    expiresAt: daysFromNow(NOTICE_DAYS),
+  });
+  const recipients = withoutMentioned(card.assignee_emails.map(normalize), mentioned);
+  if (recipients.length === 0) return;
+  await createNotifications(db, recipients, {
     kind: KIND,
     ...boardCommentText({
       subjectTitle: card.title,
       commenterName: nameFor(rows, actorEmail),
-      excerpt: excerpt(note, 160),
+      excerpt: excerpt(mentionsAsNames(note, namesOf(people)), 160),
     }),
-    href: cardHrefFor(rows, board.slug, card.id),
-    source: { type: 'board_card', id: card.id },
+    href,
+    source,
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),
   });
 }
 
-/** A goal comment reaches its owner and mentioned users with access. */
+/** A goal comment reaches its owner, and whoever it @-mentions hears about the mention. */
 export async function notifyGoalComment(
   db: SupabaseClient,
   goal: Pick<GoalRow, 'id' | 'title' | 'owner_email'>,
@@ -225,22 +245,32 @@ export async function notifyGoalComment(
   const owner = normalize(goal.owner_email);
 
   const rows = (await listStaff()) ?? [];
-  const mentions = mentionedEmails(
-    note,
-    mentionPeople(
-      rows,
-      boards.map((item) => item.slug)
-    )
+  const people = mentionPeople(
+    rows,
+    boards.map((item) => item.slug)
   );
-  await createNotifications(db, [owner, ...mentions], {
+  const href = goalHrefFor(rows, goal.id, boards);
+  const source = { type: 'goal', id: goal.id };
+  const mentioned = await notifyMentions(db, {
+    text: note,
+    people,
+    actorEmail,
+    where: `a comment on ${quotedTitle(goal.title)}`,
+    href,
+    source,
+    expiresAt: daysFromNow(NOTICE_DAYS),
+  });
+  const recipients = withoutMentioned(owner ? [owner] : [], mentioned);
+  if (recipients.length === 0) return;
+  await createNotifications(db, recipients, {
     kind: KIND,
     ...boardCommentText({
       subjectTitle: goal.title,
       commenterName: nameFor(rows, actorEmail),
-      excerpt: excerpt(note, 160),
+      excerpt: excerpt(mentionsAsNames(note, namesOf(people)), 160),
     }),
-    href: goalHrefFor(rows, goal.id, boards),
-    source: { type: 'goal', id: goal.id },
+    href,
+    source,
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),
   });

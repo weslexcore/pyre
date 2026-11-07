@@ -12,6 +12,7 @@ import type { NotificationKind, StaffNotificationRow } from '@/lib/db';
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'admin_message',
   'message_reply',
+  'mention',
   'sop_updated',
   'schedule_change',
   'shift_note_reply',
@@ -30,6 +31,7 @@ export function isNotificationKind(value: unknown): value is NotificationKind {
 export const KIND_LABELS: Record<NotificationKind, string> = {
   admin_message: 'Message',
   message_reply: 'Reply',
+  mention: 'Mention',
   sop_updated: 'SOP',
   schedule_change: 'Schedule',
   shift_note_reply: 'Shift note',
@@ -43,8 +45,9 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
 /**
  * What each kind covers, in the words the preferences panel uses. `required`
  * kinds can't be switched off (admin messages are how the admins reach the
- * team); `adminOnly` kinds only ever reach admins, so nobody else is offered
- * a switch for them.
+ * team, and a mention is how a teammate reaches you in particular);
+ * `adminOnly` kinds only ever reach admins, so nobody else is offered a
+ * switch for them.
  */
 export const KIND_DETAILS: Record<
   NotificationKind,
@@ -58,6 +61,12 @@ export const KIND_DETAILS: Record<
   message_reply: {
     label: 'Message replies',
     description: 'Replies in message threads you can see.',
+  },
+  mention: {
+    label: 'Mentions',
+    description:
+      'Someone named you with @ in a message, a reply, a comment, a shift note, or an incident note.',
+    required: true,
   },
   sop_updated: {
     label: 'SOP updates',
@@ -77,7 +86,7 @@ export const KIND_DETAILS: Record<
   },
   goal_activity: {
     label: 'Goals & boards',
-    description: 'Cards assigned to you, comments, mentions, and goal updates.',
+    description: 'Cards assigned to you, comments on them, and goal updates.',
   },
   agent_suggestion: {
     label: 'Agent suggestions',

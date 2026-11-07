@@ -36,7 +36,7 @@ function database() {
 beforeEach(() => listStaff.mockResolvedValue(roster));
 
 describe('comment notifications', () => {
-  it('notifies the owner and mentioned readers once, excluding the author and unauthorized users', async () => {
+  it('tells mentioned readers about the mention once, excluding the author and unauthorized users', async () => {
     const { db, insert } = database();
     await notifyCardComment(
       db,
@@ -45,16 +45,43 @@ describe('comment notifications', () => {
       '@owner@pyre.test @member@pyre.test @member@pyre.test @actor@pyre.test @outsider@pyre.test @revoked@pyre.test',
       'actor@pyre.test'
     );
+    // The owner was mentioned, so the mention row is the only row they get.
+    expect(insert).toHaveBeenCalledTimes(1);
     const rows = insert.mock.calls[0][0];
     expect(rows.map((row: { recipient_email: string }) => row.recipient_email)).toEqual([
       'owner@pyre.test',
       'member@pyre.test',
     ]);
     expect(rows[1]).toMatchObject({
+      kind: 'mention',
+      title: 'actor mentioned you in a comment on "A task"',
+      body: '@owner @member @member @actor @outsider@pyre.test @revoked@pyre.test',
       href: '/admin/boards/rentals#card-card',
       source_type: 'board_card',
       source_id: 'card',
     });
+  });
+
+  it('tells the assignees about the comment and the mentioned about the mention', async () => {
+    const { db, insert } = database();
+    await notifyCardComment(
+      db,
+      card,
+      { slug: 'rentals' },
+      'Can you take this, @member@pyre.test?',
+      'actor@pyre.test'
+    );
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insert.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ recipient_email: 'member@pyre.test', kind: 'mention' }),
+    ]);
+    expect(insert.mock.calls[1][0]).toEqual([
+      expect.objectContaining({
+        recipient_email: 'owner@pyre.test',
+        kind: 'goal_activity',
+        body: 'Can you take this, @member?',
+      }),
+    ]);
   });
 
   it('notifies users with board access who are not available to schedule', async () => {

@@ -10,7 +10,10 @@
 // at once — and is put back if the server refuses. Every mutation goes
 // through the two API routes, which re-check access; the predicates in
 // lib/messages/access decide which controls to draw.
-import { useEffect, useState } from 'react';
+//
+// Replies can @-mention anyone who can open the message (the payload's
+// mentionPeople); the message and its replies draw mentions as names.
+import { useEffect, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { goldButtonClass } from '@/components/admin/ui';
@@ -20,6 +23,7 @@ import { invalidateJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
 import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
+import { namesOf } from '@/lib/mentions';
 import {
   canChangeMessage,
   canReplyToMessage,
@@ -33,7 +37,7 @@ import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
-import { LinkTextarea } from './LinkTextarea';
+import { MentionTextarea } from './MentionTextarea';
 import type { MessageDraft } from './MessageComposer';
 import { draftOfMessage, MessageEditor, messageEditBackupKey } from './MessageEditor';
 import {
@@ -73,6 +77,10 @@ export function MessageThread({
   const [replies, setReplies] = useState<AdminMessageReplyRow[]>(initial?.replies ?? []);
   const [people, setPeople] = useState<PeopleNames>(initial?.people ?? {});
   const emailedTo = initial?.emailedTo ?? [];
+  const mentionPeople = initial?.mentionPeople ?? [];
+  // The candidates' names too, so a reply still on its way draws its
+  // mentions as names before the server's directory arrives.
+  const names = useMemo(() => ({ ...namesOf(mentionPeople), ...people }), [mentionPeople, people]);
   const [staff, setStaff] = useState<GrantablePerson[]>([]);
   const [error, setError] = useState<string | null>(initialError);
   // Only the two confirmations wait on the server: sending reloads the
@@ -337,7 +345,7 @@ export function MessageThread({
               )}
             </div>
             <div className="mt-3">
-              <SopMarkdown content={message.body_md} />
+              <SopMarkdown content={message.body_md} mentions={names} />
             </div>
             {emailedTo.length > 0 && (
               <p className="mt-3 font-mono text-[10px] text-white/40">
@@ -451,11 +459,13 @@ export function MessageThread({
               </div>
               {editingReply?.id === reply.id ? (
                 <div className="mt-2 space-y-2">
-                  <LinkTextarea
+                  <MentionTextarea
                     className={replyTextareaClass}
                     maxLength={REPLY_MAX}
                     value={editingReply.body}
                     onChange={(body) => setEditingReply({ id: reply.id, body })}
+                    people={mentionPeople}
+                    aria-label="Edit reply"
                   />
                   <div className="flex gap-2">
                     <button
@@ -477,7 +487,7 @@ export function MessageThread({
                 </div>
               ) : (
                 <div className="mt-1">
-                  <SopMarkdown content={reply.body_md} />
+                  <SopMarkdown content={reply.body_md} mentions={names} />
                 </div>
               )}
             </div>
@@ -485,12 +495,14 @@ export function MessageThread({
 
           {canReplyToMessage(viewer, message) ? (
             <div className="space-y-2">
-              <LinkTextarea
+              <MentionTextarea
+                id="message-reply"
                 className={replyTextareaClass}
-                placeholder="Reply… (markdown works)"
+                placeholder="Reply… (markdown works; type @ to mention someone)"
                 maxLength={REPLY_MAX}
                 value={draft}
                 onChange={setDraft}
+                people={mentionPeople}
                 aria-label={`Reply to ${message.title}`}
               />
               <button

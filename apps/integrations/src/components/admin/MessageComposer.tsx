@@ -8,15 +8,20 @@
 // template editor reuses this form too. Admin-only by the routes; the parent
 // decides what "save" and "save draft" mean (create or update), and hears
 // every change (onChange) so it can autosave (lib/client/autosave).
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+//
+// The body can @-mention anyone on the roster (admins hold the whole
+// address book here). Someone mentioned but left out of the audience can't
+// open the message and so isn't told; the form says so under the body.
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
 import type { AdminMessageTemplateRow } from '@/lib/db';
+import { mentionedEmails, namesOf } from '@/lib/mentions';
 import { roleIsNotified } from '@/lib/messages/access';
 import { fillPlaceholders } from '@/lib/messages/templates';
 import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
-import { LinkTextarea } from './LinkTextarea';
+import { MentionTextarea } from './MentionTextarea';
 import { buttonClass, textareaClass } from './messagesUi';
 import { type GrantablePerson, SopAccessPicker, type SopGrant } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
@@ -211,6 +216,21 @@ export function MessageComposer({
   const otherAdmins = staff.filter(
     (person) => person.role === 'admin' && person.email !== authorEmail
   );
+  // Who the body may name, and the names its mentions read as in the preview.
+  const mentionable = useMemo(
+    () => staff.map((person) => ({ email: person.email, name: person.name })),
+    [staff]
+  );
+  const mentionNames = useMemo(() => namesOf(mentionable), [mentionable]);
+  // Mentioned but outside the audience (and not an admin, who reads every
+  // message): they can't open it, so they won't be told.
+  const reachedEmails = new Set(reached.map((person) => person.email));
+  const unreachable = mentionedEmails(draft.bodyMd, mentionable)
+    .map((email) => staff.find((person) => person.email === email))
+    .filter(
+      (person): person is GrantablePerson =>
+        !!person && person.role !== 'admin' && !reachedEmails.has(person.email)
+    );
 
   return (
     <form
@@ -279,21 +299,29 @@ export function MessageComposer({
       {preview ? (
         <div className="min-h-[160px] rounded border border-white/10 bg-white/5 px-4 py-3">
           {draft.bodyMd.trim() ? (
-            <SopMarkdown content={draft.bodyMd} />
+            <SopMarkdown content={draft.bodyMd} mentions={mentionNames} />
           ) : (
             <p className="text-sm text-white/30">Nothing to preview yet.</p>
           )}
         </div>
       ) : (
-        <LinkTextarea
+        <MentionTextarea
+          id="message-body"
           className={textareaClass}
-          placeholder="Write the message in markdown… type [name](/ to link a page or SOP"
+          placeholder="Write the message in markdown… type [name](/ to link a page or SOP, @ to mention someone"
           maxLength={BODY_MAX}
           value={draft.bodyMd}
           onChange={(bodyMd) => setDraft((d) => ({ ...d, bodyMd }))}
+          people={mentionable}
           aria-label="Message body"
           required
         />
+      )}
+      {unreachable.length > 0 && (
+        <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
+          Mentioned but not in the audience, so they can't open it and won't be told:{' '}
+          {unreachable.map((person) => person.name).join(', ')}. Add them under "Who it's for".
+        </p>
       )}
 
       <SopAccessPicker

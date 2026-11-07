@@ -25,7 +25,8 @@ import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin'
 import { getDb, type ShiftNoteReplyRow, type ShiftNoteRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
-import { notifyShiftNoteReply } from '@/lib/notifications/shift-notes';
+import { mentionedAddresses } from '@/lib/mentions';
+import { notifyShiftNoteReply, notifyShiftNoteReplyEdited } from '@/lib/notifications/shift-notes';
 import { canReply, canSeeNote, canSeeReply, canTouchReply } from '@/lib/shift-notes/access';
 import { normalizeReplyBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -36,9 +37,15 @@ function viewerOf(gate: AdminGate) {
   return { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
 }
 
+/** Names for who wrote and edited each reply, and for whoever it @-mentions. */
 function peopleFor(...replies: ShiftNoteReplyRow[]) {
   return getPeopleNames(
-    replies.flatMap((r) => [r.author_email ?? '', r.updated_by ?? '', r.data?.requested_by ?? ''])
+    replies.flatMap((r) => [
+      r.author_email ?? '',
+      r.updated_by ?? '',
+      r.data?.requested_by ?? '',
+      ...mentionedAddresses(r.body),
+    ])
   );
 }
 
@@ -186,6 +193,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error);
 
   const reply = data as ShiftNoteReplyRow;
+  // Anyone the new text @-mentions for the first time hears about it.
+  if (patch.body !== undefined && patch.body !== existing.body) {
+    const note = await loadVisibleNote(db, reply.note_id, gate);
+    if (!(note instanceof Response)) {
+      await notifyShiftNoteReplyEdited(db, note, reply, existing.body, email);
+    }
+  }
   return json({ reply, people: await peopleFor(reply) });
 };
 
