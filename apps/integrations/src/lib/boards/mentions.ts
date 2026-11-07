@@ -1,43 +1,16 @@
+// Who may be @-mentioned on a board's cards and goals: everyone who can open
+// one of the boards involved. The mention syntax itself, and the reading and
+// drawing of mentions, are shared with every other conversation in the
+// dashboard (lib/mentions).
+import { type MentionCandidate, mentionCandidates } from '@/lib/mentions';
 import type { RosterRow } from '@/lib/notifications/recipients';
 import { accessOf } from '@/lib/notifications/recipients';
 import { canManageBoards, canViewBoard } from './access';
 
-export interface MentionPerson {
-  email: string;
-  name: string;
-}
-
 /** Board access is independent of `active`, which means available to schedule. */
-export function mentionPeople(rows: RosterRow[], slugs: string[]): MentionPerson[] {
-  return rows
-    .filter((row) => {
-      const access = accessOf(row);
-      return (
-        row.email?.trim() &&
-        (canManageBoards(access) || slugs.some((slug) => canViewBoard(access, slug)))
-      );
-    })
-    .map((row) => ({
-      email: row.email!.trim().toLowerCase(),
-      name: row.display_name?.trim() || row.email!.trim().toLowerCase(),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** Explicit @email mentions; ordinary email addresses are not mentions. */
-export function mentionedEmails(note: string, people: MentionPerson[]): string[] {
-  const allowed = new Set(people.map((person) => person.email));
-  const found = new Set<string>();
-  for (const match of note.matchAll(
-    /(?:^|[\s([{])@([a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?=$|[\s.,!?;:)\]}])/gi
-  )) {
-    const email = match[1].toLowerCase();
-    if (allowed.has(email)) found.add(email);
-  }
-  return [...found];
-}
-
-export function mentionQuery(note: string, caret: number) {
-  const match = /(?:^|\s)@([^\s]*)$/.exec(note.slice(0, caret));
-  return match ? { start: caret - match[1].length - 1, query: match[1].toLowerCase() } : null;
+export function mentionPeople(rows: RosterRow[], slugs: string[]): MentionCandidate[] {
+  return mentionCandidates(rows, (row) => {
+    const access = accessOf(row);
+    return canManageBoards(access) || slugs.some((slug) => canViewBoard(access, slug));
+  });
 }

@@ -16,9 +16,10 @@ import { type AdminGate, assertSameOrigin, requireStaff } from '@/lib/auth/admin
 import { type AdminMessageReplyRow, type AdminMessageRow, getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
+import { mentionedAddresses } from '@/lib/mentions';
 import { canReplyToMessage, canTouchReply, canViewMessage } from '@/lib/messages/access';
 import { normalizeBody, REPLY_MAX } from '@/lib/messages/validate';
-import { notifyMessageReply } from '@/lib/notifications/messages';
+import { notifyMessageReply, notifyMessageReplyEdited } from '@/lib/notifications/messages';
 import type { SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
@@ -32,8 +33,13 @@ async function viewerOf(gate: AdminGate): Promise<SopViewer> {
   };
 }
 
+/** Names for the reply's author and editor, and for whoever it @-mentions. */
 function peopleFor(reply: AdminMessageReplyRow) {
-  return getPeopleNames([reply.author_email, reply.updated_by ?? '']);
+  return getPeopleNames([
+    reply.author_email,
+    reply.updated_by ?? '',
+    ...mentionedAddresses(reply.body_md),
+  ]);
 }
 
 /** The shared mutation preamble, plus the SOP-role viewer the checks need. */
@@ -151,6 +157,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return dbError(error);
   const reply = data as AdminMessageReplyRow;
+
+  // Anyone the edit newly @-mentions hears about it.
+  const message = await loadVisibleMessage(db, reply.message_id, viewer);
+  if (!(message instanceof Response)) {
+    await notifyMessageReplyEdited(db, message, reply, existing.body_md, viewer.email);
+  }
   return json({ reply, people: await peopleFor(reply) });
 };
 

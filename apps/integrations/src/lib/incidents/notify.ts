@@ -12,9 +12,37 @@ import { INCIDENTS_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { IncidentRow } from '@/lib/db';
 import { deliveredTo, sendToEach } from '@/lib/email/send-each';
+import { notifyMentions } from '@/lib/notifications/mentions';
 import { adminsPlus } from '@/lib/notifications/recipients';
+import { daysFromNow } from '@/lib/notifications/types';
 import { logIncidentEvent } from './log';
+import { incidentMentionPeople } from './mentions';
 import { areaLabel, categoryLabel, severityLabel, URGENT_SEVERITIES } from './types';
+
+/** A follow-up note stays worth reading for about a month. */
+const NOTE_NOTICE_DAYS = 30;
+
+/**
+ * A follow-up note @-mentioned someone who can open the report — a reviewer,
+ * or the reporter: tell them in the bell. The note itself is not pushed to
+ * anyone else; the record is read, not announced.
+ */
+export async function notifyIncidentNote(
+  db: SupabaseClient,
+  incident: Pick<IncidentRow, 'id' | 'reference' | 'reported_by'>,
+  note: string,
+  actorEmail: string
+): Promise<string[]> {
+  return notifyMentions(db, {
+    text: note,
+    people: incidentMentionPeople((await listStaff()) ?? [], incident),
+    actorEmail,
+    where: `a note on ${incident.reference}`,
+    href: `/admin/incidents/${incident.id}`,
+    source: { type: 'incident', id: incident.id },
+    expiresAt: daysFromNow(NOTE_NOTICE_DAYS),
+  });
+}
 
 /** Whether this report should page management the moment it lands. */
 export function isUrgent(incident: IncidentRow): boolean {

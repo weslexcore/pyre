@@ -4,11 +4,13 @@
 // ./access and every mutation goes through the API route.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { listStaff } from '@/lib/auth/access';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
+import { type MentionPerson, mentionedAddresses } from '@/lib/mentions';
 import type { SopViewer } from '@/lib/sops/levels';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
-import { canViewMessage } from './access';
+import { canViewMessage, messageMentionPeople } from './access';
 
 /** A message as the list shows it: the row plus what its thread is up to. */
 export interface MessageSummary extends AdminMessageRow {
@@ -22,6 +24,8 @@ export interface MessageThreadPayload {
   people: PeopleNames;
   /** Who the message was emailed to (empty when it wasn't emailed). */
   emailedTo: string[];
+  /** Who a reply may @-mention: everyone who can open the message (lib/messages/access). */
+  mentionPeople: MentionPerson[];
 }
 
 export type LoadResult =
@@ -138,6 +142,12 @@ export async function loadMessageForViewer(
     ...message.shared_with,
     ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
     ...emailedTo,
+    // Whoever the message and its replies @-mention, so each reads as a name.
+    ...mentionedAddresses(message.body_md),
+    ...replies.flatMap((r) => mentionedAddresses(r.body_md)),
   ]);
-  return { ok: true, thread: { message, replies, people, emailedTo } };
+  const mentionPeople = messageMentionPeople((await listStaff()) ?? [], message).map(
+    ({ email, name }) => ({ email, name })
+  );
+  return { ok: true, thread: { message, replies, people, emailedTo, mentionPeople } };
 }

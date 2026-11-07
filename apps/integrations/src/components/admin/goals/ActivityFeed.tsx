@@ -9,17 +9,18 @@
 import { type FormEvent, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref } from '@/lib/boards/files';
-import type { MentionPerson } from '@/lib/boards/mentions';
+import { BOARD_LIMITS } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { isTempId, optimistic, tempId } from '@/lib/client/optimistic';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
+import { type MentionPerson, namesOf } from '@/lib/mentions';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { FilesField } from '../boards/FilesField';
-import { SectionTitle } from '../goalsUi';
+import { SectionTitle, textareaClass } from '../goalsUi';
+import { MentionTextarea } from '../MentionTextarea';
 import { SopMarkdown } from '../SopMarkdown';
-import { MentionInput } from './MentionInput';
 
 interface EventsResponse {
   events: BoardEventRow[];
@@ -76,7 +77,12 @@ export function ActivityFeed({
   const events = feed.data?.events ?? [];
   const mentionPeople = feed.data?.mentionPeople ?? [];
   const attachments = feed.data?.attachments ?? [];
-  const names = useMemo(() => ({ ...people, ...(feed.data?.people ?? {}) }), [people, feed.data]);
+  // The candidates' names too, so a comment still on its way draws its
+  // mentions as names before the server's directory arrives.
+  const names = useMemo(
+    () => ({ ...people, ...namesOf(mentionPeople), ...(feed.data?.people ?? {}) }),
+    [people, mentionPeople, feed.data]
+  );
   const loading = feed.loading;
 
   const comments = events.filter((entry) => entry.action === 'comment');
@@ -156,12 +162,14 @@ export function ActivityFeed({
         <label className="sr-only" htmlFor={`comment-${cardId ?? goalId}`}>
           Add a comment
         </label>
-        <MentionInput
+        <MentionTextarea
           id={`comment-${cardId ?? goalId}`}
+          className={`${textareaClass} min-h-[70px]`}
+          maxLength={BOARD_LIMITS.comment}
+          placeholder="Add a comment… Type @ to mention someone"
           value={note}
           onChange={setNote}
           people={mentionPeople}
-          disabled={false}
         />
         {takesFiles && boardId && (
           <div className="mt-2">
@@ -299,7 +307,7 @@ export function EventEntries({
               </span>
               {entry.note?.trim() && (
                 <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
-                  <SopMarkdown content={entry.note} />
+                  <SopMarkdown content={entry.note} mentions={people} />
                 </div>
               )}
               {filesByEvent.has(entry.id) && (

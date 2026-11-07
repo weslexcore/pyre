@@ -17,7 +17,8 @@
 //
 // Posting notifies the whole audience, and unless `email: false` also emails
 // them the message with a link to its thread; an edit that widens it notifies the
-// people it adds (lib/notifications/messages).
+// people it adds, and one that @-mentions someone new tells them
+// (lib/notifications/messages).
 //
 // `draft: true` saves the message without sending it: nobody in the audience
 // sees it or hears about it. `sharedWith` names the admins who may open and
@@ -61,6 +62,7 @@ import {
   emailMessagePosted,
   notifyDraftShared,
   notifyMessageAudienceWidened,
+  notifyMessageEdited,
   notifyMessagePosted,
 } from '@/lib/notifications/messages';
 import { deleteBySource, markSourceRead } from '@/lib/notifications/notify';
@@ -338,10 +340,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     const notified = await notifyDraftShared(db, message, added, email);
     return json({ message, people, notified, emailed: 0 });
   }
-  const notified = patch.audience_roles
+  const widened = patch.audience_roles
     ? await notifyMessageAudienceWidened(db, message, existing, email)
     : 0;
-  return json({ message, people, notified, emailed: 0 });
+  const mentioned =
+    patch.body_md !== undefined && patch.body_md !== existing.body_md
+      ? await notifyMessageEdited(db, message, existing.body_md, email)
+      : 0;
+  return json({ message, people, notified: widened + mentioned, emailed: 0 });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

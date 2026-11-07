@@ -12,6 +12,9 @@
 // The API is the security boundary; this island mirrors its rules so the UI
 // doesn't offer buttons that would come back 403.
 //
+// A follow-up note can @-mention anyone who can open the report (the
+// response's mentionPeople); notes draw their mentions as names.
+//
 // The report is read through the shared JSON cache, so coming back to it
 // paints at once; every change shows the moment it is made (the record's
 // fields are guessed from what was sent, the trail entry the server writes
@@ -19,7 +22,7 @@
 // successful change drops the cached /admin/incidents entries, so the log
 // can never repaint a pre-edit snapshot of this report.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { formButtonClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
@@ -48,6 +51,7 @@ import {
   type Witness,
 } from '@/lib/incidents/types';
 import { FIELD_LIMITS } from '@/lib/incidents/validate';
+import { type MentionPerson, namesOf } from '@/lib/mentions';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   cardClass,
@@ -59,12 +63,16 @@ import {
   SeverityBadge,
   StatusBadge,
 } from './incidentUi';
+import { MentionedText } from './Mentions';
+import { MentionTextarea } from './MentionTextarea';
 
 interface DetailResponse {
   incident: IncidentRow;
   attachments: IncidentAttachmentRow[];
   events: IncidentEventRow[];
   people: PeopleNames;
+  /** Who a follow-up note may @-mention: the report's readers. */
+  mentionPeople?: MentionPerson[];
   canManage: boolean;
   canAmend: boolean;
   self: string;
@@ -124,6 +132,13 @@ export function IncidentDetail({
   const error = actionError ?? loadError;
   const [note, setNote] = useState('');
   const [editing, setEditing] = useState(false);
+  const mentionPeople = data?.mentionPeople ?? [];
+  // The candidates' names too, so a note still on its way draws its
+  // mentions as names before the server's directory arrives.
+  const mentionNames = useMemo(
+    () => ({ ...namesOf(mentionPeople), ...(data?.people ?? {}) }),
+    [mentionPeople, data?.people]
+  );
 
   /**
    * Save a change the page already shows. The record's fields are guessed
@@ -479,21 +494,26 @@ export function IncidentDetail({
               </p>
               <p className="text-sm text-white/80">{describeEvent(event, people)}</p>
               {event.note && (
-                <p className="mt-1 whitespace-pre-wrap text-sm text-white/65">{event.note}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-white/65">
+                  <MentionedText text={event.note} names={mentionNames} />
+                </p>
               )}
             </li>
           ))}
         </ol>
 
         <div className="mt-4">
-          {/** biome-ignore lint/a11y/noLabelWithoutControl: label heads the textarea below */}
-          <label className={labelClass}>Add a follow-up note</label>
-          <textarea
+          <label className={labelClass} htmlFor="incident-follow-up">
+            Add a follow-up note
+          </label>
+          <MentionTextarea
+            id="incident-follow-up"
             className={`${inputClass} min-h-[80px]`}
-            placeholder="Called the guest the next morning — they saw a doctor, no fracture, and they're coming back Saturday."
+            placeholder="Called the guest the next morning — they saw a doctor, no fracture, and they're coming back Saturday. Type @ to mention a reviewer."
             maxLength={FIELD_LIMITS.note}
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={setNote}
+            people={mentionPeople}
           />
           <button
             type="button"

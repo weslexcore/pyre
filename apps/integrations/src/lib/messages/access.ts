@@ -16,6 +16,7 @@
 
 import type { AdminMessageReplyRow, AdminMessageRow, StaffRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
+import { type MentionCandidate, mentionCandidates } from '@/lib/mentions';
 import { canUseDashboard, roleForStaffRow, type SopRole, type SopViewer } from '@/lib/sops/levels';
 
 /** The parts of a message row the access rules read. */
@@ -126,6 +127,28 @@ export function resolveAudience(
     if (roleIsNotified(message, roleForStaffRow(row)) || named.has(email)) out.add(email);
   }
   return [...out];
+}
+
+/**
+ * Who may be @-mentioned on a message or in its thread: everyone on the
+ * roster who can open it (canViewMessage) — its audience, its author, and
+ * the admins, who see every message. The same list serves the composer's
+ * autocomplete and the server's notifications, so nobody is pointed at a
+ * message they can't read.
+ */
+export function messageMentionPeople(
+  rows: Pick<
+    StaffRow,
+    'email' | 'display_name' | 'active' | 'is_admin' | 'is_shift_lead' | 'pages'
+  >[],
+  message: MessageAccessFields
+): MentionCandidate[] {
+  return mentionCandidates(
+    rows,
+    (row) =>
+      canUseDashboard(row) &&
+      canViewMessage({ role: roleForStaffRow(row), email: normalizeEmail(row.email) }, message)
+  );
 }
 
 /**
