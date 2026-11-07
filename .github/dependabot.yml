@@ -18,6 +18,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Match Yarn's npmMinimalAgeGate (20160 minutes = 14 days, .yarnrc.yml).
+    # Without this Dependabot proposes versions published in the last two
+    # weeks, Yarn refuses them as quarantined, and the update job fails.
+    cooldown:
+      default-days: 14
     groups:
       # Bundle routine bumps into one reviewable PR instead of dozens.
       minor-and-patch:

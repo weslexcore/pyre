@@ -65,5 +65,10 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --workdir apps
 
+      # Supabase CLI v3 (Nov 2026) targets the local Docker stack unless told
+      # `--remote` (the linked project), and refuses to change a hosted project
+      # from a non-interactive run unless given `--yes`. Without both, this
+      # step fails with ECONNREFUSED 127.0.0.1:54322 or
+      # HostedMutationConsentRequiredError.
       - name: Push migrations
-        run: supabase db push --workdir apps
+        run: supabase db push --remote --yes --workdir apps
