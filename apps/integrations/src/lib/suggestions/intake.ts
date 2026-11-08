@@ -3,7 +3,9 @@
 // suggestion that could never be approved is refused while the agent can
 // still fix it. SOP edits arrive as find-and-replace hunks and leave here as
 // the whole proposed document. New cards leave with the board's default
-// assignees and a due date from their severity and importance. Server-only.
+// assignees and a due date from their severity and importance. Inventory
+// counts leave credited to the source's author at the source's time.
+// Server-only.
 
 import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -11,6 +13,7 @@ import { getSetting } from '@/lib/settings/store';
 import { applyHunks } from '@/lib/sops/sop-edit';
 import { checkPayload } from './approve';
 import { dueDateFor, isImportance, isSeverity } from './priority';
+import type { SourceRecord } from './sources';
 import type { NewSuggestion } from './store';
 import {
   isSuggestionKind,
@@ -114,7 +117,32 @@ async function fillCardDefaults(
   return { ...raw, assigneeEmails: defaults ?? [], dueDate };
 }
 
-export async function intakeSuggestions(db: SupabaseClient, raw: unknown): Promise<IntakeResult> {
+/**
+ * A count as the admin first sees it: credited to whoever wrote the source
+ * (the person who looked at the shelf), at the time they wrote it. The agent
+ * sends only the item and the number; a dry run has no source and leaves
+ * both blank.
+ */
+function fillCountCredit(
+  raw: Record<string, unknown>,
+  source: SourceRecord | undefined
+): Record<string, unknown> {
+  return {
+    ...raw,
+    countedBy: source?.author ?? null,
+    countedAt: source?.recordedAt ?? null,
+  };
+}
+
+/**
+ * Check the agent's list and shape it for storage. `source` is the record the
+ * run is about, when there is one (a dry run has none).
+ */
+export async function intakeSuggestions(
+  db: SupabaseClient,
+  raw: unknown,
+  source?: SourceRecord
+): Promise<IntakeResult> {
   if (!Array.isArray(raw))
     return { ok: false, status: 400, error: 'suggestions must be a list (it may be empty)' };
   if (raw.length > MAX_SUGGESTIONS_PER_RUN) {
@@ -142,6 +170,7 @@ export async function intakeSuggestions(db: SupabaseClient, raw: unknown): Promi
       payload = expanded.payload;
     }
     if (kind === 'board_card.create') payload = await fillCardDefaults(db, payload);
+    if (kind === 'inventory.count') payload = fillCountCredit(payload, source);
 
     const checked = await checkPayload(db, kind, payload);
     if (!checked.ok) {

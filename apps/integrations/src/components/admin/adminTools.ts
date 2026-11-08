@@ -107,9 +107,9 @@ export const SUGGESTIONS_TOOL: AdminTool = {
   title: 'Suggestions',
   navLabel: 'Suggestions',
   description:
-    'Tasks, task comments, and SOP edits the agent proposes from shift notes — edit and approve or dismiss each one.',
+    'Tasks, task comments, SOP edits, hours corrections, and inventory counts the agent proposes from shift notes — edit and approve or dismiss each one.',
   section: 'operations',
-  keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox'],
+  keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox', 'inventory'],
 };
 
 // Settings change what the whole app does.
@@ -204,7 +204,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
       'goals',
     ],
     description:
-      'Ask Pyre Agent anything about how we run the sauna, your shifts, or where our goals stand. It answers from the SOPs, logs, schedule, and boards you can see, with links to its sources, and proposes board changes for you to apply.',
+      'Ask Pyre Agent anything about how we run the sauna, your shifts, what is in stock, or where our goals stand. It answers from the SOPs, logs, schedule, inventory, and boards you can see, with links to its sources, and proposes board and inventory changes for you to apply.',
     section: 'operations',
   },
   {

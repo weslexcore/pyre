@@ -99,6 +99,15 @@ function noteOf(value: unknown): string | null {
   return typeof value === 'string' ? value.slice(0, MAX_DECISION_NOTE) : null;
 }
 
+/** The people an inventory count credits (the note's author, the last counter), for the name directory. */
+function countedByOf(row: AgentSuggestionRow): string[] {
+  if (row.kind !== 'inventory.count') return [];
+  const payload = row.edited_payload ?? row.payload;
+  return [payload.countedBy, payload.lastCountedBy].filter(
+    (e): e is string => typeof e === 'string' && e.includes('@')
+  );
+}
+
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requireAdminOrPage(cookies, SUGGESTIONS_HREF);
   if (gate instanceof Response) return gate;
@@ -224,7 +233,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     sources,
     ...(await resolveLinks(db, rows)),
     people: await getPeopleNames(
-      rows.flatMap((r) => [r.decided_by, r.edited_by]).filter((e): e is string => !!e)
+      rows
+        .flatMap((r) => [r.decided_by, r.edited_by, ...countedByOf(r)])
+        .filter((e): e is string => !!e)
     ),
     agentsConfigured: suggesterConfigured(),
     suggestionsEnabled: await getSetting('suggestions.enabled'),

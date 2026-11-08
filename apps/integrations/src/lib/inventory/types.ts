@@ -31,6 +31,12 @@ export interface InventoryRow {
   last_counted_at: string | null;
   /** Email of whoever last set the stock number. */
   last_counted_by: string | null;
+  /**
+   * The approved agent suggestion the last count came from, when it was read
+   * out of a shift note rather than typed here (lib/suggestions/kinds/
+   * inventory-count); null for a count made by hand.
+   */
+  last_count_suggestion_id: string | null;
   in_stock: number;
   /** Flag for re-order at or below this; null = never. */
   reorder_at: number | null;
@@ -45,6 +51,24 @@ export interface InventoryRow {
    * column; null = not enough history yet.
    */
   usage_per_day?: number | null;
+  /**
+   * Where the last count was read from, when it came from an approved
+   * suggestion: the shift note's label and link. Resolved by GET
+   * /api/admin/inventory from last_count_suggestion_id, not a column; null
+   * for a count made by hand.
+   */
+  last_count_origin?: InventoryOrigin | null;
+}
+
+/** A shift note (or other record) a count was read from, to link back to. */
+export interface InventoryOrigin {
+  label: string;
+  href: string | null;
+}
+
+/** The list, opened on one item (highlighted, scrolled into view). */
+export function inventoryItemHref(id: string): string {
+  return `${INVENTORY_HREF}?item=${id}`;
 }
 
 /** The fields inventory:manage edits (In stock: anyone); the route stamps the rest. */
@@ -92,12 +116,16 @@ export interface InventoryHistoryEntry {
   in_stock: number;
   changed_by: string;
   changed_at: string;
+  /** The approved agent suggestion behind this change (a count read from a shift note), if any. */
+  suggestion_id: string | null;
 }
 
 export interface InventoryHistoryResponse {
   /** Newest first. */
   entries: InventoryHistoryEntry[];
   people: PeopleNames;
+  /** The record each suggestion-made entry was read from, keyed by suggestion id. */
+  origins: Record<string, InventoryOrigin>;
   /** More entries exist than were sent. */
   truncated: boolean;
 }

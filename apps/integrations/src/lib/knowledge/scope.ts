@@ -9,6 +9,7 @@
 import { canViewPage, hasIncidentsManage, SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import type { AdminGate } from '@/lib/auth/admin';
 import { canViewBoardsTool } from '@/lib/boards/access';
+import { INVENTORY_HREF } from '@/lib/inventory/types';
 import type { SopRole } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
@@ -27,6 +28,12 @@ export interface KnowledgeScope {
    * /api/agent/pyre from their email — this only says whether to offer the tools.
    */
   boards: boolean;
+  /**
+   * The inventory list: whether they hold the page. Anyone with it reads the
+   * whole list and may count; whether they may change anything else
+   * (inventory:manage) is resolved per call by /api/agent/pyre.
+   */
+  inventory: boolean;
 }
 
 /** Request headers that turn a pyre-agents session into a knowledge session. */
@@ -68,6 +75,7 @@ export async function knowledgeScopeForAccess(
     // agent never reads them), so the tool needs no all/mine split.
     schedule: canViewPage(access, '/admin/schedule'),
     boards: canViewBoardsTool(access),
+    inventory: canViewPage(access, INVENTORY_HREF),
   };
 }
 

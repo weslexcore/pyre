@@ -24,32 +24,42 @@ export async function recordChange(
     after,
     email,
     now = new Date(),
+    suggestionId = null,
   }: {
     action: 'add' | 'edit';
     before: InventoryRow | null;
     after: InventoryRow;
     email: string;
     now?: Date;
+    /**
+     * The approved agent suggestion behind the change (a count read from a
+     * shift note). Stamped on the row — unique, so a retried approval finds
+     * it — and never merged into another row, so the link stays on the
+     * change it belongs to.
+     */
+    suggestionId?: string | null;
   }
 ): Promise<void> {
   try {
     const changes = diffItems(before, after);
-    if (action === 'edit') {
+    if (action === 'edit' && !suggestionId) {
       const { data: last } = await db
         .from('inventory_history')
-        .select('id, action, changes, changed_by, changed_at')
+        .select('id, action, changes, changed_by, changed_at, suggestion_id')
         .eq('item_id', after.id)
         .order('changed_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       const prev = last as Pick<
         InventoryHistoryEntry,
-        'id' | 'action' | 'changes' | 'changed_by' | 'changed_at'
+        'id' | 'action' | 'changes' | 'changed_by' | 'changed_at' | 'suggestion_id'
       > | null;
+      // A row a suggestion wrote keeps its own link: nothing merges into it.
       if (
         prev &&
         prev.action === 'edit' &&
         prev.changed_by === email &&
+        !prev.suggestion_id &&
         now.getTime() - Date.parse(prev.changed_at) < MERGE_WINDOW_MS
       ) {
         const { error } = await db
@@ -71,6 +81,7 @@ export async function recordChange(
       in_stock: after.in_stock,
       changed_by: email,
       changed_at: now.toISOString(),
+      suggestion_id: suggestionId,
     });
     if (error) throw error;
   } catch (e) {

@@ -134,6 +134,36 @@ export async function withCrewedShift<T>(
   }
 }
 
+/**
+ * An active inventory item with a stock on record, removed afterwards (its
+ * history cascades with it).
+ */
+export async function withInventoryItem<T>(
+  input: { name: string; inStock: number; reorderAt?: number },
+  fn: (itemId: string) => Promise<T>
+): Promise<T> {
+  const db = getDb();
+  const { data, error } = await db
+    .from('inventory')
+    .insert({
+      name: input.name,
+      in_stock: input.inStock,
+      reorder_at: input.reorderAt ?? null,
+      created_by: EVAL_AUTHOR,
+      last_counted_at: new Date().toISOString(),
+      last_counted_by: EVAL_AUTHOR,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`fixture inventory item: ${error.message}`);
+  const id = (data as { id: string }).id;
+  try {
+    return await fn(id);
+  } finally {
+    await db.from('inventory').delete().eq('id', id);
+  }
+}
+
 /** The headers the integrations app sends when it starts the suggester on a note. */
 export function suggesterHeaders(noteId: string): Record<string, string> {
   return {

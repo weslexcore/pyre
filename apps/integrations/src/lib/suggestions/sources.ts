@@ -23,6 +23,13 @@ export interface SourceRecord {
   href: string;
   /** Whether the work it describes is already dealt with (a resolved note). */
   closed: boolean;
+  /**
+   * Who wrote it (their email), and when. A suggestion that records an
+   * observation from the text (an inventory count) credits it to them, at
+   * that time, rather than to the admin who approved it.
+   */
+  author: string | null;
+  recordedAt: string;
 }
 
 export interface SuggestionSource {
@@ -58,10 +65,14 @@ export function formatMonthDay(ymd: string): string {
   });
 }
 
-type NoteFields = Pick<ShiftNoteRow, 'id' | 'body' | 'note_date' | 'author_email' | 'status'>;
+type NoteFields = Pick<
+  ShiftNoteRow,
+  'id' | 'body' | 'note_date' | 'author_email' | 'status' | 'created_at'
+>;
 
 function noteRecord(note: NoteFields, names: Map<string, string>): SourceRecord {
-  const author = names.get(note.author_email.trim().toLowerCase());
+  const email = note.author_email.trim().toLowerCase();
+  const author = names.get(email);
   return {
     type: 'shift_note',
     id: note.id,
@@ -70,6 +81,8 @@ function noteRecord(note: NoteFields, names: Map<string, string>): SourceRecord 
     label: `${author ? `${author}'s shift note` : 'Shift note'} (${formatMonthDay(note.note_date)})`,
     href: sourceHref('shift_note', note.id),
     closed: note.status === 'resolved',
+    author: email || null,
+    recordedAt: note.created_at,
   };
 }
 
@@ -85,7 +98,7 @@ async function staffNames(db: SupabaseClient, emails: string[]): Promise<Map<str
   return names;
 }
 
-const NOTE_COLUMNS = 'id, body, note_date, author_email, status';
+const NOTE_COLUMNS = 'id, body, note_date, author_email, status, created_at';
 
 export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> = {
   shift_note: {

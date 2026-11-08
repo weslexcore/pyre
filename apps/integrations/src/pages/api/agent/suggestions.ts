@@ -1,6 +1,7 @@
 // Agent-facing suggestion writer: the pyre-agents suggester posts what it
 // thinks should happen next for one source record (a shift note) — new
-// cards, comments on existing cards, SOP edits — and this route checks each
+// cards, comments on existing cards, SOP edits, new hours, inventory counts
+// — and this route checks each
 // against the live data with the same code an admin's approval runs
 // (lib/suggestions), stores them as pending for review, closes the run, and
 // tells the admins. Nothing here applies anything: that takes an admin.
@@ -69,7 +70,12 @@ export const POST: APIRoute = async ({ request }) => {
     if (run.status === 'failed') return json({ error: 'This run was abandoned' }, 409);
   }
 
-  const intake = await intakeSuggestions(db, body.suggestions);
+  // The record the run is about, read before intake: a count read out of it
+  // is credited to its author.
+  const source = run
+    ? await SUGGESTION_SOURCES[run.source_type].load(db, run.source_id).catch(() => null)
+    : null;
+  const intake = await intakeSuggestions(db, body.suggestions, source ?? undefined);
   if (!intake.ok) {
     return json(
       { error: intake.error, ...(intake.index !== undefined ? { index: intake.index } : {}) },
@@ -83,7 +89,6 @@ export const POST: APIRoute = async ({ request }) => {
   const saved = await insertSuggestions(db, run, intake.suggestions, agentSessionId);
   if ('error' in saved) return json({ error: saved.error }, 500);
 
-  const source = await SUGGESTION_SOURCES[run.source_type].load(db, run.source_id);
   if (source) await notifySuggestionsReady(db, source, saved.rows);
 
   return json({ saved: true, count: saved.rows.length });

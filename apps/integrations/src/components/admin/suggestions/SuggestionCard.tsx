@@ -32,6 +32,7 @@ const KIND_TONES: Record<SuggestionKind, string> = {
   'sop.edit': 'border-[var(--pyre-creme)]/40 bg-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]',
   'shift_assignment.update':
     'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 text-[var(--pyre-blue)]',
+  'inventory.count': 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300',
 };
 
 export function KindBadge({ kind }: { kind: SuggestionKind }) {
@@ -236,6 +237,7 @@ export function SuggestionCard({
             target={target}
             disabled={busy}
             idPrefix={`suggestion-${suggestion.id}`}
+            names={names}
           />
           {!parsed.ok && (
             <p className="font-mono text-[10px] text-[var(--pyre-red)]">{parsed.error}</p>

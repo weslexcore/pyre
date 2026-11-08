@@ -18,10 +18,12 @@ import {
   INVENTORY_HISTORY_API,
   type InventoryHistoryEntry,
   type InventoryHistoryResponse,
+  type InventoryOrigin,
   type InventoryRow,
 } from '@/lib/inventory/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
+import { CountOriginLink } from './InventoryOriginLink';
 import { Chip } from './incidentUi';
 
 const DAY_MS = 86_400_000;
@@ -53,7 +55,12 @@ export function InventoryHistory({ item, now }: { item: InventoryRow; now: Date 
       {data.entries.length > 0 && (
         <StockChart item={item} entries={data.entries} people={data.people} now={now} />
       )}
-      <ChangeLog entries={data.entries} people={data.people} truncated={data.truncated} />
+      <ChangeLog
+        entries={data.entries}
+        people={data.people}
+        origins={data.origins ?? {}}
+        truncated={data.truncated}
+      />
     </div>
   );
 }
@@ -358,14 +365,20 @@ function shortDate(t: number): string {
   });
 }
 
-/** Every change, newest first: when, who, and each field before and after. */
+/**
+ * Every change, newest first: when, who, and each field before and after. A
+ * count the agent read out of a shift note (and an admin approved) links the
+ * note.
+ */
 function ChangeLog({
   entries,
   people,
+  origins,
   truncated,
 }: {
   entries: readonly InventoryHistoryEntry[];
   people: PeopleNames;
+  origins: Record<string, InventoryOrigin>;
   truncated: boolean;
 }) {
   if (entries.length === 0) {
@@ -375,17 +388,26 @@ function ChangeLog({
     <div>
       <h3 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-white/50">Changes</h3>
       <ol className="divide-y divide-white/5 rounded border border-white/10">
-        {entries.map((entry) => (
-          <li key={entry.id} className="px-3 py-2">
-            <p className="text-xs text-white/50">
-              <time dateTime={entry.changed_at} title={etStampWithYear(entry.changed_at)}>
-                {etStamp(entry.changed_at)}
-              </time>{' '}
-              · {personName(entry.changed_by, people)}
-            </p>
-            <EntryBody entry={entry} />
-          </li>
-        ))}
+        {entries.map((entry) => {
+          const origin = entry.suggestion_id ? origins[entry.suggestion_id] : undefined;
+          return (
+            <li key={entry.id} className="px-3 py-2">
+              <p className="text-xs text-white/50">
+                <time dateTime={entry.changed_at} title={etStampWithYear(entry.changed_at)}>
+                  {etStamp(entry.changed_at)}
+                </time>{' '}
+                · {personName(entry.changed_by, people)}
+                {origin && (
+                  <>
+                    {' · '}
+                    <CountOriginLink origin={origin} />
+                  </>
+                )}
+              </p>
+              <EntryBody entry={entry} />
+            </li>
+          );
+        })}
       </ol>
       {truncated && (
         <p className="mt-1.5 text-xs text-white/40">Showing the most recent {entries.length}.</p>

@@ -503,7 +503,8 @@ export type AgentSuggestionKind =
   | 'board_card.create'
   | 'board_card.comment'
   | 'sop.edit'
-  | 'shift_assignment.update';
+  | 'shift_assignment.update'
+  | 'inventory.count';
 export type AgentSuggestionStatus =
   | 'pending'
   | 'applying'
@@ -532,8 +533,8 @@ export interface AgentSuggestionRunRow {
 }
 
 /**
- * A board change Pyre Agent proposed in a conversation (/admin/ask), applied
- * only when the asker presses Apply. See lib/pyre-agent.
+ * A board or inventory change Pyre Agent proposed in a conversation
+ * (/admin/ask), applied only when the asker presses Apply. See lib/pyre-agent.
  */
 export interface PyreAgentActionRow {
   id: string;
@@ -545,7 +546,9 @@ export interface PyreAgentActionRow {
     | 'board_card.create'
     | 'board_card.update'
     | 'board_card.comment'
-    | 'goal_kpi.measure';
+    | 'goal_kpi.measure'
+    | 'inventory.update'
+    | 'inventory.create';
   summary: string;
   details: string[];
   rationale: string;
@@ -576,9 +579,15 @@ export interface AgentSuggestionRow {
   edited_at: string | null;
   rationale: string;
   confidence: number | null;
-  target_type: 'board_card' | 'sop' | 'shift_assignment' | null;
+  target_type: 'board_card' | 'sop' | 'shift_assignment' | 'inventory_item' | null;
   target_id: string | null;
-  result_type: 'board_card' | 'board_event' | 'sop_version' | 'shift_assignment' | null;
+  result_type:
+    | 'board_card'
+    | 'board_event'
+    | 'sop_version'
+    | 'shift_assignment'
+    | 'inventory_item'
+    | null;
   result_id: string | null;
   applied_payload: Record<string, unknown> | null;
   decided_by: string | null;

@@ -27,6 +27,7 @@ import type { InventoryRow } from '@/lib/inventory/types';
 import { ErrorBanner } from './ErrorBanner';
 import { CategoryPicker } from './InventoryCategoryPicker';
 import { InventoryHistory } from './InventoryHistory';
+import { CountOriginLink } from './InventoryOriginLink';
 import { Modal, modalPanelClass } from './Modal';
 
 const CUSTOM = 'custom';
@@ -254,6 +255,12 @@ export function InventoryDetails({
             {item.last_counted_at
               ? `Last counted ${etStamp(item.last_counted_at)}${countedBy ? ` by ${countedBy}` : ''}`
               : 'Never counted'}
+            {item.last_count_origin && (
+              <>
+                {' · '}
+                <CountOriginLink origin={item.last_count_origin} />
+              </>
+            )}
             {!item.active && ' · inactive'}
             {isDue(item, now) && ' · due for a count'}
             {isLow(item) && ' · needs re-order'}

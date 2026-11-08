@@ -30,6 +30,7 @@ function row(overrides: Partial<InventoryRow> = {}): InventoryRow {
     count_every_days: null,
     last_counted_at: null,
     last_counted_by: null,
+    last_count_suggestion_id: null,
     in_stock: 0,
     reorder_at: null,
     active: true,
