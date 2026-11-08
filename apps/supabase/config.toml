@@ -16,9 +16,12 @@ major_version = 15
 enabled = true
 port = 54323
 
-# Staff sign-in for apps/integrations (astro dev on 4321): magic link / code,
-# invite-only — the app pre-creates every auth user from /admin/users, so
-# sign-up stays closed. Mirrors the production project's dashboard settings.
+# Staff sign-in for apps/integrations (astro dev on 4321): magic link / code.
+# The staff table is the allowlist — the login route creates a person's auth
+# user on their first sign-in — so sign-up itself stays closed. The values
+# here are for the local stack; [remotes.production] below overrides the
+# URLs for the real project, and `supabase config push` applies both the
+# auth settings and the email template there.
 [auth]
 enabled = true
 site_url = "http://localhost:4321"
@@ -35,13 +38,30 @@ otp_expiry = 600
 
 [auth.email.template.magic_link]
 subject = "Sign in to Pyre Admin"
-content_path = "./templates/magic_link.html"
+# Relative to the CLI's workdir (apps/), not to this file.
+content_path = "./supabase/templates/magic_link.html"
 
 # Local mail catcher: sign-in emails land at http://localhost:54324.
-[inbucket]
+[local_smtp]
 enabled = true
 port = 54324
 
 # The bell's live inbox channel (staff_notifications_realtime migration).
 [realtime]
 enabled = true
+
+# The production project (shared by the production and staging deployments
+# of apps/integrations, and by Vercel previews). Sign-in links come back to
+# whichever deployment asked for them, so every origin is on the allowlist.
+[remotes.production]
+project_id = "veiklnkeinpvfbxkxjrb"
+
+[remotes.production.auth]
+site_url = "https://integrations.pyresauna.com"
+additional_redirect_urls = [
+  "https://integrations.pyresauna.com/api/auth/callback",
+  "https://staging.integrations.pyresauna.com/api/auth/callback",
+  "https://pyre-integrations.vercel.app/api/auth/callback",
+  "https://*-wes-projects-f29875e5.vercel.app/api/auth/callback",
+  "http://localhost:4321/api/auth/callback",
+]
