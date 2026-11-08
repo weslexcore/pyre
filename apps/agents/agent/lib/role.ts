@@ -87,6 +87,13 @@ export interface KnowledgeScope {
    * so this only decides whether the board tools are offered.
    */
   boards: boolean;
+  /**
+   * Whether they hold the Inventory page (the supplies list: stock, counts,
+   * re-order levels). Everyone with the page reads the whole list and may
+   * count; whether they may change anything else the integrations app
+   * resolves per call, so this only decides whether the tools are offered.
+   */
+  inventory: boolean;
 }
 
 /** The scope a knowledge session gets when the caller sends none: staff-level SOPs only. */
@@ -98,6 +105,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScope = {
   water: false,
   schedule: false,
   boards: false,
+  inventory: false,
 };
 
 function logScope(value: unknown): LogScope {
@@ -128,6 +136,7 @@ export function parseKnowledgeScope(raw: unknown): KnowledgeScope {
     water: v.water === true,
     schedule: v.schedule === true,
     boards: v.boards === true,
+    inventory: v.inventory === true,
   };
 }
 

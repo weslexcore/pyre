@@ -62,6 +62,7 @@ import { personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
 import { CategoryPicker } from './InventoryCategoryPicker';
 import { type DetailsTab, InventoryDetails } from './InventoryDetails';
+import { CountOriginLink } from './InventoryOriginLink';
 import { Chip } from './incidentUi';
 import { Modal, modalPanelClass } from './Modal';
 
@@ -280,14 +281,21 @@ export function InventoryList() {
     });
   };
 
+  // A saved row that says nothing about its count's origin (an active flip)
+  // keeps the one the list already had.
+  const merged = (prev: InventoryRow | undefined, item: InventoryRow): InventoryRow =>
+    item.last_count_origin === undefined
+      ? { ...item, last_count_origin: prev?.last_count_origin ?? null }
+      : item;
+
   const replaceRow = (item: InventoryRow, people?: Record<string, string>) =>
     setData((prev) =>
       prev
         ? {
             ...prev,
             items: prev.items.some((i) => i.id === item.id)
-              ? prev.items.map((i) => (i.id === item.id ? item : i))
-              : [...prev.items, item],
+              ? prev.items.map((i) => (i.id === item.id ? merged(i, item) : i))
+              : [...prev.items, merged(undefined, item)],
             people: { ...prev.people, ...people },
           }
         : prev
@@ -336,7 +344,7 @@ export function InventoryList() {
           prev
             ? {
                 ...prev,
-                items: prev.items.map((i) => (i.id === id ? res.item : i)),
+                items: prev.items.map((i) => (i.id === id ? merged(i, res.item) : i)),
                 people: { ...prev.people, ...res.people },
               }
             : prev,
@@ -795,6 +803,12 @@ function ItemRow({
           <>
             {etStamp(item.last_counted_at)}
             {countedBy && <span className="text-white/40"> · {countedBy}</span>}
+            {item.last_count_origin && (
+              <span className="text-white/40">
+                {' · '}
+                <CountOriginLink origin={item.last_count_origin} />
+              </span>
+            )}
           </>
         ) : (
           <span className="text-white/30">Never</span>

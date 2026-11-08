@@ -6,7 +6,7 @@
 // resolves their board grants on every call and owns the progress math, so
 // nothing here re-implements either. A proposal is stored pending and shown
 // to the person in the chat with Apply and Dismiss; nothing here changes a
-// board.
+// board. The inventory tools (./inventory) share the same call.
 
 import { postAgentApi } from '../api';
 import type { KnowledgeScope } from '../role';
@@ -16,18 +16,38 @@ export type ProposalKind =
   | 'board_card.create'
   | 'board_card.update'
   | 'board_card.comment'
-  | 'goal_kpi.measure';
+  | 'goal_kpi.measure'
+  | 'inventory.update'
+  | 'inventory.create';
 
-async function callPyre(
+export type PyreOp = 'goals' | 'board' | 'cards' | 'inventory' | 'propose';
+
+/** Which page an op or proposal needs the person to hold. */
+export function areaOf(op: PyreOp, kind?: ProposalKind): 'boards' | 'inventory' {
+  if (op === 'inventory') return 'inventory';
+  if (op === 'propose' && kind?.startsWith('inventory.')) return 'inventory';
+  return 'boards';
+}
+
+/**
+ * One call to /api/agent/pyre as the person. Refused here, before the
+ * network, when the scope says they do not hold the page the op reads; the
+ * integrations app checks again with their live grants.
+ */
+export async function callPyre(
   scope: KnowledgeScope,
   sessionId: string | null,
-  op: 'goals' | 'board' | 'cards' | 'propose',
+  op: PyreOp,
   input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  if (!scope.boards) {
+  const area = areaOf(op, input.kind as ProposalKind | undefined);
+  if (area === 'boards' && !scope.boards) {
     return { error: 'This person has no boards, so there are no goals or tasks to show them.' };
   }
-  if (!scope.email) return { error: 'This session has no asker email; boards are unavailable.' };
+  if (area === 'inventory' && !scope.inventory) {
+    return { error: 'This person does not hold the Inventory page, so the list is not available.' };
+  }
+  if (!scope.email) return { error: 'This session has no asker email; this is unavailable.' };
   const { status, body } = await postAgentApi('/api/agent/pyre', {
     email: scope.email,
     sessionId,

@@ -105,6 +105,67 @@ describe('helpers', () => {
   });
 });
 
+describe('parsePayload inventory.count', () => {
+  it('reads the item and the number, with the display fields blank until checked', () => {
+    expect(parsePayload('inventory.count', { itemId: UUID, inStock: 3 })).toEqual({
+      ok: true,
+      value: {
+        itemId: UUID,
+        inStock: 3,
+        itemName: '',
+        previousInStock: null,
+        reorderAt: null,
+        lastCountedAt: null,
+        lastCountedBy: null,
+        countedBy: null,
+        countedAt: null,
+      },
+    });
+  });
+
+  it('keeps who counted it and when, and the item as it stood', () => {
+    const parsed = parsePayload('inventory.count', {
+      itemId: UUID,
+      inStock: '12.5',
+      itemName: 'Trash bags',
+      previousInStock: 20,
+      reorderAt: 5,
+      lastCountedAt: '2026-11-01T12:00:00Z',
+      lastCountedBy: 'Jo@PyreSauna.com',
+      countedBy: 'maya@pyresauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+    expect(parsed.ok && parsed.value).toMatchObject({
+      inStock: 12.5,
+      itemName: 'Trash bags',
+      previousInStock: 20,
+      reorderAt: 5,
+      lastCountedBy: 'jo@pyresauna.com',
+      countedBy: 'maya@pyresauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+  });
+
+  it('refuses a missing item, a negative or absent number, and a bad stamp', () => {
+    expect(parsePayload('inventory.count', { inStock: 3 }).ok).toBe(false);
+    expect(parsePayload('inventory.count', { itemId: UUID }).ok).toBe(false);
+    expect(parsePayload('inventory.count', { itemId: UUID, inStock: -1 }).ok).toBe(false);
+    expect(parsePayload('inventory.count', { itemId: UUID, inStock: 'three' }).ok).toBe(false);
+    const stamped = parsePayload('inventory.count', {
+      itemId: UUID,
+      inStock: 3,
+      countedAt: 'yesterday',
+    });
+    expect(stamped.ok && stamped.value.countedAt).toBeNull();
+  });
+
+  it('describes the item and the count', () => {
+    expect(describeSuggestion('inventory.count', { itemName: 'Trash bags', inStock: 3 })).toBe(
+      'Inventory count: Trash bags, 3 in stock'
+    );
+  });
+});
+
 describe('parsePayload shift_assignment.update', () => {
   it('reads an end time alone, leaving the start to be filled from the assignment', () => {
     const parsed = parsePayload('shift_assignment.update', { assignmentId: UUID, endsAt: '20:30' });

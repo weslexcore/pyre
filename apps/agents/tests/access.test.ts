@@ -41,6 +41,7 @@ describe('resolveRole', () => {
       water: true,
       schedule: false,
       boards: false,
+      inventory: false,
     });
   });
 
@@ -75,6 +76,7 @@ describe('parseKnowledgeScope', () => {
         water: true,
         schedule: true,
         boards: true,
+        inventory: true,
       })
     ).toEqual({
       role: 'admin',
@@ -84,6 +86,7 @@ describe('parseKnowledgeScope', () => {
       water: true,
       schedule: true,
       boards: true,
+      inventory: true,
     });
   });
 
@@ -96,6 +99,11 @@ describe('parseKnowledgeScope', () => {
   it('treats the boards grant as a strict boolean', () => {
     expect(parseKnowledgeScope({ boards: 'true' }).boards).toBe(false);
     expect(parseKnowledgeScope({ boards: true }).boards).toBe(true);
+  });
+
+  it('treats the inventory grant as a strict boolean', () => {
+    expect(parseKnowledgeScope({ inventory: 'true' }).inventory).toBe(false);
+    expect(parseKnowledgeScope({ inventory: true }).inventory).toBe(true);
   });
 });
 

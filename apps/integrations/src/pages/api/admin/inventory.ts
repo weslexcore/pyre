@@ -24,6 +24,7 @@ import { recordChange, usageByItem } from '@/lib/inventory/history';
 import { normalizeFields } from '@/lib/inventory/rules';
 import { INVENTORY_HREF, type InventoryResponse, type InventoryRow } from '@/lib/inventory/types';
 import { getPeopleNames } from '@/lib/sops/people';
+import { suggestionOrigins } from '@/lib/suggestions/origins';
 
 const DUPLICATE = 'An item already has that name';
 const NEEDS_MANAGE = 'Configuring inventory needs the inventory:manage permission';
@@ -45,10 +46,21 @@ export const GET: APIRoute = async ({ cookies }) => {
 
   const { data, error } = await db.from('inventory').select('*').order('name');
   if (error) return dbError(error);
-  const usage = await usageByItem(db, new Date());
-  const items = ((data ?? []) as InventoryRow[]).map((row) => ({
+  const rows = (data ?? []) as InventoryRow[];
+  // Counts read out of shift notes by an approved suggestion link back to
+  // the note; counts made here have no origin.
+  const [usage, origins] = await Promise.all([
+    usageByItem(db, new Date()),
+    suggestionOrigins(
+      db,
+      rows.map((r) => r.last_count_suggestion_id).filter((id): id is string => !!id)
+    ),
+  ]);
+  const items = rows.map((row) => ({
     ...numericRow(row),
     usage_per_day: usage.get(row.id) ?? null,
+    last_count_origin:
+      (row.last_count_suggestion_id && origins[row.last_count_suggestion_id]) || null,
   }));
   const people = await getPeopleNames(
     items.map((i) => i.last_counted_by).filter((e): e is string => !!e)
@@ -80,7 +92,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, DUPLICATE);
   const item = numericRow(data as InventoryRow);
   await recordChange(db, { action: 'add', before: null, after: item, email });
-  return json({ item: { ...item, usage_per_day: null } }, 201);
+  return json({ item: { ...item, usage_per_day: null, last_count_origin: null } }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request, url }) => {
@@ -114,9 +126,14 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .update({
       ...changes,
       // Setting an item aside (or bringing it back) isn't a look at the shelf.
+      // A look made here is the person's own, not one read from a note.
       ...(Object.keys(changes).every((key) => key === 'active')
         ? {}
-        : { last_counted_at: new Date().toISOString(), last_counted_by: email }),
+        : {
+            last_counted_at: new Date().toISOString(),
+            last_counted_by: email,
+            last_count_suggestion_id: null,
+          }),
     })
     .eq('id', id)
     .select('*')
@@ -131,7 +148,14 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     await notifyIfLow(db, saved, before.in_stock, saved.in_stock, email);
   }
   const usage = await usageByItem(db, new Date(), id);
-  const item = { ...saved, usage_per_day: usage.get(id) ?? null };
+  const item = {
+    ...saved,
+    usage_per_day: usage.get(id) ?? null,
+    // The stamp survives only an active/inactive flip; the list keeps showing
+    // the note it had until the next read when it does.
+    last_count_origin:
+      saved.last_count_suggestion_id === before.last_count_suggestion_id ? undefined : null,
+  };
   const people = await getPeopleNames([email]);
   return json({ item, people });
 };

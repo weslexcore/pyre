@@ -1,9 +1,10 @@
 // The model's tool set, resolved per session from its role (lib/role.ts):
 // scheduler sessions get the drafting tools, knowledge sessions (Pyre Agent)
-// get the read-only knowledge-base tools plus the goals-and-boards reads and
-// propose_* tools — which only store a proposal the person applies from the
-// chat (lib/knowledge/boards.ts) — suggester sessions get their record's
-// context plus save_suggestions, and none sees another's. Keeping every set
+// get the read-only knowledge-base tools plus the goals-and-boards and
+// inventory reads and propose_* tools — which only store a proposal the
+// person applies from the chat (lib/knowledge/boards.ts) — suggester
+// sessions get their record's context plus save_suggestions, and none sees
+// another's. Keeping every set
 // dynamic (rather than authoring the scheduler's statically) is what keeps
 // the write paths — save_proposal and save_suggestions — out of reach of a
 // staff member's question, and of each other's role.
@@ -32,6 +33,7 @@
 import { defineDynamic, defineTool } from 'eve/tools';
 import { z } from 'zod';
 import { findCards, getGoalsAndBoards, propose, readBoard } from '../lib/knowledge/boards';
+import { getInventory } from '../lib/knowledge/inventory';
 import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs';
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
@@ -41,6 +43,7 @@ import { getWeekContextTool } from '../lib/scheduler/get-week-context';
 import { saveProposalTool } from '../lib/scheduler/save-proposal';
 import { searchOpenCards } from '../lib/suggester/cards';
 import { getSuggestionContext } from '../lib/suggester/context';
+import { findInventoryItems } from '../lib/suggester/inventory';
 import {
   SAVE_SUGGESTIONS_DESCRIPTION,
   saveSuggestions,
@@ -136,6 +139,21 @@ export default defineDynamic({
             execute(input, ctx) {
               suggestTargetOf(ctx);
               return findShiftAssignments(input.date);
+            },
+          }),
+          find_inventory_items: defineTool({
+            description:
+              'Inventory items whose name, category, location or vendor match the key words, best matches first, each with its itemId, stock on record, re-order level and last count. Use it when a note says how much of a supply is left ("three rolls of trash bags left", "out of eucalyptus", "ten more boxes came in"), to find the item to count. Propose a count only for an item it returns.',
+            inputSchema: z.object({
+              query: z
+                .string()
+                .min(3)
+                .max(120)
+                .describe('What the note calls it, e.g. "trash bags" or "eucalyptus oil".'),
+            }),
+            execute(input, ctx) {
+              suggestTargetOf(ctx);
+              return findInventoryItems(input);
             },
           }),
           save_suggestions: defineTool({
@@ -425,6 +443,95 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return propose(scopeOf(ctx), ctx.session?.id ?? null, 'goal_kpi.measure', input);
+          },
+        }),
+        get_inventory: defineTool({
+          description:
+            'The inventory (/admin/inventory): every supply the studio tracks, with its id, category, location, stock on hand, re-order level, whether it is low or due for a count, how fast it goes and when it runs out (when there is enough history), who last counted it and when (and the shift note the count came from, if the suggestion agent read it there), cost, vendor and how to order. Plus totals (low, due, inactive), the categories, and whether this person may change items beyond counting (canManage). Filter by words ("towels"), by low or due, or by category. Available only when the person holds the Inventory page.',
+          inputSchema: z.object({
+            query: z
+              .string()
+              .max(120)
+              .optional()
+              .describe('Words to match against name, category, location, vendor, or how to order.'),
+            filter: z
+              .enum(['all', 'low', 'due', 'inactive'])
+              .optional()
+              .describe('low = at or below its re-order level; due = due for a count; inactive = set aside. Default all active items.'),
+            category: z.string().max(60).optional(),
+            limit: z.number().int().min(1).max(120).optional().describe('Max items (default 120).'),
+          }),
+          execute(input, ctx) {
+            return getInventory(scopeOf(ctx), input);
+          },
+        }),
+        propose_inventory_update: defineTool({
+          description:
+            'Propose a change to one inventory item: a new count (inStock — the number on hand the person gave you; anyone with the page may count), or, for people get_inventory says canManage, any other field — re-order level, count schedule, location, category, vendor, how to order, count instructions, cost, name, or active (false sets it aside). Only the fields given change. Shown with Apply and Dismiss; nothing changes until they press Apply, and a count is recorded as theirs.',
+          inputSchema: z.object({
+            itemId: z.string().uuid().describe('The item id from get_inventory.'),
+            inStock: z.number().min(0).max(100000).optional().describe('Stock on hand now.'),
+            reorderAt: z
+              .number()
+              .min(0)
+              .max(100000)
+              .nullable()
+              .optional()
+              .describe('Flag for re-order at or below this; null for never.'),
+            countEveryDays: z
+              .number()
+              .int()
+              .min(1)
+              .max(365)
+              .nullable()
+              .optional()
+              .describe('Count at least every this many days (1 = daily); null for no schedule.'),
+            location: z.string().max(120).nullable().optional(),
+            category: z.string().max(60).nullable().optional(),
+            vendor: z.string().max(120).nullable().optional(),
+            howToOrder: z
+              .string()
+              .max(2000)
+              .nullable()
+              .optional()
+              .describe('A URL to order from, or written instructions.'),
+            countInstructions: z.string().max(2000).nullable().optional(),
+            unitCostCents: z
+              .number()
+              .int()
+              .min(0)
+              .nullable()
+              .optional()
+              .describe('Cost of one unit, in cents ($4.50 is 450).'),
+            name: z.string().min(1).max(120).optional(),
+            active: z.boolean().optional().describe('false sets the item aside (seasonal); true brings it back.'),
+            rationale: z
+              .string()
+              .max(600)
+              .describe('One or two sentences on why, for the person deciding.'),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'inventory.update', input);
+          },
+        }),
+        propose_inventory_item: defineTool({
+          description:
+            'Propose a new item on the inventory list, for people get_inventory says canManage: its name and, when the person gave them, its category, location, starting stock, re-order level, count schedule, cost, vendor and how to order. Check get_inventory first so you do not propose an item that already exists. Applied only when they press Apply.',
+          inputSchema: z.object({
+            name: z.string().min(1).max(120),
+            category: z.string().max(60).optional(),
+            location: z.string().max(120).optional(),
+            inStock: z.number().min(0).max(100000).optional(),
+            reorderAt: z.number().min(0).max(100000).optional(),
+            countEveryDays: z.number().int().min(1).max(365).optional(),
+            unitCostCents: z.number().int().min(0).optional(),
+            vendor: z.string().max(120).optional(),
+            howToOrder: z.string().max(2000).optional(),
+            countInstructions: z.string().max(2000).optional(),
+            rationale: z.string().max(600),
+          }),
+          execute(input, ctx) {
+            return propose(scopeOf(ctx), ctx.session?.id ?? null, 'inventory.create', input);
           },
         }),
       };

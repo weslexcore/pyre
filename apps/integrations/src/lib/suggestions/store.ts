@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardCardRow } from '@/lib/db';
+import { inventoryItemHref } from '@/lib/inventory/types';
 import { scheduleHref } from '@/lib/notifications/types';
 import { markDone } from './runs';
 import {
@@ -272,9 +273,10 @@ export async function dismissPending(
 /**
  * The links the review UI shows per suggestion, keyed by suggestion id:
  * `results` — where an approved one's result lives (the card it made or
- * commented on, the SOP it edited, the assignment it re-timed); `targets` —
- * the existing card, SOP or assignment a pending one acts on. Looked up in a few batched reads rather than stored,
- * so a card that moves boards still links to where it is now.
+ * commented on, the SOP it edited, the assignment it re-timed, the item it
+ * counted); `targets` — the existing card, SOP, assignment or item a pending
+ * one acts on. Looked up in a few batched reads rather than stored, so a
+ * card that moves boards still links to where it is now.
  */
 export async function resolveLinks(
   db: SupabaseClient,
@@ -287,10 +289,12 @@ export async function resolveLinks(
   const cardIds = new Set<string>();
   const sopIds = new Set<string>();
   const assignmentIds = new Set<string>();
+  const itemIds = new Set<string>();
   for (const row of rows) {
     if (row.target_type === 'shift_assignment' && row.target_id) assignmentIds.add(row.target_id);
     if (row.target_type === 'board_card' && row.target_id) cardIds.add(row.target_id);
     if (row.target_type === 'sop' && row.target_id) sopIds.add(row.target_id);
+    if (row.target_type === 'inventory_item' && row.target_id) itemIds.add(row.target_id);
     if (row.result_type === 'board_card' && row.result_id) cardIds.add(row.result_id);
   }
 
@@ -364,6 +368,23 @@ export async function resolveLinks(
   const assignmentLink = (id: string | null): SuggestionResultLink =>
     (id ? assignments.get(id) : undefined) ?? { label: 'Assignment (removed)', href: null };
 
+  // An inventory item links to the list, opened on it.
+  const items = new Map<string, string>();
+  if (itemIds.size > 0) {
+    const { data } = await db
+      .from('inventory')
+      .select('id, name')
+      .in('id', [...itemIds]);
+    for (const item of (data ?? []) as { id: string; name: string }[])
+      items.set(item.id, item.name);
+  }
+  const itemLink = (id: string | null): SuggestionResultLink => {
+    const name = id ? items.get(id) : undefined;
+    return id && name
+      ? { label: name, href: inventoryItemHref(id) }
+      : { label: 'Inventory item (deleted)', href: null };
+  };
+
   const cardLink = (id: string | null): SuggestionResultLink => {
     const card = id ? cards.get(id) : undefined;
     const slug = card ? boardSlugs.get(card.board_id) : undefined;
@@ -382,12 +403,14 @@ export async function resolveLinks(
     if (row.target_type === 'board_card') targets[row.id] = cardLink(row.target_id);
     if (row.target_type === 'sop') targets[row.id] = sopLink(row.target_id);
     if (row.target_type === 'shift_assignment') targets[row.id] = assignmentLink(row.target_id);
+    if (row.target_type === 'inventory_item') targets[row.id] = itemLink(row.target_id);
     if (row.status !== 'approved' || !row.result_id) continue;
     if (row.result_type === 'board_card') results[row.id] = cardLink(row.result_id);
     else if (row.result_type === 'board_event') results[row.id] = cardLink(row.target_id);
     else if (row.result_type === 'sop_version') results[row.id] = sopLink(row.target_id);
     else if (row.result_type === 'shift_assignment')
       results[row.id] = assignmentLink(row.result_id);
+    else if (row.result_type === 'inventory_item') results[row.id] = itemLink(row.result_id);
   }
   return { results, targets };
 }

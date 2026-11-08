@@ -122,6 +122,20 @@ export const saveSuggestionsInput = z.object({
               message: 'Give startsAt, endsAt, or both.',
             }),
         }),
+        z.object({
+          kind: z.literal('inventory.count'),
+          ...common,
+          payload: z.object({
+            itemId: z.string().uuid().describe("The item's itemId from find_inventory_items."),
+            inStock: z
+              .number()
+              .min(0)
+              .max(100000)
+              .describe(
+                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock find_inventory_items returned.'
+              ),
+          }),
+        }),
       ])
     )
     .max(8)

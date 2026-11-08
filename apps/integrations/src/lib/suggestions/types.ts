@@ -21,6 +21,7 @@ import type {
   AgentSuggestionStatus,
 } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
+import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
 import { type Importance, isImportance, isSeverity, type Severity } from './priority';
 
 export type SuggestionKind = AgentSuggestionKind;
@@ -32,6 +33,7 @@ export const SUGGESTION_KINDS: readonly SuggestionKind[] = [
   'board_card.comment',
   'sop.edit',
   'shift_assignment.update',
+  'inventory.count',
 ];
 
 export const SUGGESTION_SOURCE_TYPES: readonly SuggestionSourceType[] = ['shift_note'];
@@ -51,6 +53,7 @@ export const KIND_LABELS: Record<SuggestionKind, string> = {
   'board_card.comment': 'Comment on task',
   'sop.edit': 'SOP edit',
   'shift_assignment.update': 'Hours change',
+  'inventory.count': 'Inventory count',
 };
 
 export const SOURCE_LABELS: Record<SuggestionSourceType, string> = {
@@ -148,11 +151,34 @@ export interface ShiftTimesPayload {
   scheduledEndsAt: string;
 }
 
+/**
+ * A new stock number for one inventory item, read out of a note ("three
+ * rolls of trash bags left"). The agent sends the item and the number; the
+ * rest is filled when it is checked (the item as it stands, for the admin
+ * reading it) and at intake (who wrote the note, and when — the count is
+ * credited to them, not to the approving admin).
+ */
+export interface InventoryCountPayload {
+  itemId: string;
+  /** Stock on hand, as the note gives it. */
+  inStock: number;
+  itemName: string;
+  /** The item's stock when this was last checked: what it changes from. */
+  previousInStock: number | null;
+  reorderAt: number | null;
+  lastCountedAt: string | null;
+  lastCountedBy: string | null;
+  /** The note's author (email) and the note's time; null in a dry run. */
+  countedBy: string | null;
+  countedAt: string | null;
+}
+
 export interface PayloadByKind {
   'board_card.create': CardCreatePayload;
   'board_card.comment': CardCommentPayload;
   'sop.edit': SopEditPayload;
   'shift_assignment.update': ShiftTimesPayload;
+  'inventory.count': InventoryCountPayload;
 }
 
 export type SuggestionPayload = PayloadByKind[SuggestionKind];
@@ -323,6 +349,42 @@ function parseShiftTimesPayload(raw: unknown): ParseResult<ShiftTimesPayload> {
   };
 }
 
+function parseInventoryCountPayload(raw: unknown): ParseResult<InventoryCountPayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  if (!isUuid(o.itemId)) {
+    return fail('itemId must be the UUID of an inventory item from find_inventory_items');
+  }
+  const inStock = parseQuantity(o.inStock);
+  if (inStock === null) return fail('inStock must be a number from 0 to 100000');
+  const quantity = (value: unknown): number | null => {
+    if (value === undefined || value === null || value === '') return null;
+    return parseQuantity(value);
+  };
+  const stamp = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() && !Number.isNaN(Date.parse(value))
+      ? value.trim()
+      : null;
+  const email = (value: unknown): string | null => {
+    const s = str(value).toLowerCase();
+    return s.includes('@') ? s : null;
+  };
+  return {
+    ok: true,
+    value: {
+      itemId: o.itemId,
+      inStock,
+      itemName: str(o.itemName),
+      previousInStock: quantity(o.previousInStock),
+      reorderAt: quantity(o.reorderAt),
+      lastCountedAt: stamp(o.lastCountedAt),
+      lastCountedBy: email(o.lastCountedBy),
+      countedBy: email(o.countedBy),
+      countedAt: stamp(o.countedAt),
+    },
+  };
+}
+
 /** Shape checks per kind; the live-data checks are each kind's validate() in ./kinds. */
 export const PAYLOAD_PARSERS: {
   [K in SuggestionKind]: (raw: unknown) => ParseResult<PayloadByKind[K]>;
@@ -331,6 +393,7 @@ export const PAYLOAD_PARSERS: {
   'board_card.comment': parseCardCommentPayload,
   'sop.edit': parseSopEditPayload,
   'shift_assignment.update': parseShiftTimesPayload,
+  'inventory.count': parseInventoryCountPayload,
 };
 
 export function parsePayload<K extends SuggestionKind>(
@@ -362,6 +425,10 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
         /\s+/g,
         ' '
       );
+    case 'inventory.count': {
+      const count = parseQuantity(o.inStock);
+      return `Inventory count: ${str(o.itemName) || 'an item'}, ${count === null ? '?' : formatQuantity(count)} in stock`;
+    }
   }
 }
 

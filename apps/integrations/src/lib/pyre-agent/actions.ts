@@ -1,20 +1,20 @@
-// Board changes Pyre Agent proposes, from the agent's tool call to the row the
-// chat shows with Apply and Dismiss (public.pyre_agent_actions).
+// Board and inventory changes Pyre Agent proposes, from the agent's tool call
+// to the row the chat shows with Apply and Dismiss (public.pyre_agent_actions).
 //
-// Proposing checks the change against the live boards and the asker's own
-// access, turns the agent's names into ids (a board by slug, a column by key
-// or label, a person by name or email), and stores the exact request the
-// dashboard's board API takes — so a proposal the person could never apply
-// is refused while the agent can still fix it, and what they see on the card
-// is what will happen. Nothing here writes to a board: applying replays the
-// stored request through the board routes as the person
-// (/api/admin/agent-actions), so their grants, the routes' rules, the
-// trails, and the notifications all work exactly as if they had clicked it
-// through themselves. Server-only.
+// Proposing checks the change against the live boards (or the live inventory)
+// and the asker's own access, turns the agent's names into ids (a board by
+// slug, a column by key or label, a person by name or email), and stores the
+// exact request the dashboard's own API takes — so a proposal the person
+// could never apply is refused while the agent can still fix it, and what
+// they see on the card is what will happen. Nothing here writes to a board or
+// the inventory: applying replays the stored request through the routes as
+// the person (/api/admin/agent-actions), so their grants, the routes' rules,
+// the trails, and the notifications all work exactly as if they had clicked
+// it through themselves. Server-only.
 
 import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PageAccess } from '@/components/admin/adminTools';
+import { hasInventoryManage, type PageAccess } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { columnKeyOf } from '@/lib/boards/columns';
 import { listAssignable } from '@/lib/boards/people';
@@ -30,6 +30,14 @@ import { BOARD_LIMITS } from '@/lib/boards/types';
 import { parseBoardCreate, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
 import type { BoardColumnRow, BoardRow, GoalKpiRow, PyreAgentActionRow } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
+import { FIELD_LABELS, formatFieldValue } from '@/lib/inventory/changes';
+import { formatQuantity, normalizeFields } from '@/lib/inventory/rules';
+import {
+  INVENTORY_API,
+  type InventoryFields,
+  type InventoryRow,
+  inventoryItemHref,
+} from '@/lib/inventory/types';
 import { cardHref } from '@/lib/suggestions/types';
 import type { ActionKind, ActionRequest, ActionView, ApplyStep } from './types';
 import { boardHref } from './workspace';
@@ -586,6 +594,149 @@ async function proposeKpiMeasure(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Inventory
+// ---------------------------------------------------------------------------
+
+const NEEDS_INVENTORY_MANAGE =
+  'This person can count items but not change anything else about them (that takes the inventory:manage permission); propose only inStock, or suggest they ask someone who manages inventory';
+
+/**
+ * The agent's camelCase field names, as the inventory API's columns. Only
+ * the keys given come through, so a PATCH changes nothing it was not asked to.
+ */
+function inventoryColumns(input: Record<string, unknown>): Record<string, unknown> {
+  const map: Record<string, keyof InventoryFields> = {
+    name: 'name',
+    category: 'category',
+    location: 'location',
+    inStock: 'in_stock',
+    reorderAt: 'reorder_at',
+    countEveryDays: 'count_every_days',
+    countInstructions: 'count_instructions',
+    unitCostCents: 'unit_cost_cents',
+    vendor: 'vendor',
+    howToOrder: 'how_to_order',
+    active: 'active',
+  };
+  const out: Record<string, unknown> = {};
+  for (const [key, column] of Object.entries(map)) {
+    if (input[key] !== undefined) out[column] = input[key];
+  }
+  return out;
+}
+
+async function loadInventoryItem(db: SupabaseClient, id: string): Promise<InventoryRow | null> {
+  const { data } = await db.from('inventory').select('*').eq('id', id).maybeSingle();
+  const row = data as InventoryRow | null;
+  return row
+    ? {
+        ...row,
+        in_stock: Number(row.in_stock),
+        reorder_at: row.reorder_at == null ? null : Number(row.reorder_at),
+      }
+    : null;
+}
+
+/** "In stock: 12 → 3" for one changed field, as the change log words it. */
+function fieldLine(key: keyof InventoryFields, from: unknown, to: unknown): string {
+  const before = formatFieldValue(key, from) ?? 'none';
+  const after = formatFieldValue(key, to) ?? 'none';
+  return `${FIELD_LABELS[key]}: ${before} → ${after}`;
+}
+
+/**
+ * A change to an existing item: a count (anyone with the page), or any other
+ * field (inventory:manage). Only the fields given change; ones already at the
+ * given value are dropped, and a proposal that changes nothing is refused.
+ */
+async function proposeInventoryUpdate(
+  db: SupabaseClient,
+  access: PageAccess,
+  input: Record<string, unknown>
+): Promise<Checked> {
+  if (!isUuid(input.itemId)) return fail('itemId must be an item id from get_inventory');
+  const item = await loadInventoryItem(db, input.itemId);
+  if (!item) return fail('No inventory item with that id');
+
+  const normalized = normalizeFields(inventoryColumns(input), { partial: true });
+  if (!normalized.ok) return fail(normalized.error);
+  const body: Record<string, unknown> = {};
+  const details: string[] = [];
+  for (const [key, value] of Object.entries(normalized.value) as [
+    keyof InventoryFields,
+    unknown,
+  ][]) {
+    const current = item[key] ?? null;
+    if (JSON.stringify(current) === JSON.stringify(value ?? null)) continue;
+    body[key] = value;
+    details.push(fieldLine(key, current, value));
+  }
+  if (Object.keys(body).length === 0) return fail('That would not change anything on the item');
+  if (!hasInventoryManage(access) && Object.keys(body).some((key) => key !== 'in_stock')) {
+    return fail(NEEDS_INVENTORY_MANAGE);
+  }
+
+  const count = typeof body.in_stock === 'number' ? body.in_stock : null;
+  const summary =
+    count !== null && Object.keys(body).length === 1
+      ? `Count ${item.name}: ${formatQuantity(count)} in stock (was ${formatQuantity(item.in_stock)})`
+      : `Update ${item.name} in the inventory`;
+  if (count !== null) {
+    details.push('Recorded as your count of the item, as if you had typed it on the list');
+  }
+  return {
+    ok: true,
+    proposal: {
+      kind: 'inventory.update',
+      summary: clip(summary, 300),
+      details,
+      steps: [{ method: 'PATCH', path: INVENTORY_API, query: { id: item.id }, body }],
+      target: { label: item.name, href: inventoryItemHref(item.id) },
+    },
+  };
+}
+
+/** A new item on the list (inventory:manage). */
+async function proposeInventoryCreate(
+  db: SupabaseClient,
+  access: PageAccess,
+  input: Record<string, unknown>
+): Promise<Checked> {
+  if (!hasInventoryManage(access)) {
+    return fail(
+      'This person can count items but not add them (that takes the inventory:manage permission); suggest they ask someone who manages inventory'
+    );
+  }
+  const normalized = normalizeFields(inventoryColumns(input));
+  if (!normalized.ok) return fail(normalized.error);
+  const fields = normalized.value as InventoryFields;
+  const { data: taken } = await db
+    .from('inventory')
+    .select('id, name')
+    .ilike('name', fields.name)
+    .maybeSingle();
+  if (taken) {
+    const existing = taken as { id: string; name: string };
+    return fail(
+      `An item already has that name (${existing.name}, ${existing.id}); propose an update to it instead`
+    );
+  }
+  const details = (Object.entries(fields) as [keyof InventoryFields, unknown][])
+    .filter(([key, value]) => key !== 'name' && key !== 'active' && value != null && value !== 0)
+    .map(([key, value]) => `${FIELD_LABELS[key]}: ${formatFieldValue(key, value) ?? 'none'}`);
+  if (fields.in_stock) details.push('The starting number counts as your first count of it');
+  return {
+    ok: true,
+    proposal: {
+      kind: 'inventory.create',
+      summary: clip(`New inventory item: ${fields.name}`, 300),
+      details,
+      steps: [{ method: 'POST', path: INVENTORY_API, body: inventoryColumns(input) }],
+    },
+  };
+}
+
 const PROPOSERS: Record<
   ActionKind,
   (db: SupabaseClient, access: PageAccess, input: Record<string, unknown>) => Promise<Checked>
@@ -595,6 +746,8 @@ const PROPOSERS: Record<
   'board_card.update': proposeCardUpdate,
   'board_card.comment': proposeCardComment,
   'goal_kpi.measure': proposeKpiMeasure,
+  'inventory.update': proposeInventoryUpdate,
+  'inventory.create': proposeInventoryCreate,
 };
 
 export function actionView(row: PyreAgentActionRow): ActionView {
@@ -657,9 +810,21 @@ const ALLOWED_STEPS = new Set([
   'POST /api/admin/board-events',
   'POST /api/admin/boards',
   'PATCH /api/admin/goal-kpis',
+  `POST ${INVENTORY_API}`,
+  `PATCH ${INVENTORY_API}`,
 ]);
 
-/** The stored request, re-checked: only the board routes, only as recorded. */
+function isQuery(value: unknown): value is Record<string, string> | undefined {
+  if (value === undefined) return true;
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.values(value as Record<string, unknown>).every((v) => typeof v === 'string')
+  );
+}
+
+/** The stored request, re-checked: only the board and inventory routes, only as recorded. */
 export function readRequest(
   row: Pick<PyreAgentActionRow, 'request'>
 ): (ActionRequest & { target?: { label: string; href: string } }) | null {
@@ -668,7 +833,12 @@ export function readRequest(
   const steps = request.steps as ApplyStep[];
   if (
     !steps.every(
-      (s) => s && ALLOWED_STEPS.has(`${s.method} ${s.path}`) && s.body && typeof s.body === 'object'
+      (s) =>
+        s &&
+        ALLOWED_STEPS.has(`${s.method} ${s.path}`) &&
+        isQuery(s.query) &&
+        s.body &&
+        typeof s.body === 'object'
     )
   ) {
     return null;
@@ -713,12 +883,16 @@ export async function replayAction(
   let href = request.target?.href ?? null;
   const board = head.body.board as { slug?: string; name?: string } | undefined;
   const card = head.body.card as { id?: string; title?: string } | undefined;
+  const item = head.body.item as { id?: string; name?: string } | undefined;
   if (row.kind === 'board.create' && board?.slug) {
     label = board.name ?? board.slug;
     href = boardHref(board.slug);
   } else if (row.kind === 'board_card.create' && card?.id) {
     label = card.title ?? label;
     href = cardHref(String(first.body.board), card.id);
+  } else if (row.kind === 'inventory.create' && item?.id) {
+    label = item.name ?? label;
+    href = inventoryItemHref(item.id);
   }
 
   const failed: string[] = [];

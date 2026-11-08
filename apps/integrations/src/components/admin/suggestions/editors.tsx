@@ -3,14 +3,18 @@
 // date and custom fields, plus the severity and importance its due date
 // follows; a comment's words; an SOP's text, shown as a diff against
 // the document as it is now; an assignment's hours, next to what was
-// scheduled). The Record type makes a new kind in
-// lib/suggestions/types a type error here until it has an editor.
+// scheduled; an inventory count, next to the stock on record). The Record
+// type makes a new kind in lib/suggestions/types a type error here until it
+// has an editor.
 
 import { timeToMinutes, todayEastern } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
 import { LinkTextarea } from '@/components/admin/LinkTextarea';
 import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
+import { etStamp } from '@/lib/client/format';
 import type { BoardFieldValue } from '@/lib/db';
+import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   describeDueDays,
   dueDateFor,
@@ -52,6 +56,8 @@ export interface EditorProps<K extends SuggestionKind> {
   disabled?: boolean;
   /** Namespaces input ids, so two suggestions on a page don't collide. */
   idPrefix: string;
+  /** Names for the emails a payload carries (who counted an item). */
+  names?: PeopleNames;
 }
 
 function CardCreateEditor({
@@ -494,6 +500,102 @@ function ShiftTimesEditor({
   );
 }
 
+/**
+ * A count read out of a note: the number, next to what the list says now
+ * and who last counted it. The count is recorded as the note author's, at
+ * the note's time, so the admin sees whose look at the shelf they are
+ * approving — and whether someone has counted it since the note.
+ */
+function InventoryCountEditor({
+  value,
+  onChange,
+  target,
+  disabled,
+  idPrefix,
+  names,
+}: EditorProps<'inventory.count'>) {
+  // The box keeps what the admin types; the payload takes it once it parses.
+  const [text, setText] = useState(formatQuantity(value.inStock));
+  useEffect(() => {
+    setText(formatQuantity(value.inStock));
+  }, [value.inStock]);
+  const parsed = parseQuantity(text);
+  const delta =
+    parsed !== null && value.previousInStock !== null ? parsed - value.previousInStock : null;
+  const countedSince =
+    value.countedAt !== null &&
+    value.lastCountedAt !== null &&
+    Date.parse(value.lastCountedAt) > Date.parse(value.countedAt);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-white/60">
+        {target?.href ? (
+          <a href={target.href} className="text-[var(--pyre-gold)] underline hover:text-white">
+            {target.label}
+          </a>
+        ) : (
+          <span>{target?.label ?? value.itemName}</span>
+        )}
+        {value.previousInStock !== null && (
+          <span className="font-mono text-[10px] text-white/40">
+            {' '}
+            · {formatQuantity(value.previousInStock)} on record
+            {value.reorderAt !== null && `, re-order at ${formatQuantity(value.reorderAt)}`}
+          </span>
+        )}
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}-count`} className={labelClass}>
+            In stock
+          </label>
+          <input
+            id={`${idPrefix}-count`}
+            inputMode="decimal"
+            className={`${compactInputClass} w-28 text-right tabular-nums`}
+            value={text}
+            disabled={disabled}
+            aria-invalid={parsed === null || undefined}
+            onChange={(e) => {
+              setText(e.target.value);
+              const next = parseQuantity(e.target.value);
+              if (next !== null) onChange({ ...value, inStock: next });
+            }}
+          />
+        </div>
+        {delta !== null && delta !== 0 && (
+          <span className="pb-1.5 font-mono text-xs text-white/60">
+            {delta > 0 ? `+${formatQuantity(delta)}` : `−${formatQuantity(-delta)}`}
+          </span>
+        )}
+      </div>
+      {parsed === null && (
+        <p className="font-mono text-[10px] text-[var(--pyre-red)]">
+          In stock must be a number from 0 to 100000.
+        </p>
+      )}
+      <span className={hintClass}>
+        {value.countedBy
+          ? `Recorded as counted by ${personName(value.countedBy, names)}${
+              value.countedAt ? ` on ${etStamp(value.countedAt)}` : ''
+            }, with a link back to the shift note.`
+          : 'Recorded as a count read from the shift note, with a link back to it.'}
+        {value.lastCountedAt &&
+          ` Last counted ${etStamp(value.lastCountedAt)}${
+            value.lastCountedBy ? ` by ${personName(value.lastCountedBy, names)}` : ''
+          }.`}
+      </span>
+      {countedSince && (
+        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-2 py-1.5 font-mono text-[10px] text-[var(--pyre-gold)]">
+          Someone counted this item after the note was written. Approving replaces their count with
+          the note's.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export const SUGGESTION_EDITORS: {
   [K in SuggestionKind]: (props: EditorProps<K>) => React.JSX.Element;
 } = {
@@ -501,4 +603,5 @@ export const SUGGESTION_EDITORS: {
   'board_card.comment': CardCommentEditor,
   'sop.edit': SopEditEditor,
   'shift_assignment.update': ShiftTimesEditor,
+  'inventory.count': InventoryCountEditor,
 };

@@ -1,17 +1,19 @@
-// Pyre Agent's window onto the goals and boards: the pyre-agents knowledge
-// role calls this for every goal, board, and card read, and for every change
-// it proposes, on behalf of the person in the conversation. Their access is
-// resolved here, fresh, from their email (the same lookup the dashboard's
-// own gate makes), so a read never shows a board they could not open and a
-// proposal they could never apply is refused while the agent can still fix
-// it. Nothing here changes a board: proposals are stored pending
-// (lib/pyre-agent/actions) and the person applies them from the chat.
+// Pyre Agent's window onto the goals, boards and inventory: the pyre-agents
+// knowledge role calls this for every goal, board, card and inventory read,
+// and for every change it proposes, on behalf of the person in the
+// conversation. Their access is resolved here, fresh, from their email (the
+// same lookup the dashboard's own gate makes), so a read never shows a board
+// or a list they could not open and a proposal they could never apply is
+// refused while the agent can still fix it. Nothing here changes a board or
+// the inventory: proposals are stored pending (lib/pyre-agent/actions) and
+// the person applies them from the chat.
 //
 //   POST { email, sessionId, turnId?, op, input }
-//     op 'goals'   → every goal they can see, where it stands, and their boards
-//     op 'board'   → { slug } one board: goal, KPIs, columns, cards
-//     op 'cards'   → { query?, board?, assignee?, state?, dueBy?, overdue?, limit? }
-//     op 'propose' → { kind, ...the change, rationale } → { proposal } | 422 { error }
+//     op 'goals'     → every goal they can see, where it stands, and their boards
+//     op 'board'     → { slug } one board: goal, KPIs, columns, cards
+//     op 'cards'     → { query?, board?, assignee?, state?, dueBy?, overdue?, limit? }
+//     op 'inventory' → { query?, filter?, category?, limit? } the inventory list
+//     op 'propose'   → { kind, ...the change, rationale } → { proposal } | 422 { error }
 //
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). The email
 // comes from the session's scope on the agent side — stamped there by
@@ -25,9 +27,19 @@ import { canViewBoardsTool } from '@/lib/boards/access';
 import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
+import { INVENTORY_HREF } from '@/lib/inventory/types';
 import { proposeAction } from '@/lib/pyre-agent/actions';
-import { ACTION_KINDS, type ActionKind, PYRE_AGENT_HREF } from '@/lib/pyre-agent/types';
+import { inventoryForAgent } from '@/lib/pyre-agent/inventory';
+import {
+  ACTION_KINDS,
+  type ActionKind,
+  INVENTORY_ACTION_KINDS,
+  PYRE_AGENT_HREF,
+} from '@/lib/pyre-agent/types';
 import { boardForAgent, findCardsForAgent, goalsForAgent } from '@/lib/pyre-agent/workspace';
+
+const NO_BOARDS = 'This person has no boards; there are no goals or tasks to show them';
+const NO_INVENTORY = 'This person does not hold the Inventory page; the list is not theirs to see';
 
 export const prerender = false;
 
@@ -53,18 +65,18 @@ export const POST: APIRoute = async ({ request }) => {
   const input = isRecord(body.input) ? body.input : {};
   if (!email) return json({ error: 'email is required' }, 400);
 
-  // The asker must still hold the agent page, and some board, for any of
-  // this — access can be taken away mid-conversation.
+  // The asker must still hold the agent page, and the page each op reads
+  // (some board, or the inventory) — access can be taken away
+  // mid-conversation.
   const access = await getAccess(email);
   if (!access || !canViewPage(access, PYRE_AGENT_HREF)) {
     return json({ error: 'This person no longer has access to Pyre Agent' }, 403);
   }
-  if (!canViewBoardsTool(access)) {
-    return json(
-      { error: 'This person has no boards; there are no goals or tasks to show them' },
-      403
-    );
-  }
+  const boards = canViewBoardsTool(access);
+  const inventory = canViewPage(access, INVENTORY_HREF);
+  const boardOps = ['goals', 'board', 'cards'];
+  if (boardOps.includes(String(body.op)) && !boards) return json({ error: NO_BOARDS }, 403);
+  if (body.op === 'inventory' && !inventory) return json({ error: NO_INVENTORY }, 403);
 
   try {
     switch (body.op) {
@@ -74,6 +86,22 @@ export const POST: APIRoute = async ({ request }) => {
         const slug = typeof input.slug === 'string' ? input.slug.trim() : '';
         const result = await boardForAgent(db, access, slug);
         return json(result, 'error' in result ? 404 : 200);
+      }
+      case 'inventory': {
+        const filter = input.filter;
+        return json(
+          await inventoryForAgent(db, access, {
+            query: typeof input.query === 'string' ? input.query : undefined,
+            filter:
+              filter === 'low' || filter === 'reorder'
+                ? 'reorder'
+                : filter === 'due' || filter === 'inactive' || filter === 'all'
+                  ? filter
+                  : undefined,
+            category: typeof input.category === 'string' ? input.category : undefined,
+            limit: typeof input.limit === 'number' ? input.limit : undefined,
+          })
+        );
       }
       case 'cards': {
         const result = await findCardsForAgent(db, access, email, {
@@ -99,6 +127,9 @@ export const POST: APIRoute = async ({ request }) => {
         if (typeof kind !== 'string' || !(ACTION_KINDS as readonly string[]).includes(kind)) {
           return json({ error: `kind must be one of ${ACTION_KINDS.join(', ')}` }, 400);
         }
+        const onInventory = (INVENTORY_ACTION_KINDS as readonly string[]).includes(kind);
+        if (onInventory && !inventory) return json({ error: NO_INVENTORY }, 403);
+        if (!onInventory && !boards) return json({ error: NO_BOARDS }, 403);
         const result = await proposeAction(
           db,
           access,
@@ -114,7 +145,7 @@ export const POST: APIRoute = async ({ request }) => {
         return json({ proposal: result.action });
       }
       default:
-        return json({ error: 'op must be goals, board, cards, or propose' }, 400);
+        return json({ error: 'op must be goals, board, cards, inventory, or propose' }, 400);
     }
   } catch (error) {
     console.error('[pyre-agent] op failed:', error);

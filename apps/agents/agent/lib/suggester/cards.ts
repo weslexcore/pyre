@@ -30,16 +30,25 @@ export function searchTerms(query: string): string[] {
   ].slice(0, 12);
 }
 
-/** Title matches count double: a card's title is what it is about. */
-export function scoreCard(card: Pick<CardRow, 'title' | 'notes_md'>, terms: string[]): number {
-  const title = card.title.toLowerCase();
-  const notes = card.notes_md.toLowerCase();
+/**
+ * How well a record matches the terms: two points for each term in its
+ * heading, one for each found only in its body. Shared with the inventory
+ * search (./inventory), where the heading is the item's name.
+ */
+export function scoreTerms(heading: string, body: string, terms: string[]): number {
+  const head = heading.toLowerCase();
+  const rest = body.toLowerCase();
   let score = 0;
   for (const term of terms) {
-    if (title.includes(term)) score += 2;
-    else if (notes.includes(term)) score += 1;
+    if (head.includes(term)) score += 2;
+    else if (rest.includes(term)) score += 1;
   }
   return score;
+}
+
+/** Title matches count double: a card's title is what it is about. */
+export function scoreCard(card: Pick<CardRow, 'title' | 'notes_md'>, terms: string[]): number {
+  return scoreTerms(card.title, card.notes_md, terms);
 }
 
 export async function searchOpenCards(input: { query: string; board?: string; limit?: number }) {

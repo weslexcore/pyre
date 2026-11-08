@@ -1,14 +1,14 @@
-// The board changes Pyre Agent proposed in a conversation, for the person in
-// it: read them back to draw the cards in the chat, and apply or dismiss
-// each one. Only the asker's own rows, and only with the agent page grant
-// (/admin/ask).
+// The board and inventory changes Pyre Agent proposed in a conversation, for
+// the person in it: read them back to draw the cards in the chat, and apply
+// or dismiss each one. Only the asker's own rows, and only with the agent
+// page grant (/admin/ask).
 //
-// Applying replays the stored request through the board routes themselves
-// (board-cards, board-events, boards, goal-kpis), handed this request's own
-// cookies — so the change is made by the person, under their grants, with
-// every rule, trail entry, and notification the board would give a click.
-// A refused or failed change puts the row back to pending with the route's
-// error, so the card can say why and be tried again.
+// Applying replays the stored request through the routes themselves
+// (board-cards, board-events, boards, goal-kpis, inventory), handed this
+// request's own cookies — so the change is made by the person, under their
+// grants, with every rule, trail entry, and notification the page would give
+// a click. A refused or failed change puts the row back to pending with the
+// route's error, so the card can say why and be tried again.
 //
 //   GET  ?sessionId=…               → { actions } — every session of the
 //                                     conversation that session is in
@@ -27,6 +27,7 @@ import * as boardCards from './board-cards';
 import * as boardEvents from './board-events';
 import * as boards from './boards';
 import * as goalKpis from './goal-kpis';
+import * as inventory from './inventory';
 
 export const prerender = false;
 
@@ -35,6 +36,7 @@ const ROUTES: Record<string, Partial<Record<'POST' | 'PATCH', APIRoute>>> = {
   '/api/admin/board-events': { POST: boardEvents.POST },
   '/api/admin/boards': { POST: boards.POST },
   '/api/admin/goal-kpis': { PATCH: goalKpis.PATCH },
+  '/api/admin/inventory': { POST: inventory.POST, PATCH: inventory.PATCH },
 };
 
 /** Per conversation; a long planning chat proposes a few dozen at most. */
@@ -69,8 +71,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 function runAsCaller(context: APIContext) {
   return async (step: ApplyStep): Promise<StepResponse> => {
     const handler = ROUTES[step.path]?.[step.method];
-    if (!handler) return { status: 400, body: { error: 'Not a board change' } };
+    if (!handler) return { status: 400, body: { error: 'Not a board or inventory change' } };
     const target = new URL(step.path, context.url);
+    for (const [key, value] of Object.entries(step.query ?? {})) {
+      target.searchParams.set(key, value);
+    }
     const headers = new Headers({ 'content-type': 'application/json' });
     for (const name of ['cookie', 'origin', 'referer', 'host']) {
       const value = context.request.headers.get(name);

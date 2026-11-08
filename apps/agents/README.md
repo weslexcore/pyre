@@ -48,7 +48,7 @@ never gets a shell.
 /admin/sops/ask ──▶ POST /api/admin/knowledge-ask (integrations)
                         resolves the asker's scope: SOP role + email,
                         shift-notes / incidents (all | mine | none), water,
-                        schedule
+                        schedule, boards, inventory
                         │  x-pyre-agent: knowledge, x-pyre-knowledge-scope
                         ▼
                     POST {this app}/eve/v1/session
@@ -114,6 +114,16 @@ never gets a shell.
   as the exact dashboard request to replay, drawn in the chat with Apply and
   Dismiss, and applied by `/api/admin/agent-actions` through the board routes
   as the person.
+- **Inventory.** When the scope says `inventory` (the person holds
+  `/admin/inventory`), the role also gets `get_inventory` (the list with
+  stock, re-order levels, what is low or due, usage and run-out, who last
+  counted each item and the shift note it came from when the suggester read
+  it there) and `propose_inventory_update` / `propose_inventory_item`
+  (`agent/lib/knowledge/inventory.ts`). Same path as the boards: `POST
+  /api/agent/pyre` as the asker, a `pyre_agent_actions` row the person
+  applies, replayed through `/api/admin/inventory` under their own grants —
+  so anyone with the page may count, and only `inventory:manage` may change
+  anything else or add an item.
 - **Routines.** People save requests on `/admin/ask/routines` to run on a
   cadence (daily, chosen weekdays, or a day of the month, at an Eastern
   hour). The integrations cron tick (`pyre-agent-routines`) opens each due
