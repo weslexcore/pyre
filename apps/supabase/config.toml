@@ -16,9 +16,32 @@ major_version = 15
 enabled = true
 port = 54323
 
+# Staff sign-in for apps/integrations (astro dev on 4321): magic link / code,
+# invite-only — the app pre-creates every auth user from /admin/users, so
+# sign-up stays closed. Mirrors the production project's dashboard settings.
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000"]
+site_url = "http://localhost:4321"
+additional_redirect_urls = ["http://localhost:4321/api/auth/callback"]
 jwt_expiry = 3600
+enable_signup = false
+
+[auth.email]
+# The email provider stays on (the global enable_signup above is what keeps
+# strangers out); the code in the sign-in mail is 6 digits, good for 10 min.
 enable_signup = true
+otp_length = 6
+otp_expiry = 600
+
+[auth.email.template.magic_link]
+subject = "Sign in to Pyre Admin"
+content_path = "./templates/magic_link.html"
+
+# Local mail catcher: sign-in emails land at http://localhost:54324.
+[inbucket]
+enabled = true
+port = 54324
+
+# The bell's live inbox channel (staff_notifications_realtime migration).
+[realtime]
+enabled = true

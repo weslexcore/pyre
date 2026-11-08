@@ -13,6 +13,9 @@ import type { SessionUser } from './types';
 export interface AdminGate {
   user: SessionUser;
   access: DashboardAccess;
+  /** The verified access token and its expiry — for /api/auth/realtime-token. */
+  accessToken: string | null;
+  expiresAt: number | null;
 }
 
 /**
@@ -24,7 +27,7 @@ export async function requireAccess(
   cookies: AstroCookies,
   isAllowed: (access: DashboardAccess) => boolean
 ): Promise<AdminGate | Response> {
-  const { session } = await validateSession(cookies);
+  const { session, accessToken } = await validateSession(cookies);
 
   if (!session.isAuthenticated || !session.user) {
     return json({ error: 'Not authenticated' }, 401);
@@ -41,7 +44,7 @@ export async function requireAccess(
     );
   }
 
-  return { user: session.user, access };
+  return { user: session.user, access, accessToken, expiresAt: session.expiresAt };
 }
 
 /**
