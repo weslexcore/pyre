@@ -71,8 +71,8 @@ Fill in a code and a value per card in a typed data file; the template does the 
 | `code` | no | Verbatim, in the code chip: `code: PYRE-7K2M-Q9`. Omit it to print `code:` and a ruled line for a hand-written code |
 | `value` | no | A number becomes a dollar amount (`50` → `$50`, `12.5` → `$12.50`); a string prints as-is (`'4 credits'`). Omit it to print `$` and a ruled line for a hand-written amount |
 | `lede` | no | One line under the value. Default: `Heat, cold, connection.` |
-| `to` / `from` | no | `For Sam · From Alex` in mono caps under the lede |
-| `expires` | no | Small line inside the code chip, e.g. `use by 12/31/2027` |
+| `to` / `from` | no | `For Sam · From Alex` in mono caps under the code row |
+| `expires` | no | Small blue note at the end of the code row, e.g. `use by 12/31/2027` |
 | `accent` | no | Set as `data-accent` on both faces for per-batch recoloring |
 
 ## Slots
@@ -85,12 +85,13 @@ Fill in a code and a value per card in a typed data file; the template does the 
 | `.tpl-gift-card__cite` | Front: site and handle |
 | `.tpl-gift-card__eyebrow` | Back: `Gift card` label, top left |
 | `.tpl-gift-card__logo` | Back: pine logo, top right |
+| `.tpl-gift-card__fields` | Back: the middle band holding the amount and code rows |
 | `.tpl-gift-card__value` | Back: the amount, display type; `--blank` modifier when hand-written |
-| `.tpl-gift-card__write-in` | Back: the ruled line next to `$` on a blank card |
-| `.tpl-gift-card__lede` | Back: one-line description |
-| `.tpl-gift-card__names` | Back: optional For / From line |
-| `.tpl-gift-card__code` | Back: ticket chip holding the code and optional expiry |
-| `.tpl-gift-card__code-write-in` | Back: the ruled line inside the chip on a blank-code card |
+| `.tpl-gift-card__code` | Back: full-width code row with label, code or line, optional expiry |
+| `.tpl-gift-card__write-in` | Back: the ruled line in a blank amount or code row |
+| `.tpl-gift-card__names` | Back: optional For / From line under the code row |
+| `.tpl-gift-card__footer` | Back: bottom band |
+| `.tpl-gift-card__lede` | Back: one-line description, bottom left |
 | `.tpl-gift-card__redeem` | Back: redemption note, bottom right |
 
 Set `--tpl-gift-card-accent` on `.tpl-gift-card[data-accent="…"]` in your post's `style.css` to

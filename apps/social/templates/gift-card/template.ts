@@ -59,7 +59,8 @@ function buildFront(card: GiftCardData): HTMLElement {
   return article;
 }
 
-/* Back: eyebrow + logo, the value as the hero, then the code chip pinned to the bottom. */
+/* Back: header on top, full-width amount and code rows in the middle, lede + redeem note along
+   the bottom. With no QR code the rows run edge to edge of the safe area. */
 function buildBack(card: GiftCardData): HTMLElement {
   const article = el('article', 'tpl-gift-card tpl-gift-card--back post');
   if (card.accent) article.dataset.accent = card.accent;
@@ -70,40 +71,41 @@ function buildBack(card: GiftCardData): HTMLElement {
   logo.alt = 'Pyre';
   header.append(el('span', 'tpl-gift-card__eyebrow', 'Gift card'), logo);
 
-  const value =
-    card.value === undefined
-      ? buildBlankValue()
-      : el('h1', 'tpl-gift-card__value', formatValue(card.value));
-  const lede = el('p', 'tpl-gift-card__lede', card.lede ?? DEFAULT_LEDE);
-
-  const children: HTMLElement[] = [header, value, lede];
-
+  const fields = el('div', 'tpl-gift-card__fields');
+  fields.append(buildValue(card), buildCode(card));
   const names = buildNames(card);
-  if (names) children.push(names);
+  if (names) fields.append(names);
 
-  const footer = el('div', 'tpl-gift-card__footer');
-  const chip = el('p', 'tpl-gift-card__code');
-  chip.append(
-    'code: ',
-    card.code === undefined
-      ? el('span', 'tpl-gift-card__code-write-in')
-      : el('strong', 'tpl-gift-card__code-value', card.code)
-  );
-  if (card.expires) chip.append(el('span', 'tpl-gift-card__expiry', card.expires));
+  const footer = el('footer', 'tpl-gift-card__footer');
   const redeem = el('span', 'tpl-gift-card__redeem');
   redeem.append('Enter the code at checkout', document.createElement('br'), 'pyresauna.com');
-  footer.append(chip, redeem);
-  children.push(footer);
+  footer.append(el('p', 'tpl-gift-card__lede', card.lede ?? DEFAULT_LEDE), redeem);
 
-  article.append(...children);
+  article.append(header, fields, footer);
   return article;
 }
 
-/* No value given: a dollar sign and a ruled line to hand-write the amount on. */
-function buildBlankValue(): HTMLElement {
+/* "$50" when a value is given; otherwise a "$" and a ruled line to hand-write the amount on. */
+function buildValue(card: GiftCardData): HTMLElement {
+  if (card.value !== undefined) {
+    return el('h1', 'tpl-gift-card__value', formatValue(card.value));
+  }
   const value = el('h1', 'tpl-gift-card__value tpl-gift-card__value--blank');
   value.append(el('span', 'tpl-gift-card__currency', '$'), el('span', 'tpl-gift-card__write-in'));
   return value;
+}
+
+/* "code: PYRE-…" when a code is given; otherwise the label and a ruled line to hand-write it on. */
+function buildCode(card: GiftCardData): HTMLElement {
+  const row = el('p', 'tpl-gift-card__code');
+  row.append(
+    el('span', 'tpl-gift-card__code-label', 'Code:'),
+    card.code === undefined
+      ? el('span', 'tpl-gift-card__write-in')
+      : el('strong', 'tpl-gift-card__code-value', card.code)
+  );
+  if (card.expires) row.append(el('span', 'tpl-gift-card__expiry', card.expires));
+  return row;
 }
 
 function buildNames(card: GiftCardData): HTMLElement | null {

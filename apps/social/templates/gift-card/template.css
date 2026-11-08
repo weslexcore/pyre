@@ -62,7 +62,7 @@
   letter-spacing: 0.08em;
 }
 
-/* ── Back: value + code on creme ────────────────────────────── */
+/* ── Back: amount + code on creme ───────────────────────────── */
 
 .tpl-gift-card--back {
   background: var(--pyre-creme);
@@ -90,6 +90,15 @@
   width: auto;
 }
 
+/* The amount and code rows share the middle band, centered between header and footer. */
+.tpl-gift-card__fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
 /* The amount is the hero. Sized for "$100"; "$1,000" still fits the 975px content width. */
 .tpl-gift-card__value {
   font-family: var(--font-display);
@@ -97,58 +106,37 @@
   font-size: 176px;
   line-height: 0.95;
   letter-spacing: -0.03em;
-  margin-top: var(--space-2);
 }
 
-/* Hand-written amount: "$" at full size, then a ruled line sitting on the same baseline.
-   The line stops short of the right edge so the logo column stays clear. */
+/* Hand-written amount: "$" at full size, then a ruled line running to the right edge. */
 .tpl-gift-card__value--blank {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
 }
 
+/* Shared write-in rule for the amount and code rows; each row sets its own thickness. */
 .tpl-gift-card__write-in {
-  width: 560px;
+  flex: 1;
   border-bottom: 4px solid var(--pyre-black);
-  /* Lift the rule to the baseline of the "$" so handwriting sits on it. */
+  /* Lift the rule to the text baseline so handwriting sits on it. */
   transform: translateY(-8px);
 }
 
-.tpl-gift-card__lede {
-  font-size: 34px;
-  line-height: 1.2;
-  color: var(--pyre-blue);
-  margin-top: var(--space-1);
-}
-
-.tpl-gift-card__names {
-  font-family: var(--font-mono);
-  font-size: 26px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-top: var(--space-2);
-}
-
-/* Chip on the left, redeem note on the right, pinned to the bottom of the card. */
-.tpl-gift-card__footer {
-  margin-top: auto;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-/* Ticket-style code chip: mono inside a black rule, same as the voucher cards. */
+/* Code row: mono label, then the printed code or a ruled line, running the full width. */
 .tpl-gift-card__code {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
   font-family: var(--font-mono);
-  font-size: 35px;
+  font-size: 40px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  border: 3px solid var(--pyre-black);
-  border-radius: 14px;
-  padding: var(--space-2) var(--space-3);
-  white-space: nowrap;
+}
+
+.tpl-gift-card__code .tpl-gift-card__write-in {
+  border-bottom-width: 3px;
+  transform: translateY(-6px);
 }
 
 .tpl-gift-card__code-value {
@@ -157,20 +145,32 @@
   letter-spacing: 0.14em;
 }
 
-/* Hand-written code: a ruled line inside the chip where the code value would print. */
-.tpl-gift-card__code-write-in {
-  display: inline-block;
-  width: 340px;
-  border-bottom: 3px solid var(--pyre-black);
-  vertical-align: baseline;
-  transform: translateY(-4px);
-}
-
 .tpl-gift-card__expiry {
-  display: block;
   font-size: 22px;
   letter-spacing: 0.12em;
-  margin-top: 4px;
+  color: var(--pyre-blue);
+  white-space: nowrap;
+}
+
+.tpl-gift-card__names {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Lede on the left, redeem note on the right, along the bottom edge of the safe area. */
+.tpl-gift-card__footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.tpl-gift-card__lede {
+  font-size: 30px;
+  line-height: 1.2;
+  color: var(--pyre-blue);
 }
 
 .tpl-gift-card__redeem {
@@ -181,6 +181,4 @@
   color: var(--pyre-blue);
   text-align: right;
   line-height: 1.3;
-  /* Line up the text's visible baseline with the chip's bottom border. */
-  padding-bottom: 6px;
 }
