@@ -13,17 +13,18 @@
 // row with no email (nobody could log in as them). Rows referenced by assignments or
 // time off are deactivated instead of deleted, so schedule history survives.
 //
-// Logins are Supabase Auth, invite-only: a person with dashboard access gets
-// an auth user created here (lib/auth/users), kept in step when their email
-// or name changes, and deleted with them. staff.user_id links the two. The
-// auth side is best effort — a failure never blocks the staff row, and the
-// sign-in callback links an existing auth user on first login.
+// Logins are Supabase Auth and this table is the allowlist: the sign-in
+// route creates a person's auth user the first time they ask for a link, if
+// their email is on a row with dashboard access (lib/auth/users). Once one
+// exists (staff.user_id), edits here keep it in step — an email or name
+// change is written through, dropping the email or deleting the person
+// removes the login. Best effort: a failure never blocks the staff row.
 
 import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, CAPABILITIES_BY_PAGE, USERS_HREF } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { requirePage } from '@/lib/auth/admin';
-import { ensureAuthUser, removeAuthUser, syncAuthUser } from '@/lib/auth/users';
+import { removeAuthUser, syncAuthUser } from '@/lib/auth/users';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { dbError, gateMutation, json, sessionEmail } from '@/lib/http/route';
@@ -233,22 +234,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     payRate = parsed;
   }
 
-  // Someone with dashboard access needs a login to reach it: pre-create the
-  // auth user now (sign-up is closed), confirmed, so their first sign-in link
-  // works. Roster-only people get none.
-  const needsLogin = !!email && (isAdmin || pages.length > 0);
-  const auth = needsLogin
-    ? await ensureAuthUser(db, { email: email as string, displayName })
-    : null;
-  if (auth && !auth.ok) console.warn(`[users] no auth user for ${email}: ${auth.error}`);
-
   const { data, error } = await db
     .from('staff')
     .insert({
       pay_rate: payRate,
       display_name: displayName,
       email,
-      user_id: auth?.ok ? auth.userId : null,
       is_admin: isAdmin,
       pages,
       is_founder: body.isFounder === true,
@@ -266,16 +257,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, `${email} is already on this list`);
 
   invalidateAccessCache();
-  return json(
-    {
-      person: redactCalendarToken(data as StaffRow),
-      momenceMatch: member.matched,
-      // False when access was granted but the auth user could not be created:
-      // the person cannot sign in until it is (retry by saving them again).
-      loginReady: needsLogin ? !!auth?.ok : null,
-    },
-    201
-  );
+  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch: member.matched }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -391,31 +373,18 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Dashboard access needs a login email' }, 400);
   }
 
-  // Keep the auth user in step with the row. Someone who will hold access
-  // needs one (created now if the row never had one, or if the staff row and
-  // the auth user were never linked); an email or name change is written
-  // through to it; dropping the email removes the login with it. Best effort
-  // throughout — the row is saved either way.
-  const willHaveAccess = !!willHaveEmail && (willBeAdmin || willHavePages.length > 0);
-  const willHaveName = fields.display_name ?? row.display_name;
-  let loginReady: boolean | null = null;
-  if (willHaveAccess && !row.user_id) {
-    const auth = await ensureAuthUser(db, {
-      email: willHaveEmail as string,
-      displayName: willHaveName,
-    });
-    if (auth.ok) fields.user_id = auth.userId;
-    else console.warn(`[users] no auth user for ${willHaveEmail}: ${auth.error}`);
-    loginReady = auth.ok;
-  } else if (row.user_id && fields.email === null) {
+  // Keep an existing login in step with the row: an email or name change is
+  // written through to the auth user, and dropping the email removes it. A
+  // row without a login gets one from the sign-in route on first use. Best
+  // effort — the row is saved either way.
+  if (row.user_id && fields.email === null) {
     const removed = await removeAuthUser(db, row.user_id);
     if (removed.ok) fields.user_id = null;
   } else if (row.user_id && (fields.email !== undefined || fields.display_name !== undefined)) {
-    const synced = await syncAuthUser(db, row.user_id, {
+    await syncAuthUser(db, row.user_id, {
       email: fields.email ?? undefined,
       displayName: fields.display_name,
     });
-    loginReady = synced.ok;
   }
 
   const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
@@ -423,7 +392,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, 'That email is already in use');
 
   invalidateAccessCache();
-  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch, loginReady });
+  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
