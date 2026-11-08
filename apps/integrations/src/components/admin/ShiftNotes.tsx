@@ -14,8 +14,9 @@
 //
 // Each note also carries a triage status — open, to do, resolved — that only
 // admins flip, so a request or piece of feedback gets tracked to completion,
-// and an activity thread: comments, in which an admin responds in context and
-// the author replies back, and an entry for every action on the note — each
+// and an activity thread: comments, which anyone who can see the note may
+// add — an admin responds in context, the author replies back, a teammate
+// chimes in on a shared note — and an entry for every action on the note — each
 // status change, each edit (with what it changed), each time the classifier
 // read it — so the note's history reads in order. That history stays
 // collapsed under a toggle until opened; comments always show. Entries show
@@ -1333,11 +1334,7 @@ export function ShiftNotes() {
                       <MentionTextarea
                         id={`note-${note.id}-reply`}
                         className={replyTextareaClass}
-                        placeholder={
-                          viewer.isAdmin
-                            ? 'Reply to this note… (@ to mention someone)'
-                            : 'Reply to the admins… (@ to mention someone)'
-                        }
+                        placeholder="Reply to this note… (@ to mention someone)"
                         maxLength={REPLY_BODY_MAX}
                         value={replyDrafts[note.id] ?? ''}
                         onChange={(next) =>

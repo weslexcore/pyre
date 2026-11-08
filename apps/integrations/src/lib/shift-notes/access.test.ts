@@ -101,14 +101,19 @@ describe('status', () => {
 describe('replies', () => {
   const admin = { email: 'wes@pyresauna.com', isAdmin: true };
   const maya = { email: 'maya@pyresauna.com', isAdmin: false };
+  // A session that holds the page but carries no email: sees shared notes, owns none.
+  const nobody = { email: '', isAdmin: false };
   const reply = (author: string, is_private = false) => ({ author_email: author, is_private });
 
-  it('lets the author and admins reply, nobody else', () => {
+  it('lets whoever can see a note reply to it', () => {
+    // Their own note, shared or not.
     expect(canReply(note('maya@pyresauna.com'), maya)).toBe(true);
+    // Someone else's admin-only note: not theirs to read, so not theirs to join.
     expect(canReply(note('sunny@pyresauna.com'), maya)).toBe(false);
     expect(canReply(note('sunny@pyresauna.com'), admin)).toBe(true);
-    // Seeing a shared note doesn't make you part of its conversation.
-    expect(canReply(note('sunny@pyresauna.com', false), maya)).toBe(false);
+    // Seeing a shared note makes you part of its conversation.
+    expect(canReply(note('sunny@pyresauna.com', false), maya)).toBe(true);
+    expect(canReply(note('sunny@pyresauna.com', false), nobody)).toBe(true);
   });
 
   it('hides private replies from everyone but admins', () => {
