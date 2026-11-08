@@ -54,15 +54,6 @@ export function loginRedirect(returnUrl: string, error?: string): string {
 }
 
 /**
- * Supabase's answer to signInWithOtp for an email with no auth user while
- * sign-up is closed. Treated as success by the login route, so the form
- * never reveals which addresses belong to staff.
- */
-export function isUnknownUserError(error: { code?: string; message: string }): boolean {
-  return error.code === 'otp_disabled' || /signups? not allowed/i.test(error.message);
-}
-
-/**
  * After a successful verify: point the staff row with this email at the
  * auth user (a no-op once linked). Access checks fall back to the email, so
  * a failure here changes nothing about what the person can open.

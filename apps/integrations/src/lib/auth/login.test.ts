@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isUnknownUserError,
-  loginRedirect,
-  rememberReturnUrl,
-  safeReturnUrl,
-  takeReturnUrl,
-} from './login';
+import { loginRedirect, rememberReturnUrl, safeReturnUrl, takeReturnUrl } from './login';
 
 function fakeCookies() {
   const jar = new Map<string, string>();
@@ -52,18 +46,6 @@ describe('return url cookie', () => {
     const cookies = fakeCookies();
     rememberReturnUrl(cookies as never, 'https://evil.test');
     expect(takeReturnUrl(cookies as never)).toBe('/admin');
-  });
-});
-
-describe('isUnknownUserError', () => {
-  it('recognises the closed-sign-up answer and nothing else', () => {
-    expect(
-      isUnknownUserError({ code: 'otp_disabled', message: 'Signups not allowed for otp' })
-    ).toBe(true);
-    expect(isUnknownUserError({ message: 'Signups not allowed for otp' })).toBe(true);
-    expect(isUnknownUserError({ code: 'over_email_send_rate_limit', message: 'rate limit' })).toBe(
-      false
-    );
   });
 });
 
