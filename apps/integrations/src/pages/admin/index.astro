@@ -15,9 +15,11 @@ import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
 import { canViewPage, toolsForAccess, visibleTools } from '@/components/admin/adminTools';
 import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
+import { NUDGE_DISMISSED_COOKIE, SignInNudge } from '@/components/admin/SignInNudge';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
+import { getSignInMethods } from '@/lib/auth/methods';
 import { etStamp } from '@/lib/client/format';
 import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
@@ -46,13 +48,20 @@ const canSeeSops = !!db && !!access && canViewPage(access, '/admin/sops');
 // out together: the settings row, the pins, the roster, the on-call and
 // week lookups, and the SOP viewer's role. Serially they were six round
 // trips ahead of the first byte of the dashboard.
-const [hiddenTools, pins, staff, onCallRaw, sopRole] = await Promise.all([
+// Someone who can only sign in by email is asked to add a password or a
+// passkey, until they do or they wave it off (SignInNudge).
+const userId = Astro.locals.adminUser?.id ?? '';
+const checkNudge = !!db && !!userId && !Astro.cookies.has(NUDGE_DISMISSED_COOKIE);
+const [hiddenTools, pins, staff, onCallRaw, sopRole, signInMethods] = await Promise.all([
   access ? getSetting('navigation.hiddenTools') : Promise.resolve([] as string[]),
   email ? getToolPins(email) : Promise.resolve([] as string[]),
   db && access ? listStaff() : Promise.resolve(null),
   db && access ? getOnCallNow(db) : Promise.resolve(null),
   canSeeSops ? getSopRole(email, access) : Promise.resolve(null),
+  checkNudge && db ? getSignInMethods(db, userId) : Promise.resolve(null),
 ]);
+const showSignInNudge =
+  !!signInMethods && !signInMethods.hasPassword && signInMethods.passkeys.length === 0;
 const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 // Memo for AdminLayout (its frontmatter runs after the page's), so the nav
 // doesn't refetch the same list on this request.
@@ -142,6 +151,7 @@ const chipWindow = nextShift
 
 <AdminLayout>
   <div class="space-y-8">
+    {showSignInNudge && <SignInNudge client:load />}
     {
       onCallNow.length > 0 && (
         <section>

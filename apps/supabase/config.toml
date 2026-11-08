@@ -35,11 +35,27 @@ enable_signup = false
 enable_signup = true
 otp_length = 6
 otp_expiry = 600
+# Staff can add a password on /admin/account once signed in by email, so a
+# lost inbox does not lock them out. A signed-in session is enough to set or
+# change it (no reauthentication nonce).
+minimum_password_length = 10
+secure_password_change = false
 
 [auth.email.template.magic_link]
 subject = "Sign in to Pyre Admin"
 # Relative to the CLI's workdir (apps/), not to this file.
 content_path = "./supabase/templates/magic_link.html"
+
+# Passkeys (experimental in Supabase Auth): added on /admin/account, used from
+# the login page. Passkeys are bound to rp_id, so the production value below
+# must never change once anyone has enrolled one.
+[auth.passkey]
+enabled = true
+
+[auth.webauthn]
+rp_display_name = "Pyre Admin"
+rp_id = "localhost"
+rp_origins = ["http://localhost:4321"]
 
 # Local mail catcher: sign-in emails land at http://localhost:54324.
 [local_smtp]
@@ -64,4 +80,15 @@ additional_redirect_urls = [
   "https://pyre-integrations.vercel.app/api/auth/callback",
   "https://*-wes-projects-f29875e5.vercel.app/api/auth/callback",
   "http://localhost:4321/api/auth/callback",
+]
+
+# Production and staging share this project and both live under rp_id, so a
+# passkey made on one works on the other. Vercel preview URLs cannot match it;
+# the login page offers previews email and password only (lib/auth/passkey.ts).
+[remotes.production.auth.webauthn]
+rp_display_name = "Pyre Admin"
+rp_id = "integrations.pyresauna.com"
+rp_origins = [
+  "https://integrations.pyresauna.com",
+  "https://staging.integrations.pyresauna.com",
 ]

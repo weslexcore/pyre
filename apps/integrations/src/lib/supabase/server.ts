@@ -6,7 +6,7 @@
 //   - createSupabaseServerClient(cookies) here is the publishable-key client
 //     bound to the request's session cookies, used for auth only — reading
 //     the signed-in user's claims, sending and verifying the magic link,
-//     signing out. It never queries a table.
+//     password and passkey sign-in, signing out. It never queries a table.
 //
 // The session lives in httpOnly cookies written by @supabase/ssr through the
 // adapter below; the browser never holds the refresh token. Astro's cookie
@@ -64,8 +64,10 @@ export function createSupabaseServerClient(cookies: AstroCookies): SupabaseClien
 
   return createServerClient(config.url, config.key, {
     // The server does every exchange (token_hash from the link, the 6-digit
-    // code), so there is no PKCE verifier to park in a cookie.
-    auth: { flowType: 'implicit' },
+    // code), so there is no PKCE verifier to park in a cookie. Passkeys are
+    // opt-in while Supabase marks them experimental; the server runs both
+    // halves of each ceremony (lib/auth/passkey.ts).
+    auth: { flowType: 'implicit', experimental: { passkey: true } },
     cookieOptions: {
       name: SESSION_COOKIE,
       httpOnly: true,

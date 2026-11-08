@@ -1,13 +1,14 @@
 ---
 // Staff sign-in for the Pyre integrations service. All /admin pages redirect
 // unauthenticated visitors here; the emailed link (or the 6-digit code from
-// the same email) returns them to returnUrl. Signed-in staff skip straight
+// the same email), a password, or a passkey returns them to returnUrl. Signed-in staff skip straight
 // to the dashboard.
 import { LoginForm } from '@/components/admin/LoginForm';
 import Favicon from '@/components/Favicon.astro';
 import PullToRefresh from '@/components/PullToRefresh.astro';
 import { getAccess } from '@/lib/auth/access';
 import { safeReturnUrl } from '@/lib/auth/login';
+import { passkeysAvailable } from '@/lib/auth/methods';
 import { validateSession } from '@/lib/auth/session';
 import '@/styles/admin.css';
 
@@ -64,7 +65,12 @@ if (user?.email && (await getAccess(user.email))) {
         ) : (
           <>
             <h1 class="mb-4 text-2xl font-semibold">Pyre Admin</h1>
-            <LoginForm client:load returnUrl={returnUrl} initialError={authError} />
+            <LoginForm
+              client:load
+              returnUrl={returnUrl}
+              initialError={authError}
+              passkeysAvailable={passkeysAvailable(Astro.url)}
+            />
           </>
         )
       }

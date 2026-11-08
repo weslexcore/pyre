@@ -5,12 +5,8 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin } from '@/lib/auth/admin';
-import { purgeLegacyCookies } from '@/lib/auth/session';
-import {
-  createSupabaseServerClient,
-  hasSessionCookie,
-  sessionCookieNames,
-} from '@/lib/supabase/server';
+import { endSession } from '@/lib/auth/login';
+import { createSupabaseServerClient, hasSessionCookie } from '@/lib/supabase/server';
 
 export const prerender = false;
 
@@ -18,15 +14,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
 
-  if (hasSessionCookie(cookies)) {
-    const supabase = createSupabaseServerClient(cookies);
-    if (supabase) {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) console.warn('[Auth] signOut failed:', error.message);
-    }
-  }
-  for (const name of sessionCookieNames()) cookies.delete(name, { path: '/' });
-  purgeLegacyCookies(cookies);
+  await endSession(hasSessionCookie(cookies) ? createSupabaseServerClient(cookies) : null, cookies);
 
   return redirect('/', 303);
 };

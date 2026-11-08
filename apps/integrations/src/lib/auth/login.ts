@@ -6,10 +6,17 @@
 // magic link (sign-up closed, so only an existing auth user gets one); the
 // email carries both a link back to /api/auth/callback and a 6-digit code.
 // Either is verified on the server, which sets the session cookies.
+//
+// Once signed in, a person can add a password or a passkey (/admin/account,
+// lib/auth/methods.ts) and sign in with those instead. Those sign-ins do not
+// go through the staff check in api/auth/login, so finishSignIn makes it.
 
-import type { User } from '@supabase/supabase-js';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import type { AstroCookies } from 'astro';
 import { getDb } from '@/lib/db';
+import { sessionCookieNames } from '@/lib/supabase/server';
+import { getAccess } from './access';
+import { purgeLegacyCookies } from './session';
 import { linkStaffUser } from './users';
 
 export const DEFAULT_RETURN_URL = '/admin';
@@ -62,4 +69,36 @@ export async function afterSignIn(user: User): Promise<void> {
   const db = getDb();
   if (!db || !user.email) return;
   await linkStaffUser(db, user.id, user.email);
+}
+
+/** Sign out this browser and clear every session cookie, whatever Supabase says. */
+export async function endSession(
+  supabase: SupabaseClient | null,
+  cookies: AstroCookies
+): Promise<void> {
+  if (supabase) {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) console.warn('[Auth] signOut failed:', error.message);
+  }
+  for (const name of sessionCookieNames()) cookies.delete(name, { path: '/' });
+  purgeLegacyCookies(cookies);
+}
+
+/**
+ * The end of a password or passkey sign-in. Supabase has just set the
+ * session cookies; keep them only if this person has dashboard access
+ * (someone taken off the staff list can still hold a password or a passkey),
+ * else sign straight back out. True when the sign-in stands.
+ */
+export async function finishSignIn(
+  supabase: SupabaseClient,
+  user: User,
+  cookies: AstroCookies
+): Promise<boolean> {
+  if (!user.email || !(await getAccess(user.email))) {
+    await endSession(supabase, cookies);
+    return false;
+  }
+  await afterSignIn(user);
+  return true;
 }
