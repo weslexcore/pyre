@@ -25,6 +25,8 @@ const REFRESH_LEAD_MS = 60_000;
 const COALESCE_MS = 250;
 
 interface TokenResponse {
+  url: string;
+  key: string;
   accessToken: string;
   expiresAt: number | null;
   topic: string;
@@ -48,8 +50,7 @@ export function useRealtimeNotifications(onChange: () => void): boolean {
 
   useEffect(() => {
     if (!token) return;
-    const client = getBrowserSupabase();
-    if (!client) return;
+    const client = getBrowserSupabase(token.url, token.key);
 
     void client.realtime.setAuth(token.accessToken);
     let pending: ReturnType<typeof setTimeout> | null = null;

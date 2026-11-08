@@ -31,10 +31,16 @@ export function sessionCookieNames(): string[] {
   ];
 }
 
-/** URL and publishable key, or null when sign-in is not configured. */
+/**
+ * URL and publishable key, or null when sign-in is not configured. The same
+ * SUPABASE_URL the service-role client uses, plus the publishable
+ * (sb_publishable_*) key — or the legacy anon JWT, which plays the same
+ * role. Also handed to the browser by /api/auth/realtime-token, so nothing
+ * needs a PUBLIC_ twin in the environment.
+ */
 export function supabasePublicConfig(): { url: string; key: string } | null {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL ?? import.meta.env.SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const url = import.meta.env.SUPABASE_URL;
+  const key = import.meta.env.SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return { url, key };
 }
@@ -51,9 +57,7 @@ export function createSupabaseServerClient(cookies: AstroCookies): SupabaseClien
   if (!config) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
-      console.warn(
-        '[Auth] Supabase Auth not configured (PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_PUBLISHABLE_KEY)'
-      );
+      console.warn('[Auth] Supabase Auth not configured (SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY)');
     }
     return null;
   }

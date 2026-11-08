@@ -47,11 +47,12 @@ interface ImportMetaEnv {
   readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
   // Supabase Auth (staff sign-in, lib/supabase/server) and the browser's
-  // Realtime client. PUBLIC_ so Astro inlines them into island bundles; the
-  // publishable key is meant to ship — RLS is what it can see through.
-  // PUBLIC_SUPABASE_URL falls back to SUPABASE_URL on the server.
-  readonly PUBLIC_SUPABASE_URL?: string;
-  readonly PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
+  // Realtime client: the sb_publishable_* key (SUPABASE_ANON_KEY is the
+  // legacy JWT equivalent, used when the newer key is unset). Meant to ship
+  // to browsers — RLS is what it can see through — but handed over by
+  // /api/auth/realtime-token rather than inlined, so no PUBLIC_ twin.
+  readonly SUPABASE_PUBLISHABLE_KEY?: string;
+  readonly SUPABASE_ANON_KEY?: string;
   // Bootstrap admin allowlist (comma-separated emails). Access is managed in
   // the staff table via /admin/users; this env var only applies
   // while that table has no admin row (or Supabase is unreachable).
