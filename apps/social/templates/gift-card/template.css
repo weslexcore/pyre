@@ -137,7 +137,8 @@
 
 .tpl-gift-card__code .tpl-gift-card__write-in {
   border-bottom-width: 3px;
-  transform: translateY(-6px);
+  /* Mono caps have no descenders, so the baseline is the bottom of "CODE:"; sit flush on it. */
+  transform: none;
 }
 
 .tpl-gift-card__code-value {
