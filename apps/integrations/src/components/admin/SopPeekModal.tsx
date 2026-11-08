@@ -17,9 +17,11 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { Modal } from '@/components/admin/Modal';
+import { useChannel, useRealtimeSession } from '@/lib/client/realtime';
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import type { CheckItems } from '@/lib/sops/optimistic';
+import { type SopPresence, sopTopic } from '@/lib/sops/realtime';
 import { backLinkClass } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { cascadeLinked } from './linkedCascade';
@@ -72,6 +74,11 @@ export function PeekChecklist({
     onError: setError,
     onNotice: setNotice,
   });
+
+  // Teammates' taps on this sub-checklist show here as they land (listen
+  // only — the page underneath announces the viewer's presence).
+  const realtime = useRealtimeSession();
+  useChannel<SopPresence>(realtime, sopTopic(sop.id), { onChange: run.refresh });
 
   // What the bar under the parent's item should say: the open run's count
   // of resolved items, "completed" for a finished run still on screen,

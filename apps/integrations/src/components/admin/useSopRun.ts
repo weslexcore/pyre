@@ -81,6 +81,12 @@ export interface SopRunController {
   startAgain: () => void;
   /** Replace the run outright (page reload, run deleted from the log). */
   resetRun: (next: RunState | null) => void;
+  /**
+   * Re-read the shared run from the server — a teammate changed it (the
+   * document's Realtime channel says so). Waits for this screen's own taps
+   * to settle first, so their responses are never clobbered.
+   */
+  refresh: () => void;
 }
 
 /** Whether the state on screen is a run still being worked (not a finished one). */
@@ -162,6 +168,10 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
     if (names) setPeople((prev) => ({ ...prev, ...names }));
   }, []);
 
+  // A refresh asked for while taps were in flight runs once the queue drains.
+  const refreshWantedRef = useRef(false);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
+
   const enqueue = useCallback((op: () => Promise<void>) => {
     pendingRef.current += 1;
     setPending(pendingRef.current);
@@ -173,6 +183,10 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
       .finally(() => {
         pendingRef.current -= 1;
         setPending(pendingRef.current);
+        if (pendingRef.current === 0 && refreshWantedRef.current) {
+          refreshWantedRef.current = false;
+          void refreshRef.current();
+        }
       });
   }, []);
 
@@ -313,6 +327,64 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
     [commit, enqueue, resetRun, sendCheck, sendUncheck]
   );
 
+  // What a teammate's change means for this screen, re-read from the server.
+  // A live run on screen is fetched by id, since its status may have moved
+  // on: still open (adopt the checks), finished (show it finished, as our
+  // own last tap would), left unfinished or discarded (clear it). Then the
+  // document's open run is looked up, to adopt one a teammate started. A
+  // finished run already on screen stays until Start again, unless a new
+  // run has begun. Never while our own taps are in flight.
+  const refreshNow = useCallback(async () => {
+    const { sop, onNotice } = latest.current;
+    if (!sop) return;
+    try {
+      const known = runRef.current;
+      if (known && isPersisted(known.run) && isLiveRun(known)) {
+        const res = await fetch(`/api/admin/sop-runs?id=${known.run.id}`);
+        if (pendingRef.current > 0) return;
+        const body = res.ok ? ((await res.json()) as RunResponse) : null;
+        if (body?.run && body.run.status !== 'abandoned') {
+          mergePeople(body.people);
+          commit({
+            run: body.run,
+            checks: body.checks ?? [],
+            content: body.content ?? known.content,
+          });
+          noteFinished(runRef.current);
+          return;
+        }
+        resetRun(null);
+        onNotice(
+          body?.run
+            ? 'This run was closed as left unfinished on another screen.'
+            : 'This run was discarded on another screen.'
+        );
+      }
+      const res = await fetch(`/api/admin/sop-runs?sopId=${sop.id}`);
+      if (!res.ok || pendingRef.current > 0) return;
+      const body = (await res.json()) as RunResponse;
+      mergePeople(body.people);
+      if (body.run) {
+        commit({
+          run: body.run,
+          checks: body.checks ?? [],
+          content: body.content ?? sop.content_md,
+        });
+      }
+    } catch {
+      // Non-fatal: the next broadcast or tap brings the screen up to date.
+    }
+  }, [commit, mergePeople, noteFinished, resetRun]);
+  refreshRef.current = refreshNow;
+
+  const refresh = useCallback(() => {
+    if (pendingRef.current > 0) {
+      refreshWantedRef.current = true;
+      return;
+    }
+    void refreshRef.current();
+  }, []);
+
   const discardRun = useCallback(async () => {
     const current = runRef.current;
     if (!current || !isLiveRun(current) || !isPersisted(current.run)) return;
@@ -408,5 +480,6 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
     startFresh,
     startAgain,
     resetRun,
+    refresh,
   };
 }

@@ -27,6 +27,7 @@ import { parseChecklist } from '@/lib/sops/checklist';
 import type { LinkedProgressMap } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems, RunState } from '@/lib/sops/optimistic';
+import { presenceByItem, type SopPresence } from '@/lib/sops/realtime';
 import { Checklist, type ChecklistMark } from './Checklist';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -49,6 +50,7 @@ export function ChecklistView({
   run,
   checks,
   people,
+  others,
   linked,
   currentVersion,
   busy,
@@ -67,6 +69,8 @@ export function ChecklistView({
   /** Every resolved item — completed or skipped — of the run. */
   checks: SopRunCheckRow[];
   people?: PeopleNames;
+  /** Everyone else with this checklist open right now, and the item each last touched. */
+  others?: SopPresence[];
   /** Progress of the checklists this document links to, by slug. */
   linked?: LinkedProgressMap;
   currentVersion: number;
@@ -107,9 +111,30 @@ export function ChecklistView({
   const [outstandingOnly, setOutstandingOnly] = useState(false);
   const filtering = outstandingOnly && run !== null && !finished;
   const allDone = finished || (run !== null && total > 0 && done >= total);
+  const hereByItem = useMemo(() => presenceByItem(others ?? []), [others]);
 
   return (
     <div className="space-y-4">
+      {/* Who else has this checklist open — whether or not a run has started
+          yet — and the item they last touched, so two people splitting the
+          work can see each other's place in it. */}
+      {others && others.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] text-white/50">
+          <span
+            aria-hidden="true"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--pyre-sage)]"
+          />
+          <span>Also here:</span>
+          {others.map((person) => (
+            <span key={person.email} className="text-white/70">
+              {person.name}
+              {person.item !== null && (
+                <span className="text-white/40"> · item {person.item + 1}</span>
+              )}
+            </span>
+          ))}
+        </p>
+      )}
       {run && (
         <div
           className={`sticky ${STICKY_TOP[headerOffset]} z-30 space-y-2 rounded-lg border bg-[var(--pyre-black)] p-4 ${
@@ -221,6 +246,7 @@ export function ChecklistView({
         locked={finished}
         outstandingOnly={filtering}
         highlight={highlight}
+        presence={hereByItem}
         onSopLink={onSopLink}
         onToggle={onToggle}
       />
