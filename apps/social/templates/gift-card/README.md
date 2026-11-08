@@ -49,14 +49,14 @@ Fill in a code and a value per card in a typed data file; the template does the 
    ];
    ```
 
-4. In `post.config.ts`, export at `business-card` and set `pages` to two per card:
+4. In `post.config.ts`, export at `business-card` and set `pages` to two per card. Write the
+   number out rather than importing the data file: the dev server caches that import, so a
+   derived count goes stale in the preview and shows empty pages.
 
    ```ts
-   import { cards } from './cards.data.ts';
-
    export default defineConfig({
      name: 'gift-card',
-     pages: cards.length * 2,
+     pages: 2, // one card: front + back
      exports: [{ size: 'business-card', format: 'png', filename: 'gift-card' }],
    });
    ```
@@ -84,7 +84,7 @@ Fill in a code and a value per card in a typed data file; the template does the 
 | `.tpl-gift-card__tagline` | Front: `Sauna + Cold Plunge` |
 | `.tpl-gift-card__cite` | Front: site and handle |
 | `.tpl-gift-card__eyebrow` | Back: `Gift card` label, top left |
-| `.tpl-gift-card__logo` | Back: pine logo, top right |
+| `.tpl-gift-card__logo` | Back: gold pine logo, top right |
 | `.tpl-gift-card__fields` | Back: the middle band holding the amount and code rows |
 | `.tpl-gift-card__value` | Back: the amount, display type; `--blank` modifier when hand-written |
 | `.tpl-gift-card__code` | Back: full-width code row with label, code or line, optional expiry |

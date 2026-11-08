@@ -1,6 +1,6 @@
 import type { GiftCardData } from './types.ts';
 
-const DEFAULT_LEDE = 'Heat, cold, connection.';
+const DEFAULT_LEDE = 'SELF CARE TOGETHER';
 
 /**
  * Render two `<section class="page">`s per card (front, then back) into `root`, numbered from 1,
@@ -67,7 +67,7 @@ function buildBack(card: GiftCardData): HTMLElement {
 
   const header = el('header', 'tpl-gift-card__header');
   const logo = el('img', 'tpl-gift-card__logo');
-  logo.src = '/shared/logos/pyre_logo.svg';
+  logo.src = '/shared/logos/pyre_logo_gold.svg';
   logo.alt = 'Pyre';
   header.append(el('span', 'tpl-gift-card__eyebrow', 'Gift card'), logo);
 

@@ -14,8 +14,9 @@
   flex-direction: column;
 }
 
+/* Gold, to match the gold logo on the other face. */
 .tpl-gift-card__plus {
-  color: var(--pyre-sky);
+  color: var(--pyre-gold);
 }
 
 /* ── Front: brand mark on black ─────────────────────────────── */

@@ -17,7 +17,7 @@ Preview: `yarn workspace @pyre/social dev`, open `http://localhost:5173/preview/
 ## Pre-printing a value or code
 
 `cards.data.ts` holds a single empty entry (`{}`). To print the amount or code instead of leaving
-a line, add them there; one entry per card, two pages per entry:
+a line, add them there, one entry per card, and set `pages` in `post.config.ts` to two per entry:
 
 ```ts
 export const cards: GiftCardData[] = [
