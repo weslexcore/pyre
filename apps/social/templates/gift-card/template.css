@@ -1,0 +1,162 @@
+/* Gift-card template — a double-sided 3.5×2in PRINT business card (size key `business-card`).
+   Canvas: 1125×675px = 3.75×2.25in at 300dpi (3.5×2in trim + 0.125in bleed per edge).
+   1in = 300px. Keep all content ≥75px (0.25in) from the canvas edge: 37px of bleed is trimmed
+   away, the rest is cutting tolerance.
+   Linkable via <link rel="stylesheet" href="/templates/gift-card/template.css">. */
+
+.tpl-gift-card {
+  --tpl-gift-card-accent: var(--pyre-red);
+
+  width: 100vw;
+  height: 100vh;
+  font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+}
+
+.tpl-gift-card__plus {
+  color: var(--pyre-sky);
+}
+
+/* ── Front: brand mark on black ─────────────────────────────── */
+
+/* The 420px wordmark spans ~960px, leaving ~80px on the tight side; the 100px bottom
+   padding keeps the cite line's glyphs (which paint below their box) inside the safe area. */
+.tpl-gift-card--front {
+  background: var(--pyre-black);
+  color: var(--pyre-creme);
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: 48px 48px 100px;
+}
+
+/* Eckmannpsych only ships a 400 weight; keep the h1 from synthesizing bold. */
+.tpl-gift-card__wordmark {
+  font-family: var(--font-logo);
+  font-weight: 400;
+  font-size: 420px;
+  line-height: 0.85;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* Justified single line so the words spread edge to edge under the wordmark. */
+.tpl-gift-card__tagline {
+  width: 90%;
+  margin: 0 auto;
+  font-family: var(--font-mono);
+  font-size: 56px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: justify;
+  text-align-last: justify;
+  white-space: nowrap;
+}
+
+.tpl-gift-card__cite {
+  margin-top: auto;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+}
+
+/* ── Back: value + code on creme ────────────────────────────── */
+
+.tpl-gift-card--back {
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  /* 75px is the safe-area minimum; content runs right up to it. */
+  padding: 75px;
+}
+
+.tpl-gift-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tpl-gift-card__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 33px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tpl-gift-card-accent);
+}
+
+.tpl-gift-card__logo {
+  height: 56px;
+  width: auto;
+}
+
+/* The amount is the hero. Sized for "$100"; "$1,000" still fits the 975px content width. */
+.tpl-gift-card__value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 176px;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-top: var(--space-2);
+}
+
+.tpl-gift-card__lede {
+  font-size: 34px;
+  line-height: 1.2;
+  color: var(--pyre-blue);
+  margin-top: var(--space-1);
+}
+
+.tpl-gift-card__names {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: var(--space-2);
+}
+
+/* Chip on the left, redeem note on the right, pinned to the bottom of the card. */
+.tpl-gift-card__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* Ticket-style code chip: mono inside a black rule, same as the voucher cards. */
+.tpl-gift-card__code {
+  font-family: var(--font-mono);
+  font-size: 35px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 3px solid var(--pyre-black);
+  border-radius: 14px;
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+
+.tpl-gift-card__code-value {
+  font-weight: 700;
+  color: var(--tpl-gift-card-accent);
+  letter-spacing: 0.14em;
+}
+
+.tpl-gift-card__expiry {
+  display: block;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  margin-top: 4px;
+}
+
+.tpl-gift-card__redeem {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pyre-blue);
+  text-align: right;
+  line-height: 1.3;
+  /* Line up the text's visible baseline with the chip's bottom border. */
+  padding-bottom: 6px;
+}

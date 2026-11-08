@@ -1,0 +1,7 @@
+/* Gift cards — double-sided 3.5×2in print, two pages per card (see templates/gift-card).
+   The template owns layout and type; put per-batch tweaks here, e.g.
+
+   .tpl-gift-card[data-accent="gold"] {
+     --tpl-gift-card-accent: var(--pyre-gold);
+   }
+*/
