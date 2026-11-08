@@ -28,10 +28,12 @@ import {
   movePatch,
 } from '@/lib/boards/calendar';
 import type { Assignable } from '@/lib/boards/people';
+import { announceBoardChange, BOARDS_ALL_TOPIC } from '@/lib/boards/realtime';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import { optimistic } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { filterChipClass } from '../scheduleUi';
@@ -86,6 +88,11 @@ export function BoardsCalendar() {
 
   const today = data?.today ?? todayEastern();
 
+  // Live: a card changed on any board refetches the calendar (and an open drawer's feed).
+  useBroadcastTopic(BOARDS_ALL_TOPIC, () => {
+    void reload();
+    announceBoardChange();
+  });
   useCardDeepLink(data?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload });
 
   // The edited card is replaced in place, so the month keeps its scroll, its

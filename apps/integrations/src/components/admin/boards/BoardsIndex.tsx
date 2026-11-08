@@ -17,10 +17,12 @@ import { todayEastern } from '@pyre/schedule-core';
 import { type ReactNode, useState } from 'react';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
+import { BOARDS_ALL_TOPIC } from '@/lib/boards/realtime';
 import { boardsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally, UpNextCard } from '@/lib/boards/store';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
@@ -59,6 +61,8 @@ export function BoardsIndex() {
   // Cached across navigations: coming back to the boards paints the last
   // list at once and revalidates behind it; a warmed entry skips even that.
   const { data, error: loadError, loading, reload } = useCachedJson<BoardsResponse>(BOARDS_URL);
+  // Live: boards and their cards changing anywhere refetch the library.
+  useBroadcastTopic(BOARDS_ALL_TOPIC, () => void reload());
   const [actionError, setActionError] = useState<string | null>(null);
   const error = actionError ?? loadError;
 

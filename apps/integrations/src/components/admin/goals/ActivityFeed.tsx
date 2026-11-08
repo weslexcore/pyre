@@ -6,9 +6,10 @@
 // posted. A comment may be files alone. A goal has no board to keep files
 // on, so its comments are words only.
 
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref } from '@/lib/boards/files';
+import { BOARD_LIVE_EVENT } from '@/lib/boards/realtime';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
@@ -74,6 +75,14 @@ export function ActivityFeed({
   // Cached across drawers and navigations: reopening a card paints its
   // discussion at once and revalidates behind it.
   const feed = useCachedJson<EventsResponse>(query ? `/api/admin/board-events?${query}` : null);
+  // The island this feed sits in listens on the board's channel and raises
+  // this event on a change; a comment left from another screen shows up here.
+  const { reload: reloadFeed } = feed;
+  useEffect(() => {
+    const onLive = () => void reloadFeed();
+    document.addEventListener(BOARD_LIVE_EVENT, onLive);
+    return () => document.removeEventListener(BOARD_LIVE_EVENT, onLive);
+  }, [reloadFeed]);
   const events = feed.data?.events ?? [];
   const mentionPeople = feed.data?.mentionPeople ?? [];
   const attachments = feed.data?.attachments ?? [];

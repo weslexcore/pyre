@@ -13,11 +13,13 @@
 
 import { type ReactNode, useId, useMemo, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
+import { announceBoardChange, BOARDS_ALL_TOPIC } from '@/lib/boards/realtime';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import { optimistic } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
@@ -134,6 +136,11 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     loading,
     reload,
   } = useCachedJson<TasksData>(`/api/admin/all-tasks?since=${encodeURIComponent(since)}`);
+  // Live: a card changed on any board refetches the list (and an open drawer's feed).
+  useBroadcastTopic(BOARDS_ALL_TOPIC, () => {
+    void reload();
+    announceBoardChange();
+  });
   const [actionError, setActionError] = useState<string | null>(null);
   const error = actionError ?? loadError;
 

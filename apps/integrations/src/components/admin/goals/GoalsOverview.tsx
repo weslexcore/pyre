@@ -16,8 +16,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GOAL_CREATED_EVENT } from '@/lib/boards/createActions';
+import { announceBoardChange, GOALS_TOPIC } from '@/lib/boards/realtime';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
 import {
   buildGoalRows,
@@ -58,6 +60,12 @@ export function GoalsOverview() {
   // Cached across navigations: coming back paints the last list at once
   // and revalidates behind it; a warmed entry skips even that.
   const { data, error: loadError, loading, reload } = useCachedJson<GoalsOverviewData>(GOALS_URL);
+  // Live: a goal, KPI or goal comment changed from another screen refetches
+  // the overview (and an open goal's feed).
+  useBroadcastTopic(GOALS_TOPIC, () => {
+    void reload();
+    announceBoardChange();
+  });
   const [actionError, setActionError] = useState<string | null>(null);
   const error = actionError ?? loadError;
   const [owner, setOwner] = useState('all');
