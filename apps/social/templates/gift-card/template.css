@@ -96,7 +96,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--space-4);
+  /* Wide gap so a hand-written code has clear room under the amount line. */
+  gap: var(--space-12);
 }
 
 /* The amount is the hero. Sized for "$100"; "$1,000" still fits the 975px content width. */
