@@ -46,6 +46,12 @@ interface ImportMetaEnv {
   readonly SUPABASE_URL?: string;
   readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
+  // Supabase Auth (staff sign-in, lib/supabase/server) and the browser's
+  // Realtime client. PUBLIC_ so Astro inlines them into island bundles; the
+  // publishable key is meant to ship — RLS is what it can see through.
+  // PUBLIC_SUPABASE_URL falls back to SUPABASE_URL on the server.
+  readonly PUBLIC_SUPABASE_URL?: string;
+  readonly PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
   // Bootstrap admin allowlist (comma-separated emails). Access is managed in
   // the staff table via /admin/users; this env var only applies
   // while that table has no admin row (or Supabase is unreachable).
@@ -117,9 +123,9 @@ interface ImportMeta {
 
 declare namespace App {
   interface Locals {
-    // Set by src/middleware.ts for /admin/* pages: the authenticated Momence
-    // user (not yet access-checked — AdminLayout enforces adminAccess).
-    adminUser?: import('./lib/auth/types').MomenceUserProfile;
+    // Set by src/middleware.ts for /admin/* pages: the signed-in user (not
+    // yet access-checked — AdminLayout enforces adminAccess).
+    adminUser?: import('./lib/auth/types').SessionUser;
     // Their dashboard access (null = no dashboard access at all).
     adminAccess?: import('./lib/auth/access').DashboardAccess | null;
     // Per-request memo: the user's ordered pinned tool hrefs, set by pages

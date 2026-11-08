@@ -11,7 +11,8 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   trailingSlash: 'never',
   output: 'server',
-  // Cookie/session auth exists only on /admin + /api/admin (Momence OAuth).
+  // Cookie/session auth exists only on /admin + /api/admin (Supabase Auth,
+  // lib/supabase/server).
   // Global CSRF origin checking stays off because it breaks server-to-server
   // webhooks that POST form-encoded bodies without an Origin header
   // (Mailchimp's audience webhook does exactly that). Cookie-authed routes
@@ -24,8 +25,9 @@ export default defineConfig({
   adapter: vercel({ maxDuration: 60 }),
   // Link prefetching for the admin nav, opt-in per link via
   // data-astro-prefetch. `prefetchAll` is deliberately off: it would prefetch
-  // every same-origin <a>, and /api/auth/logout is a GET that clears the
-  // session cookies — hovering the logout link would sign the user out.
+  // every same-origin <a>, including API routes a page links to. (Logout is
+  // a POST form, so a prefetch can no longer sign anyone out, but the
+  // opt-in default stays.)
   prefetch: { prefetchAll: false, defaultStrategy: 'hover' },
   integrations: [react()],
   vite: {

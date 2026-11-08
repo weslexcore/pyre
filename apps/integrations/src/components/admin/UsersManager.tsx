@@ -745,10 +745,11 @@ export function UsersManager() {
           staff: prev.staff.map((p) => (p.id === id ? applyFields(p, fields) : p)).sort(byName),
         },
       () =>
-        sendJson<{ person: StaffRow; momenceMatch?: boolean }>(USERS_URL, 'PATCH', {
-          id,
-          ...fields,
-        }),
+        sendJson<{ person: StaffRow; momenceMatch?: boolean; loginReady?: boolean | null }>(
+          USERS_URL,
+          'PATCH',
+          { id, ...fields }
+        ),
       {
         reconcile: (prev, { person }) =>
           prev && { ...prev, staff: prev.staff.map((p) => (p.id === id ? person : p)) },
@@ -758,9 +759,13 @@ export function UsersManager() {
     if (!body) return;
     // The saved row is the draft now (the server may have trimmed it).
     setDrafts(({ [id]: _saved, ...rest }) => rest);
-    if (body.momenceMatch === false) {
+    if (body.loginReady === false) {
       setNotice(
-        `No Momence member matched ${body.person.email} — they can only log in if it matches their Momence account email exactly.`
+        `Saved, but ${body.person.email} cannot sign in yet — their login could not be set up. Save them again to retry.`
+      );
+    } else if (body.momenceMatch === false) {
+      setNotice(
+        `No Momence member matched ${body.person.email}. Sign-in still works; the schedule sync just won't match their Momence shifts until the emails agree.`
       );
     }
   };
@@ -821,7 +826,12 @@ export function UsersManager() {
           staff: [...prev.staff, pending].sort(byName),
           envUsers: prev.envUsers.filter((u) => u.email !== pending.email),
         },
-      () => sendJson<{ person: StaffRow; momenceMatch: boolean }>(USERS_URL, 'POST', fields),
+      () =>
+        sendJson<{ person: StaffRow; momenceMatch: boolean; loginReady: boolean | null }>(
+          USERS_URL,
+          'POST',
+          fields
+        ),
       {
         reconcile: (prev, { person }) =>
           prev && { ...prev, staff: prev.staff.map((p) => (p.id === pending.id ? person : p)) },
@@ -830,9 +840,13 @@ export function UsersManager() {
     );
     setAdding(false);
     if (!body) return null;
-    if (body.person.email && !body.momenceMatch) {
+    if (body.loginReady === false) {
       setNotice(
-        `Added ${body.person.display_name} — no Momence member matched ${body.person.email}. They can only log in if it matches their Momence account email exactly.`
+        `Added ${body.person.display_name}, but their login could not be set up — they cannot sign in yet. Edit and save them again to retry.`
+      );
+    } else if (body.person.email && !body.momenceMatch) {
+      setNotice(
+        `Added ${body.person.display_name} — no Momence member matched ${body.person.email}. Sign-in still works; the schedule sync just won't match their Momence shifts until the emails agree.`
       );
     }
     return body.person;
@@ -1035,10 +1049,10 @@ export function UsersManager() {
               <input
                 className={`${inputClass} w-64`}
                 type="email"
-                placeholder="momence login email"
+                placeholder="login email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                aria-label="Momence login email"
+                aria-label="Login email"
               />
               <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
                 <input
@@ -1154,11 +1168,11 @@ export function UsersManager() {
                       <input
                         className={`${inputClass} w-64`}
                         type="email"
-                        placeholder="momence login email"
+                        placeholder="login email"
                         value={draft.email}
                         disabled={isSelf}
                         onChange={(e) => setDraft({ email: e.target.value })}
-                        aria-label={`${person.display_name} Momence email`}
+                        aria-label={`${person.display_name} login email`}
                       />
                       <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
                         <input
