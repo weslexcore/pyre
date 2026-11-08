@@ -12,11 +12,18 @@
 // grants every page would be unreachable); and access can't be granted to a
 // row with no email (nobody could log in as them). Rows referenced by assignments or
 // time off are deactivated instead of deleted, so schedule history survives.
+//
+// Logins are Supabase Auth, invite-only: a person with dashboard access gets
+// an auth user created here (lib/auth/users), kept in step when their email
+// or name changes, and deleted with them. staff.user_id links the two. The
+// auth side is best effort — a failure never blocks the staff row, and the
+// sign-in callback links an existing auth user on first login.
 
 import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, CAPABILITIES_BY_PAGE, USERS_HREF } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { requirePage } from '@/lib/auth/admin';
+import { ensureAuthUser, removeAuthUser, syncAuthUser } from '@/lib/auth/users';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { dbError, gateMutation, json, sessionEmail } from '@/lib/http/route';
@@ -106,9 +113,9 @@ function isLastPeopleHolder(rows: StaffRow[], row: StaffRow): boolean {
 }
 
 /**
- * Best-effort Momence lookup: people sign in with their Momence account, so
- * the email has to match their Momence login. A miss doesn't block the write
- * — staff logins aren't always host members — but the UI surfaces it.
+ * Best-effort Momence lookup, for the display name and the member id the
+ * schedule sync matches shifts on. A miss doesn't block the write — staff
+ * aren't always host members — but the UI surfaces it.
  */
 async function lookupMember(
   email: string
@@ -202,7 +209,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const pages = parsePages(body.pages, await liveBoardSlugs(db));
   if (pages instanceof Response) return pages;
   if (!email && (isAdmin || pages.length > 0)) {
-    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
+    return json({ error: 'Dashboard access needs a login email' }, 400);
   }
 
   let displayName = String(body.displayName ?? '').trim();
@@ -226,12 +233,22 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     payRate = parsed;
   }
 
+  // Someone with dashboard access needs a login to reach it: pre-create the
+  // auth user now (sign-up is closed), confirmed, so their first sign-in link
+  // works. Roster-only people get none.
+  const needsLogin = !!email && (isAdmin || pages.length > 0);
+  const auth = needsLogin
+    ? await ensureAuthUser(db, { email: email as string, displayName })
+    : null;
+  if (auth && !auth.ok) console.warn(`[users] no auth user for ${email}: ${auth.error}`);
+
   const { data, error } = await db
     .from('staff')
     .insert({
       pay_rate: payRate,
       display_name: displayName,
       email,
+      user_id: auth?.ok ? auth.userId : null,
       is_admin: isAdmin,
       pages,
       is_founder: body.isFounder === true,
@@ -249,7 +266,16 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, `${email} is already on this list`);
 
   invalidateAccessCache();
-  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch: member.matched }, 201);
+  return json(
+    {
+      person: redactCalendarToken(data as StaffRow),
+      momenceMatch: member.matched,
+      // False when access was granted but the auth user could not be created:
+      // the person cannot sign in until it is (retry by saving them again).
+      loginReady: needsLogin ? !!auth?.ok : null,
+    },
+    201
+  );
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -287,6 +313,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'active'
       | 'momence_member_id'
       | 'pay_rate'
+      | 'user_id'
     >
   > = {};
   let momenceMatch: boolean | undefined;
@@ -361,7 +388,34 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const willHavePages = fields.pages ?? row.pages;
   const willHaveEmail = fields.email !== undefined ? fields.email : row.email;
   if (!willHaveEmail && (willBeAdmin || willHavePages.length > 0)) {
-    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
+    return json({ error: 'Dashboard access needs a login email' }, 400);
+  }
+
+  // Keep the auth user in step with the row. Someone who will hold access
+  // needs one (created now if the row never had one, or if the staff row and
+  // the auth user were never linked); an email or name change is written
+  // through to it; dropping the email removes the login with it. Best effort
+  // throughout — the row is saved either way.
+  const willHaveAccess = !!willHaveEmail && (willBeAdmin || willHavePages.length > 0);
+  const willHaveName = fields.display_name ?? row.display_name;
+  let loginReady: boolean | null = null;
+  if (willHaveAccess && !row.user_id) {
+    const auth = await ensureAuthUser(db, {
+      email: willHaveEmail as string,
+      displayName: willHaveName,
+    });
+    if (auth.ok) fields.user_id = auth.userId;
+    else console.warn(`[users] no auth user for ${willHaveEmail}: ${auth.error}`);
+    loginReady = auth.ok;
+  } else if (row.user_id && fields.email === null) {
+    const removed = await removeAuthUser(db, row.user_id);
+    if (removed.ok) fields.user_id = null;
+  } else if (row.user_id && (fields.email !== undefined || fields.display_name !== undefined)) {
+    const synced = await syncAuthUser(db, row.user_id, {
+      email: fields.email ?? undefined,
+      displayName: fields.display_name,
+    });
+    loginReady = synced.ok;
   }
 
   const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
@@ -369,7 +423,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return dbError(error, 'That email is already in use');
 
   invalidateAccessCache();
-  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch });
+  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch, loginReady });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -393,6 +447,10 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (isLastPeopleHolder(rows, row)) {
     return json({ error: 'Someone else needs People access first' }, 400);
   }
+
+  // Their login goes with them, whether the row is deleted or only stripped
+  // of access below (the FK nulls staff.user_id either way).
+  if (row.user_id) await removeAuthUser(db, row.user_id);
 
   const { error } = await db.from('staff').delete().eq('id', id);
 

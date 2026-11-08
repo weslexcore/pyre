@@ -855,6 +855,7 @@ export function UsersManager() {
     is_admin: fields.roles.isAdmin,
     pages: fields.pages,
     momence_member_id: null,
+    user_id: null,
     added_by: self || null,
     calendar_token: null,
     calendar_payday: false,
