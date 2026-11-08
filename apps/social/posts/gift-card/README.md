@@ -1,7 +1,8 @@
 # Gift card (print)
 
-Double-sided 3.5×2in gift cards built on `templates/gift-card/`. Each card needs a **code** and a
-**value**; everything else is optional.
+Double-sided 3.5×2in gift cards built on `templates/gift-card/`. Give a card a **code** and a
+**value** to print them, or leave either one off to get a blank line for writing it in by hand.
+An empty entry (`{}`) prints a card with both lines blank.
 
 ## Make a batch
 
@@ -11,9 +12,13 @@ Double-sided 3.5×2in gift cards built on `templates/gift-card/`. Each card need
    { code: 'PYRE-7K2M-Q9', value: 50 }
    { code: 'PYRE-3XD8-LA', value: 100, to: 'Sam', from: 'Alex' }
    { code: 'PYRE-H4PT-2N', value: '4 credits', expires: 'use by 12/31/2027' }
+   { code: 'PYRE-Q2VW-8C' }
+   {}
    ```
 
-   A numeric `value` prints as dollars (`$50`); a string prints as written.
+   A numeric `value` prints as dollars (`$50`); a string prints as written. No `value` prints
+   `$` followed by a ruled line, and no `code` prints `code:` followed by a ruled line, for
+   hand-writing.
 
 2. Preview: `yarn workspace @pyre/social dev`, open `http://localhost:5173/preview/`, pick
    `gift-card`. Odd pages are fronts, even pages are backs.

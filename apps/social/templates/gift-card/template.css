@@ -100,6 +100,21 @@
   margin-top: var(--space-2);
 }
 
+/* Hand-written amount: "$" at full size, then a ruled line sitting on the same baseline.
+   The line stops short of the right edge so the logo column stays clear. */
+.tpl-gift-card__value--blank {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.tpl-gift-card__write-in {
+  width: 560px;
+  border-bottom: 4px solid var(--pyre-black);
+  /* Lift the rule to the baseline of the "$" so handwriting sits on it. */
+  transform: translateY(-8px);
+}
+
 .tpl-gift-card__lede {
   font-size: 34px;
   line-height: 1.2;
@@ -140,6 +155,15 @@
   font-weight: 700;
   color: var(--tpl-gift-card-accent);
   letter-spacing: 0.14em;
+}
+
+/* Hand-written code: a ruled line inside the chip where the code value would print. */
+.tpl-gift-card__code-write-in {
+  display: inline-block;
+  width: 340px;
+  border-bottom: 3px solid var(--pyre-black);
+  vertical-align: baseline;
+  transform: translateY(-4px);
 }
 
 .tpl-gift-card__expiry {

@@ -19,7 +19,7 @@ export function renderGiftCards(cards: GiftCardData[], root: HTMLElement): void 
 }
 
 /** "$50" for numbers (cents only when needed); strings print as given. */
-export function formatValue(value: GiftCardData['value']): string {
+export function formatValue(value: NonNullable<GiftCardData['value']>): string {
   if (typeof value !== 'number') return value;
   return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`;
 }
@@ -70,7 +70,10 @@ function buildBack(card: GiftCardData): HTMLElement {
   logo.alt = 'Pyre';
   header.append(el('span', 'tpl-gift-card__eyebrow', 'Gift card'), logo);
 
-  const value = el('h1', 'tpl-gift-card__value', formatValue(card.value));
+  const value =
+    card.value === undefined
+      ? buildBlankValue()
+      : el('h1', 'tpl-gift-card__value', formatValue(card.value));
   const lede = el('p', 'tpl-gift-card__lede', card.lede ?? DEFAULT_LEDE);
 
   const children: HTMLElement[] = [header, value, lede];
@@ -80,7 +83,12 @@ function buildBack(card: GiftCardData): HTMLElement {
 
   const footer = el('div', 'tpl-gift-card__footer');
   const chip = el('p', 'tpl-gift-card__code');
-  chip.append('code: ', el('strong', 'tpl-gift-card__code-value', card.code));
+  chip.append(
+    'code: ',
+    card.code === undefined
+      ? el('span', 'tpl-gift-card__code-write-in')
+      : el('strong', 'tpl-gift-card__code-value', card.code)
+  );
   if (card.expires) chip.append(el('span', 'tpl-gift-card__expiry', card.expires));
   const redeem = el('span', 'tpl-gift-card__redeem');
   redeem.append('Enter the code at checkout', document.createElement('br'), 'pyresauna.com');
@@ -89,6 +97,13 @@ function buildBack(card: GiftCardData): HTMLElement {
 
   article.append(...children);
   return article;
+}
+
+/* No value given: a dollar sign and a ruled line to hand-write the amount on. */
+function buildBlankValue(): HTMLElement {
+  const value = el('h1', 'tpl-gift-card__value tpl-gift-card__value--blank');
+  value.append(el('span', 'tpl-gift-card__currency', '$'), el('span', 'tpl-gift-card__write-in'));
+  return value;
 }
 
 function buildNames(card: GiftCardData): HTMLElement | null {

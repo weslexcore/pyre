@@ -34,8 +34,8 @@ Fill in a code and a value per card in a typed data file; the template does the 
    </body>
    ```
 
-3. Define the cards in a data file next to the post. `code` and `value` are the only required
-   fields:
+3. Define the cards in a data file next to the post. Every field is optional; leave `value` or
+   `code` out to get a blank write-in line in its place:
 
    ```ts
    import type { GiftCardData } from '../../templates/gift-card/types.ts';
@@ -44,6 +44,8 @@ Fill in a code and a value per card in a typed data file; the template does the 
      { code: 'PYRE-7K2M-Q9', value: 50 },
      { code: 'PYRE-3XD8-LA', value: 100, to: 'Sam', from: 'Alex' },
      { code: 'PYRE-H4PT-2N', value: '4 credits', expires: 'use by 12/31/2027' },
+     { code: 'PYRE-Q2VW-8C' }, // blank line: write the amount in by hand
+     {}, // blank lines for both: write the amount and the code in by hand
    ];
    ```
 
@@ -66,8 +68,8 @@ Fill in a code and a value per card in a typed data file; the template does the 
 
 | Field | Required | Prints as |
 | --- | --- | --- |
-| `code` | yes | Verbatim, in the code chip: `code: PYRE-7K2M-Q9` |
-| `value` | yes | A number becomes a dollar amount (`50` → `$50`, `12.5` → `$12.50`); a string prints as-is (`'4 credits'`) |
+| `code` | no | Verbatim, in the code chip: `code: PYRE-7K2M-Q9`. Omit it to print `code:` and a ruled line for a hand-written code |
+| `value` | no | A number becomes a dollar amount (`50` → `$50`, `12.5` → `$12.50`); a string prints as-is (`'4 credits'`). Omit it to print `$` and a ruled line for a hand-written amount |
 | `lede` | no | One line under the value. Default: `Heat, cold, connection.` |
 | `to` / `from` | no | `For Sam · From Alex` in mono caps under the lede |
 | `expires` | no | Small line inside the code chip, e.g. `use by 12/31/2027` |
@@ -83,10 +85,12 @@ Fill in a code and a value per card in a typed data file; the template does the 
 | `.tpl-gift-card__cite` | Front: site and handle |
 | `.tpl-gift-card__eyebrow` | Back: `Gift card` label, top left |
 | `.tpl-gift-card__logo` | Back: pine logo, top right |
-| `.tpl-gift-card__value` | Back: the amount, display type |
+| `.tpl-gift-card__value` | Back: the amount, display type; `--blank` modifier when hand-written |
+| `.tpl-gift-card__write-in` | Back: the ruled line next to `$` on a blank card |
 | `.tpl-gift-card__lede` | Back: one-line description |
 | `.tpl-gift-card__names` | Back: optional For / From line |
 | `.tpl-gift-card__code` | Back: ticket chip holding the code and optional expiry |
+| `.tpl-gift-card__code-write-in` | Back: the ruled line inside the chip on a blank-code card |
 | `.tpl-gift-card__redeem` | Back: redemption note, bottom right |
 
 Set `--tpl-gift-card-accent` on `.tpl-gift-card[data-accent="…"]` in your post's `style.css` to
