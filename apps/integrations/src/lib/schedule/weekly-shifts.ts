@@ -2,6 +2,10 @@
 // ahead gets one email listing their own shifts, each a deep link straight to
 // that shift on /admin/schedule. Off-shift duties they're down for (fill the
 // carboys Monday) are listed beneath, so someone with only those still hears.
+// Their time off closes the email: what they've logged inside the window the
+// schedule is set for, then the two weeks after it — the weeks that get
+// scheduled next — with a button to the Availability tab, so anything they
+// haven't logged yet lands before those weeks lock.
 //
 // "Locked in" means live rows — is_draft = false on both the shift and the
 // assignment, so an agent proposal still awaiting review is never mailed out
@@ -16,15 +20,25 @@
 import {
   addDays,
   assignmentHours,
+  busyIntervalOn,
+  DOW_LABELS,
   type DutyAssignmentRow,
   dutyDef,
+  firstTentativeDate,
+  formatCompactTime,
   formatDuties,
   formatShortDay,
+  type TimeOffRow,
   todayEastern,
   utcToEastern,
   weekStartOf,
 } from '@pyre/schedule-core';
-import type { WeeklyDutyItem, WeeklyShiftItem } from '@/emails/types';
+import type {
+  WeeklyDutyItem,
+  WeeklyShiftItem,
+  WeeklyTimeOffItem,
+  WeeklyTimeOffWindow,
+} from '@/emails/types';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import {
   getDb,
@@ -36,6 +50,7 @@ import {
 import { sendTemplate } from '@/lib/email/send';
 import { appOrigin } from '@/lib/origins';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { getConfirmedHorizonDays } from '@/lib/schedule/settings';
 import { formatWindowLabel } from '@/lib/schedule/sub';
 
 /** ET hour from which Monday's roundup may go out. */
@@ -43,6 +58,13 @@ const SEND_HOUR = 7;
 
 /** Stop starting new sends with less than this left in the tick's budget. */
 const TIME_FLOOR_MS = 5_000;
+
+/**
+ * How far past the commitment horizon the time-off section looks: the two
+ * weeks that get scheduled next, so the ask to log time off lands while it
+ * can still shape those weeks.
+ */
+const UPCOMING_DAYS = 14;
 
 export interface WeeklyShiftsSummary {
   weekStart: string;
@@ -67,6 +89,65 @@ export function formatWeekLabel(start: string, end: string): string {
     day: 'numeric',
   });
   return `${startLabel}–${endLabel}`;
+}
+
+/** First date in [from, to] on which the entry makes the person busy, or null. */
+function firstDateIn(entry: TimeOffRow, from: string, to: string): string | null {
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    if (busyIntervalOn(entry, date)) return date;
+  }
+  return null;
+}
+
+/** "Fri, Nov 20 – Sun, Nov 22", "Fri, Nov 20", or "Every Tue/Thu (through Sun, Nov 30)". */
+function formatTimeOffWhen(entry: TimeOffRow): string {
+  if (entry.kind === 'range') {
+    const start = entry.start_date ?? '';
+    const end = entry.end_date ?? start;
+    return start === end
+      ? formatShortDay(start)
+      : `${formatShortDay(start)} – ${formatShortDay(end)}`;
+  }
+  const days = [...entry.days_of_week]
+    .sort((a, b) => a - b)
+    .map((d) => DOW_LABELS[d] ?? String(d))
+    .join('/');
+  return entry.end_date
+    ? `Every ${days} (through ${formatShortDay(entry.end_date)})`
+    : `Every ${days}`;
+}
+
+/** One entry as the email shows it. */
+export function timeOffItem(entry: TimeOffRow): WeeklyTimeOffItem {
+  return {
+    whenLabel: formatTimeOffWhen(entry),
+    timeLabel:
+      entry.starts_at && entry.ends_at
+        ? `${formatCompactTime(entry.starts_at)}–${formatCompactTime(entry.ends_at)}`
+        : 'All day',
+    ...(entry.note && { note: entry.note }),
+  };
+}
+
+/**
+ * The entries that put the person out on at least one day of [from, to], in
+ * the order they first apply. A trip that straddles the boundary between two
+ * windows shows in both — each window reads complete on its own.
+ */
+export function timeOffWindow(
+  entries: TimeOffRow[],
+  from: string,
+  to: string
+): WeeklyTimeOffWindow {
+  const items = entries
+    .map((entry) => ({ entry, first: firstDateIn(entry, from, to) }))
+    .filter((row): row is { entry: TimeOffRow; first: string } => row.first != null)
+    .sort(
+      (x, y) =>
+        x.first.localeCompare(y.first) || x.entry.created_at.localeCompare(y.entry.created_at)
+    )
+    .map(({ entry }) => timeOffItem(entry));
+  return { rangeLabel: formatWeekLabel(from, to), items };
 }
 
 export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyShiftsSummary> {
@@ -117,7 +198,7 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
   const shiftIds = shifts.map((s) => s.id);
-  const [assignmentRes, staffRes, subRes] = await Promise.all([
+  const [assignmentRes, staffRes, subRes, timeOffRes, horizonDays] = await Promise.all([
     shiftIds.length > 0
       ? db.from('shift_assignments').select('*').in('shift_id', shiftIds).eq('is_draft', false)
       : Promise.resolve({ data: [], error: null }),
@@ -125,9 +206,16 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
     shiftIds.length > 0
       ? db.from('sub_requests').select('*').in('shift_id', shiftIds).eq('status', 'open')
       : Promise.resolve({ data: [], error: null }),
+    // Every entry, filtered per window below: a recurring rule has no dates to
+    // range-query on, and the table is small.
+    db.from('time_off').select('*'),
+    getConfirmedHorizonDays(),
   ]);
   if (assignmentRes.error) {
     return { ...base, skipped: `assignments-query-failed:${assignmentRes.error.message}` };
+  }
+  if (timeOffRes.error) {
+    return { ...base, skipped: `time-off-query-failed:${timeOffRes.error.message}` };
   }
 
   const assignments = (assignmentRes.data ?? []) as ShiftAssignmentRow[];
@@ -149,9 +237,20 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
   for (const d of [...dutyAssignments].sort((x, y) => x.duty_date.localeCompare(y.duty_date))) {
     dutiesByStaff.set(d.staff_id, [...(dutiesByStaff.get(d.staff_id) ?? []), d]);
   }
+  const timeOffByStaff = new Map<string, TimeOffRow[]>();
+  for (const t of (timeOffRes.data ?? []) as TimeOffRow[]) {
+    timeOffByStaff.set(t.staff_id, [...(timeOffByStaff.get(t.staff_id) ?? []), t]);
+  }
+
+  // The set window runs from this Monday to the last confirmed date; the
+  // upcoming one is the two weeks after that, which get scheduled next.
+  const upcomingStart = firstTentativeDate(today, horizonDays);
+  const confirmedEnd = addDays(upcomingStart, -1);
+  const upcomingEnd = addDays(upcomingStart, UPCOMING_DAYS - 1);
 
   const origin = appOrigin();
   const scheduleUrl = `${origin}/admin/schedule`;
+  const availabilityUrl = `${origin}/admin/schedule/availability`;
   const weekLabel = formatWeekLabel(weekStart, weekEnd);
   const summary: WeeklyShiftsSummary = { ...base };
   const wouldSend: string[] = [];
@@ -159,6 +258,7 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
   for (const person of staff) {
     const mine = byStaff.get(person.id) ?? [];
     const myDuties = dutiesByStaff.get(person.id) ?? [];
+    const myTimeOff = timeOffByStaff.get(person.id) ?? [];
     if (mine.length === 0 && myDuties.length === 0) {
       summary.withoutShifts += 1;
       continue;
@@ -235,6 +335,11 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
           ...(dutyItems.length > 0 && { offShiftDuties: dutyItems }),
           totalHours,
           scheduleUrl,
+          timeOff: {
+            confirmed: timeOffWindow(myTimeOff, weekStart, confirmedEnd),
+            upcoming: timeOffWindow(myTimeOff, upcomingStart, upcomingEnd),
+          },
+          availabilityUrl,
         },
         kind: 'transactional',
         sendKey: `weekly-shifts:${weekStart}:${email}`,

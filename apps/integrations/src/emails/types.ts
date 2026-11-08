@@ -202,6 +202,27 @@ export interface WeeklyDutyItem {
   dayUrl: string;
 }
 
+/** One time-off entry on the Monday roundup, as the person logged it. */
+export interface WeeklyTimeOffItem {
+  /** A trip: "Fri, Nov 20 – Sun, Nov 22" (one day: "Fri, Nov 20"); a weekly rule: "Every Tue/Thu". */
+  whenLabel: string;
+  /** "All day", or the hours they're out, e.g. "9a–12p". */
+  timeLabel: string;
+  /** Their own note on the entry, if any. */
+  note?: string;
+}
+
+/**
+ * The time off that falls in one stretch of the schedule — the window that's
+ * already set, or the weeks about to be scheduled.
+ */
+export interface WeeklyTimeOffWindow {
+  /** The dates the window covers, e.g. "Nov 9–22". */
+  rangeLabel: string;
+  /** Entries that touch the window, in the order they first apply; empty when none logged. */
+  items: WeeklyTimeOffItem[];
+}
+
 export interface WeeklyShiftsProps {
   firstName: string;
   /** e.g. "Aug 17–23" */
@@ -216,6 +237,17 @@ export interface WeeklyShiftsProps {
   /** Total scheduled hours for the week, e.g. "18.5". */
   totalHours: string;
   scheduleUrl: string;
+  /**
+   * Their time off, split at the commitment horizon: the window the schedule
+   * is set for (this week onward), then the two weeks after it, which get
+   * scheduled next — the ask is to log any time off there now.
+   */
+  timeOff: {
+    confirmed: WeeklyTimeOffWindow;
+    upcoming: WeeklyTimeOffWindow;
+  };
+  /** The Availability tab, where they add time off. */
+  availabilityUrl: string;
 }
 
 export interface HoursChangeDecisionProps {

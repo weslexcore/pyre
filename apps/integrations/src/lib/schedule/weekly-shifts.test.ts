@@ -10,8 +10,10 @@ vi.mock('@/lib/schedule/duties', async () => {
   const { DEFAULT_DUTY_CATALOG } = await import('@pyre/schedule-core');
   return { loadDutyCatalog: async () => DEFAULT_DUTY_CATALOG };
 });
+// The built-in horizon: this week plus next are set, the Monday after is tentative.
+vi.mock('@/lib/schedule/settings', () => ({ getConfirmedHorizonDays: async () => 14 }));
 
-const { formatWeekLabel, runWeeklyShiftEmails } = await import('./weekly-shifts');
+const { formatWeekLabel, runWeeklyShiftEmails, timeOffWindow } = await import('./weekly-shifts');
 
 describe('formatWeekLabel', () => {
   it('collapses the month when the week stays inside one', () => {
@@ -72,6 +74,23 @@ const person = (over: Record<string, unknown> = {}) => ({
   display_name: 'Omar',
   email: 'omar@example.com',
   active: true,
+  ...over,
+});
+
+const timeOff = (over: Record<string, unknown> = {}) => ({
+  id: 't-1',
+  staff_id: 'staff-1',
+  kind: 'range',
+  start_date: '2026-08-28',
+  end_date: '2026-08-30',
+  days_of_week: [],
+  starts_at: null,
+  ends_at: null,
+  note: null,
+  is_emergency: false,
+  created_by: 'staff',
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: '2026-08-01T00:00:00Z',
   ...over,
 });
 
@@ -292,6 +311,79 @@ describe('runWeeklyShiftEmails', () => {
     expect(sendTemplate).not.toHaveBeenCalled();
   });
 
+  it('splits time off at the horizon: set weeks, then the two weeks scheduled next', async () => {
+    getDb.mockReturnValue(
+      fakeDb({
+        shifts: [shift()],
+        shift_assignments: [assignment()],
+        staff: [person()],
+        sub_requests: [],
+        time_off: [
+          // Inside the set window (Aug 17–30).
+          timeOff({ note: 'Wedding' }),
+          // Straddles the boundary — listed in both windows.
+          timeOff({ id: 't-2', start_date: '2026-08-30', end_date: '2026-09-01' }),
+          // Only in the upcoming window (Aug 31–Sep 13), with hours.
+          timeOff({
+            id: 't-3',
+            start_date: '2026-09-04',
+            end_date: '2026-09-04',
+            starts_at: '09:00',
+            ends_at: '12:00',
+          }),
+          // Past the upcoming window — not mentioned.
+          timeOff({ id: 't-4', start_date: '2026-09-20', end_date: '2026-09-21' }),
+          // Someone else's.
+          timeOff({
+            id: 't-5',
+            staff_id: 'staff-2',
+            start_date: '2026-08-18',
+            end_date: '2026-08-18',
+          }),
+        ],
+      })
+    );
+
+    await runWeeklyShiftEmails(ctx);
+
+    const { props } = sendTemplate.mock.calls[0][0];
+    expect(props.availabilityUrl).toBe(
+      'https://pyre-integrations.vercel.app/admin/schedule/availability'
+    );
+    expect(props.timeOff.confirmed).toEqual({
+      rangeLabel: 'Aug 17–30',
+      items: [
+        { whenLabel: 'Fri, Aug 28 – Sun, Aug 30', timeLabel: 'All day', note: 'Wedding' },
+        { whenLabel: 'Sun, Aug 30 – Tue, Sep 1', timeLabel: 'All day' },
+      ],
+    });
+    expect(props.timeOff.upcoming).toEqual({
+      rangeLabel: 'Aug 31–Sep 13',
+      items: [
+        { whenLabel: 'Sun, Aug 30 – Tue, Sep 1', timeLabel: 'All day' },
+        { whenLabel: 'Fri, Sep 4', timeLabel: '9a–12p' },
+      ],
+    });
+  });
+
+  it('sends empty time-off windows when nothing is logged, so the ask still goes out', async () => {
+    getDb.mockReturnValue(
+      fakeDb({
+        shifts: [shift()],
+        shift_assignments: [assignment()],
+        staff: [person()],
+        sub_requests: [],
+      })
+    );
+
+    await runWeeklyShiftEmails(ctx);
+
+    expect(sendTemplate.mock.calls[0][0].props.timeOff).toEqual({
+      confirmed: { rangeLabel: 'Aug 17–30', items: [] },
+      upcoming: { rangeLabel: 'Aug 31–Sep 13', items: [] },
+    });
+  });
+
   it('lists off-shift duties, and emails someone who has only those', async () => {
     getDb.mockReturnValue(
       fakeDb({
@@ -319,5 +411,46 @@ describe('runWeeklyShiftEmails', () => {
     ]);
     const omar = sendTemplate.mock.calls.find((c) => c[0].to === 'omar@example.com')?.[0];
     expect(omar.props).not.toHaveProperty('offShiftDuties');
+  });
+});
+
+describe('timeOffWindow', () => {
+  const rule = (over: Record<string, unknown> = {}) =>
+    timeOff({
+      id: 'r-1',
+      kind: 'recurring',
+      start_date: null,
+      end_date: null,
+      days_of_week: [4, 2],
+      starts_at: '09:00',
+      ends_at: '12:00',
+      ...over,
+    }) as never;
+
+  it('shows a weekly rule in every window it reaches, days in week order', () => {
+    const window = timeOffWindow([rule()], '2026-08-17', '2026-08-30');
+    expect(window.items).toEqual([{ whenLabel: 'Every Tue/Thu', timeLabel: '9a–12p' }]);
+  });
+
+  it('names the end of a rule that stops, and drops one that has already stopped', () => {
+    expect(
+      timeOffWindow([rule({ end_date: '2026-08-20' })], '2026-08-17', '2026-08-30').items
+    ).toEqual([{ whenLabel: 'Every Tue/Thu (through Thu, Aug 20)', timeLabel: '9a–12p' }]);
+    expect(
+      timeOffWindow([rule({ end_date: '2026-08-16' })], '2026-08-17', '2026-08-30').items
+    ).toEqual([]);
+  });
+
+  it('orders entries by the first day they apply inside the window', () => {
+    const window = timeOffWindow(
+      [
+        timeOff({ id: 'later', start_date: '2026-08-21', end_date: '2026-08-21' }) as never,
+        // Wednesday rule first applies Aug 19, before the Friday trip.
+        rule({ days_of_week: [3] }),
+      ],
+      '2026-08-17',
+      '2026-08-30'
+    );
+    expect(window.items.map((i) => i.whenLabel)).toEqual(['Every Wed', 'Fri, Aug 21']);
   });
 });

@@ -1,12 +1,21 @@
 import { Button, Hr, Link, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
-import type { WeeklyDutyItem, WeeklyShiftItem, WeeklyShiftsProps } from '../types';
+import type {
+  WeeklyDutyItem,
+  WeeklyShiftItem,
+  WeeklyShiftsProps,
+  WeeklyTimeOffItem,
+  WeeklyTimeOffWindow,
+} from '../types';
 
 // Monday morning to each person with live (non-draft) assignments in the week
 // ahead — their own hours, not the whole board. Every row is a deep link to
 // that shift on /admin/schedule, so "when am I working Thursday?" is one tap
 // from the inbox. Off-shift duties they're down for (fill the carboys
-// Monday) follow the shifts, each a link to its day. Sent by the
+// Monday) follow the shifts, each a link to its day. Their time off closes
+// the email in two windows — the dates the schedule is already set for, then
+// the two weeks that get scheduled next — with a button to the Availability
+// tab so anything missing gets logged before those weeks lock. Sent by the
 // weekly-shifts cron job.
 
 const shiftDay = {
@@ -44,6 +53,26 @@ const shiftLink = {
   textDecoration: 'underline',
 };
 
+// Section lead-ins ("Off-shift duties", a time-off window's dates) — the
+// shift-detail face, letterspaced so they read as labels rather than rows.
+const sectionLabel = {
+  ...shiftDetail,
+  color: COLORS.sky,
+  fontSize: '12px',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase' as const,
+  margin: '0 0 6px',
+};
+
+// The second call to action: outlined, so "See the full schedule" stays the
+// one red button.
+const secondaryButton = {
+  ...button,
+  backgroundColor: 'transparent',
+  border: `1px solid ${COLORS.creme}`,
+};
+
 function ShiftRow({ shift }: { shift: WeeklyShiftItem }) {
   return (
     <>
@@ -58,6 +87,38 @@ function ShiftRow({ shift }: { shift: WeeklyShiftItem }) {
       {shift.subRequested ? (
         <Text style={shiftNote}>Sub requested — yours until someone claims it.</Text>
       ) : null}
+    </>
+  );
+}
+
+function TimeOffRow({ item }: { item: WeeklyTimeOffItem }) {
+  return (
+    <>
+      <Text style={shiftDay}>{item.whenLabel}</Text>
+      <Text style={shiftDetail}>{item.timeLabel}</Text>
+      {item.note ? <Text style={shiftNote}>{item.note}</Text> : null}
+    </>
+  );
+}
+
+function TimeOffWindowBlock({ title, window }: { title: string; window: WeeklyTimeOffWindow }) {
+  return (
+    <>
+      <Text style={sectionLabel}>
+        {title} · {window.rangeLabel}
+      </Text>
+      {window.items.length === 0 ? (
+        <Text style={shiftDetail}>No time off logged.</Text>
+      ) : (
+        window.items.map((item, i) => (
+          <div
+            key={`${item.whenLabel}-${item.timeLabel}`}
+            style={{ margin: i === 0 ? '0 0 10px' : '10px 0' }}
+          >
+            <TimeOffRow item={item} />
+          </div>
+        ))
+      )}
     </>
   );
 }
@@ -82,6 +143,8 @@ export function WeeklyShifts({
   offShiftDuties = [],
   totalHours,
   scheduleUrl,
+  timeOff,
+  availabilityUrl,
 }: WeeklyShiftsProps) {
   const shiftCount = shifts.length;
   const dutyCount = offShiftDuties.length;
@@ -118,7 +181,7 @@ export function WeeklyShifts({
       {dutyCount > 0 && (
         <>
           {shiftCount > 0 && <Hr style={{ borderColor: COLORS.sky, margin: '16px 0' }} />}
-          <Text style={shiftDetail}>Off-shift duties</Text>
+          <Text style={sectionLabel}>Off-shift duties</Text>
           {offShiftDuties.map((duty) => (
             <div key={`${duty.dayLabel}-${duty.dutyLabel}`} style={{ margin: '10px 0' }}>
               <DutyRow duty={duty} />
@@ -135,6 +198,20 @@ export function WeeklyShifts({
         Need a change? Request a sub from the shift on the board and whoever's free that day gets
         asked automatically.
       </Text>
+
+      <Hr style={{ borderColor: COLORS.sky, margin: '4px 0 16px' }} />
+      <Text style={{ ...heading, fontSize: '18px', lineHeight: '26px' }}>Your time off</Text>
+      <div style={{ margin: '0 0 16px' }}>
+        <TimeOffWindowBlock title="Schedule set" window={timeOff.confirmed} />
+      </div>
+      <TimeOffWindowBlock title="Scheduled next" window={timeOff.upcoming} />
+      <Text style={{ ...text, margin: '16px 0' }}>
+        The schedule for {timeOff.upcoming.rangeLabel} gets set next. If you'll be away any of those
+        days and it isn't listed above, add it now so we plan around it.
+      </Text>
+      <Button style={secondaryButton} href={availabilityUrl}>
+        Add time off
+      </Button>
     </EmailLayout>
   );
 }
@@ -178,6 +255,20 @@ WeeklyShifts.PreviewProps = {
     },
   ],
   scheduleUrl: 'https://pyre-integrations.vercel.app/admin/schedule',
+  timeOff: {
+    confirmed: {
+      rangeLabel: 'Aug 17–30',
+      items: [
+        { whenLabel: 'Fri, Aug 28 – Sun, Aug 30', timeLabel: 'All day', note: 'Wedding' },
+        { whenLabel: 'Every Wed', timeLabel: '9a–12p', note: 'Class' },
+      ],
+    },
+    upcoming: {
+      rangeLabel: 'Aug 31–Sep 13',
+      items: [{ whenLabel: 'Every Wed', timeLabel: '9a–12p', note: 'Class' }],
+    },
+  },
+  availabilityUrl: 'https://pyre-integrations.vercel.app/admin/schedule/availability',
 } satisfies WeeklyShiftsProps;
 
 export default WeeklyShifts;
