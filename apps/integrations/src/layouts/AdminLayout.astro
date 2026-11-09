@@ -110,16 +110,16 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
           <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
           <p class="text-white/60">You do not have access to this page.</p>
           <p class="mt-4 font-mono text-xs text-white/40">
-            Signed in as {user?.email || '(no email)'} (id {user?.id ?? 'unknown'})
+            Signed in as {user?.email || '(no email)'}
           </p>
-          <a
-            href="/api/auth/logout"
-            data-astro-prefetch="false"
-            data-astro-reload
-            class="mt-6 inline-block font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
-          >
-            Log out
-          </a>
+          <form method="post" action="/api/auth/logout" data-astro-reload class="mt-6">
+            <button
+              type="submit"
+              class="font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
+            >
+              Log out
+            </button>
+          </form>
         </main>
       ) : (
         <>

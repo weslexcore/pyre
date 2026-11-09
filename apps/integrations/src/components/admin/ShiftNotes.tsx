@@ -14,8 +14,9 @@
 //
 // Each note also carries a triage status — open, to do, resolved — that only
 // admins flip, so a request or piece of feedback gets tracked to completion,
-// and an activity thread: comments, in which an admin responds in context and
-// the author replies back, and an entry for every action on the note — each
+// and an activity thread: comments, which anyone who can see the note may
+// add — an admin responds in context, the author replies back, a teammate
+// chimes in on a shared note — and an entry for every action on the note — each
 // status change, each edit (with what it changed), each time the classifier
 // read it — so the note's history reads in order. That history stays
 // collapsed under a toggle until opened; comments always show. Entries show
@@ -55,6 +56,7 @@ import { readError } from '@/lib/client/api';
 import { primeJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime } from '@/lib/client/format';
 import { optimistic, tempId } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type {
   ShiftNoteAttachmentRow,
   ShiftNoteReplyRow,
@@ -78,6 +80,7 @@ import {
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
 import { noteMentionPeople, SHIFT_NOTE_MENTION_PEOPLE_URL } from '@/lib/shift-notes/mentions';
+import { SHIFT_NOTES_TOPIC, shiftNotesViewerTopic } from '@/lib/shift-notes/realtime';
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { matchesTerm } from '@/lib/sops/search';
@@ -246,6 +249,14 @@ export function ShiftNotes() {
   const [lightbox, setLightbox] = useState<{ noteId: string; index: number } | null>(null);
   const [viewer, setViewer] = useState<Viewer>({ email: '', isAdmin: false });
   const [scope, setScope] = useState<Scope>('shared');
+
+  // Live: a note, reply, edit or status change made by someone else refetches
+  // the log. Shared notes arrive on one channel; admin-only notes on the
+  // admins' channel or the author's own, so nobody hears about a note they
+  // cannot read (lib/shift-notes/realtime).
+  const { reload: reloadLog } = log;
+  useBroadcastTopic(SHIFT_NOTES_TOPIC, () => void reloadLog());
+  useBroadcastTopic(shiftNotesViewerTopic(viewer), () => void reloadLog());
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1333,11 +1344,7 @@ export function ShiftNotes() {
                       <MentionTextarea
                         id={`note-${note.id}-reply`}
                         className={replyTextareaClass}
-                        placeholder={
-                          viewer.isAdmin
-                            ? 'Reply to this note… (@ to mention someone)'
-                            : 'Reply to the admins… (@ to mention someone)'
-                        }
+                        placeholder="Reply to this note… (@ to mention someone)"
                         maxLength={REPLY_BODY_MAX}
                         value={replyDrafts[note.id] ?? ''}
                         onChange={(next) =>

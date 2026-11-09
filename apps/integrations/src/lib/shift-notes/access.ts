@@ -12,12 +12,13 @@
 //   * status — open / todo / resolved, set by admins only (the classifier
 //     also triages notes no admin has yet, server-side: ./triage); the
 //     author sees it.
-//   * activity — the note's thread. The author and the admins may comment
-//     (it is their conversation, shared note or not); an entry is visible to
-//     whoever sees the note, unless it is private, in which case only admins
-//     read it. Editing or deleting a comment is its author or an admin. The
-//     other entries are events the app recorded (status changes, edits,
-//     classifications) and nobody edits or deletes them.
+//   * activity — the note's thread. Whoever can see the note may comment on
+//     it (canReply is canSeeNote: on a shared note, that is everyone who
+//     holds the page); an entry is visible to whoever sees the note, unless
+//     it is private, in which case only admins read it. Editing or deleting
+//     a comment is its author or an admin. The other entries are events the
+//     app recorded (status changes, edits, classifications) and nobody edits
+//     or deletes them.
 //
 // Client-bundle-safe (no db/env imports): the island uses it to decide which
 // controls to draw, and every route re-checks it server-side.
@@ -99,12 +100,12 @@ export function canSetStatus(viewer: NoteViewer): boolean {
 }
 
 /**
- * Replying is the author's conversation with the admins, so it follows the
- * edit rule — on a shared note, everyone else reads the thread but does not
- * write in it.
+ * Whether `viewer` may comment on this note: anyone who can see it. A thread
+ * is open to its readers — on a shared note that is everyone who holds the
+ * page, on an admin-only note its author and the admins.
  */
-export function canReply(note: AuthoredNote, viewer: NoteViewer): boolean {
-  return canEditNote(note, viewer);
+export function canReply(note: VisibleNote, viewer: NoteViewer): boolean {
+  return canSeeNote(note, viewer);
 }
 
 /**

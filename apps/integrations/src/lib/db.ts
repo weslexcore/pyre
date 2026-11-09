@@ -1471,7 +1471,8 @@ export function getDb(): SupabaseClient | null {
   }
 
   client = createClient(url, secretKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    // passkey: auth.admin.passkey lists a person's passkeys (lib/auth/passkey.ts).
+    auth: { persistSession: false, autoRefreshToken: false, experimental: { passkey: true } },
   });
   return client;
 }

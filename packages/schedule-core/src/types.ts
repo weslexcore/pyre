@@ -15,11 +15,17 @@ export interface StaffRow {
 	id: string;
 	display_name: string;
 	/**
-	 * Momence account email — the join key against the OAuth profile, for both
+	 * Login email — the key a dashboard sign-in is matched against, for both
 	 * "whose schedule is this" and "may they use the dashboard". Null until the
-	 * person's account email is confirmed.
+	 * person's email is confirmed.
 	 */
 	email: string | null;
+	/**
+	 * The auth.users row behind their dashboard login (Supabase Auth). Set
+	 * when the person is added with dashboard access, or on first sign-in;
+	 * null for roster-only people.
+	 */
+	user_id: string | null;
 	is_founder: boolean;
 	/**
 	 * May anchor a shift. Anyone without this (and without is_founder) must be

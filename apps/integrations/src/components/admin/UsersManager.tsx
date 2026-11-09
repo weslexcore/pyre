@@ -760,7 +760,7 @@ export function UsersManager() {
     setDrafts(({ [id]: _saved, ...rest }) => rest);
     if (body.momenceMatch === false) {
       setNotice(
-        `No Momence member matched ${body.person.email} — they can only log in if it matches their Momence account email exactly.`
+        `No Momence member matched ${body.person.email}. Sign-in still works; the schedule sync just won't match their Momence shifts until the emails agree.`
       );
     }
   };
@@ -832,7 +832,7 @@ export function UsersManager() {
     if (!body) return null;
     if (body.person.email && !body.momenceMatch) {
       setNotice(
-        `Added ${body.person.display_name} — no Momence member matched ${body.person.email}. They can only log in if it matches their Momence account email exactly.`
+        `Added ${body.person.display_name} — no Momence member matched ${body.person.email}. Sign-in still works; the schedule sync just won't match their Momence shifts until the emails agree.`
       );
     }
     return body.person;
@@ -855,6 +855,7 @@ export function UsersManager() {
     is_admin: fields.roles.isAdmin,
     pages: fields.pages,
     momence_member_id: null,
+    user_id: null,
     added_by: self || null,
     calendar_token: null,
     calendar_payday: false,
@@ -1034,10 +1035,10 @@ export function UsersManager() {
               <input
                 className={`${inputClass} w-64`}
                 type="email"
-                placeholder="momence login email"
+                placeholder="login email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                aria-label="Momence login email"
+                aria-label="Login email"
               />
               <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
                 <input
@@ -1153,11 +1154,11 @@ export function UsersManager() {
                       <input
                         className={`${inputClass} w-64`}
                         type="email"
-                        placeholder="momence login email"
+                        placeholder="login email"
                         value={draft.email}
                         disabled={isSelf}
                         onChange={(e) => setDraft({ email: e.target.value })}
-                        aria-label={`${person.display_name} Momence email`}
+                        aria-label={`${person.display_name} login email`}
                       />
                       <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
                         <input

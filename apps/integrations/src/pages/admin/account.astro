@@ -1,0 +1,12 @@
+---
+// Sign-in methods: a password and passkeys, so someone who cannot reach
+// their inbox can still sign in. Open to anyone with dashboard access (see
+// ACCOUNT_HREF in adminTools); /api/auth/account/* acts only on the session's
+// own user.
+import { AccountSecurity } from '@/components/admin/AccountSecurity';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Sign-in methods" subtitle="Ways to sign in besides the emailed link">
+  <AccountSecurity client:load />
+</AdminLayout>

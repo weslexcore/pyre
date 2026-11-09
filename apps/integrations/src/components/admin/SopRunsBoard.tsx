@@ -13,7 +13,9 @@ import { buttonClass, compactInputClass, compactSelectClass } from '@/components
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { optimistic } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
+import { SOP_RUNS_TOPIC } from '@/lib/sops/realtime';
 import { BackLink } from './BackLink';
 import { type RunEntry, RunsList } from './SopRunsList';
 
@@ -53,7 +55,15 @@ const LIST_URL = '/api/admin/sop-runs?view=list';
 export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
   // Cached across navigations: coming back paints the last log at once and
   // revalidates behind it.
-  const { data, error: loadError, loading, setData } = useCachedJson<RunsResponse>(LIST_URL);
+  const {
+    data,
+    error: loadError,
+    loading,
+    setData,
+    reload,
+  } = useCachedJson<RunsResponse>(LIST_URL);
+  // A run started, finished or closed anywhere: the log re-reads itself.
+  useBroadcastTopic(SOP_RUNS_TOPIC, () => void reload());
   const runs = data?.runs ?? [];
   const names = data?.people ?? {};
   const viewerEmail = data?.viewer ?? '';

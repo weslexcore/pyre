@@ -1,8 +1,10 @@
 // The bell in the admin header: a badge with the unread count, and a
 // popover of the latest unread rows with a link to the full inbox. The
 // count is painted by the server on every page (initialCount), so opening a
-// page costs no extra request; from there a slow poll while the tab is
-// visible keeps it fresh, opening the popover fetches the rows, and the
+// page costs no extra request; from there the person's Realtime channel
+// (lib/client/useRealtimeNotifications) refetches the moment a row of
+// theirs changes, a slow poll while the tab is visible covers a socket that
+// is down, opening the popover fetches the rows, and the
 // NOTIFICATIONS_EVENT the inbox and thread islands fire after they mark
 // rows read updates it in place. The rows go through the shared JSON cache,
 // so the popover reopens on the next page with what it showed on the last
@@ -19,6 +21,7 @@ import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { optimistic } from '@/lib/client/optimistic';
 import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
+import { useRealtimeNotifications } from '@/lib/client/useRealtimeNotifications';
 import type { StaffNotificationRow } from '@/lib/db';
 import { isUnread, NOTIFICATIONS_EVENT } from '@/lib/notifications/types';
 import { NOTIFICATIONS_HREF } from './adminTools';
@@ -116,9 +119,22 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
     return () => document.removeEventListener(NOTIFICATIONS_EVENT, onEvent);
   }, []);
 
+  // Live updates: the person's own Realtime channel says when a row of
+  // theirs changed, and the feed is refetched at once. While that channel is
+  // up the poll below stands down; it is the fallback for a socket that
+  // never connected (a strict network, an old browser) or dropped.
+  const live = useRealtimeNotifications(
+    useCallback(() => {
+      invalidateJson('/api/admin/notifications');
+      void reload();
+    }, [reload])
+  );
+  const liveRef = useRef(live);
+  liveRef.current = live;
+
   useEffect(() => {
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void reload();
+      if (document.visibilityState === 'visible' && !liveRef.current) void reload();
     }, POLL_MS);
     const onVisible = () => {
       if (document.visibilityState === 'visible') void reload();

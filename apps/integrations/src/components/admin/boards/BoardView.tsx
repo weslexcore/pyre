@@ -35,6 +35,7 @@ import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import { formBuilderHref } from '@/lib/boards/forms';
 import { type LinkSummary, summariesById } from '@/lib/boards/links';
 import type { Assignable } from '@/lib/boards/people';
+import { announceBoardChange, boardTopic } from '@/lib/boards/realtime';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import type { LinkedSop } from '@/lib/boards/sops';
@@ -44,6 +45,7 @@ import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import { optimistic, tempId } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import type {
   BoardCardRow,
   BoardColumnRow,
@@ -149,6 +151,12 @@ export function BoardView({ slug }: { slug: string }) {
     loading,
     reload,
   } = useCachedJson<BundleResponse>(bundleUrl(slug));
+  // Live: a card added, moved, edited or commented on from another screen
+  // refetches the board, and tells an open card drawer's feed to refetch too.
+  useBroadcastTopic(boardTopic(slug), () => {
+    void reload();
+    announceBoardChange();
+  });
   // Only the goal's and the settings' forms wait on this: the columns, the
   // cards, and the quick-add stay live while a save is out.
   const [saving, setSaving] = useState(false);

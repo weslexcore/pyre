@@ -52,6 +52,8 @@ export interface StaffPage {
 
 export const MESSAGES_HREF = '/admin/messages';
 export const NOTIFICATIONS_HREF = '/admin/notifications';
+/** Your own sign-in methods (password, passkeys). Linked from your email in the nav. */
+export const ACCOUNT_HREF = '/admin/account';
 
 export const STAFF_PAGES: StaffPage[] = [
   {
@@ -533,6 +535,7 @@ export function canViewPath(access: PageAccess, pathname: string): boolean {
   // shows the cards they hold.
   if (pathname === '/admin' || pathname === '/admin/') return true;
   if (isStaffPagePath(pathname)) return true;
+  if (pathname === ACCOUNT_HREF) return true;
   return ADMIN_TOOLS.some(
     (tool) =>
       canViewPage(access, tool.href) &&

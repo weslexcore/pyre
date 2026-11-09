@@ -36,6 +36,7 @@ import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime } from '@/lib/client/format';
 import { optimistic } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import { timeAgo } from '@/lib/client/relativeTime';
 import { useDebounced } from '@/lib/client/useDebounced';
 import {
@@ -56,6 +57,7 @@ import {
   onFloor,
 } from '@/lib/guests/floor-timing';
 import type { FloorMember, GuestPlan } from '@/lib/guests/plan';
+import { FLOOR_TOPIC } from '@/lib/guests/realtime';
 import { FloorViewPicker } from './FloorViewPicker';
 import { readFloorViewPref, writeFloorViewPref } from './floorViewPref';
 import { FirstVisitBadge, formatDateLabel, formatTimeRange, QuietBadge } from './guestUi';
@@ -313,6 +315,11 @@ export function GuestCheckIns() {
   const [leaving, setLeaving] = useState<Record<string, string | null>>({});
 
   const { reload, setData } = floor;
+  // A check-in, check-out or edit made on another tablet (or recorded by the
+  // Momence webhook) lands here at once. The poll below stays regardless:
+  // the Momence side of the floor — new bookings, cancellations — is not
+  // ours to broadcast.
+  useBroadcastTopic(FLOOR_TOPIC, () => void reload());
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') void reload();

@@ -1,44 +1,38 @@
-// OAuth callback: validate CSRF state, exchange the code for tokens, set the
-// session cookies, and land back on the admin dashboard.
+// The magic link lands here: verify its token hash with Supabase (which sets
+// the session cookies through lib/supabase/server), link the staff row on a
+// first sign-in, and send the person where they were headed. Any failure
+// goes back to the login page with a code it can explain.
 
 import type { APIRoute } from 'astro';
-import { getAndClearOAuthState, setAuthTokens } from '@/lib/auth/cookies';
-import { exchangeCodeForTokens } from '@/lib/auth/momence-oauth';
+import { afterSignIn, loginRedirect, takeReturnUrl } from '@/lib/auth/login';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+export const prerender = false;
 
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
-  const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state');
-  const error = url.searchParams.get('error');
+  const returnUrl = takeReturnUrl(cookies);
+  const fail = (code: string) => redirect(loginRedirect(returnUrl, code), 302);
 
-  if (error) {
-    console.error(
-      '[OAuth Callback] Error from Momence:',
-      error,
-      url.searchParams.get('error_description')
-    );
-    return redirect('/admin?error=auth_failed', 302);
+  // Supabase reports a dead link on the redirect itself (error_code=otp_expired).
+  const errorCode = url.searchParams.get('error_code') ?? url.searchParams.get('error');
+  if (errorCode) {
+    console.warn('[Auth] Callback error:', errorCode, url.searchParams.get('error_description'));
+    return fail(errorCode === 'otp_expired' ? 'link_expired' : 'auth_failed');
   }
 
-  if (!code || !state) {
-    return redirect('/admin?error=invalid_callback', 302);
+  const tokenHash = url.searchParams.get('token_hash');
+  const type = url.searchParams.get('type');
+  if (!tokenHash || type !== 'email') return fail('invalid_callback');
+
+  const supabase = createSupabaseServerClient(cookies);
+  if (!supabase) return fail('auth_failed');
+
+  const { data, error } = await supabase.auth.verifyOtp({ type: 'email', token_hash: tokenHash });
+  if (error || !data.user) {
+    console.warn('[Auth] Link verification failed:', error?.message ?? 'no user');
+    return fail('link_expired');
   }
 
-  const storedState = getAndClearOAuthState(cookies);
-  if (!storedState || storedState.state !== state) {
-    console.error('[OAuth Callback] State mismatch or missing state cookie');
-    return redirect('/admin?error=state_mismatch', 302);
-  }
-
-  try {
-    const tokens = await exchangeCodeForTokens(url, code);
-    setAuthTokens(cookies, tokens);
-
-    const returnUrl = storedState.returnUrl || '/admin';
-    const redirectUrl = new URL(returnUrl, url.origin);
-    redirectUrl.searchParams.set('auth', 'success');
-    return redirect(redirectUrl.toString(), 302);
-  } catch (err) {
-    console.error('[OAuth Callback] Token exchange failed:', err);
-    return redirect('/admin?error=token_exchange_failed', 302);
-  }
+  await afterSignIn(data.user);
+  return redirect(returnUrl, 302);
 };

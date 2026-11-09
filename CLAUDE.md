@@ -165,11 +165,11 @@ All database operations are managed through the Supabase workspace.
 - **Session Types**: Social, Silent, Guided with different pricing and capacity
 - **Slot Management**: Real-time availability tracking via available_slots field
 - **Location-based Pricing**: Different pricing tiers based on location and session type
-- **Admin Detection**: Uses `raw_user_meta_data->>'role' = 'admin'` for admin privileges
+- **Admin Detection**: `public.is_admin()` resolves the signed-in user's `staff` row (by `staff.user_id`, else by the JWT email) and returns its `is_admin`; `public.has_page(text)` checks a page grant the same way
 
 ### RLS (Row Level Security) Implementation
 - **Granular policies** for each table and operation (SELECT, INSERT, UPDATE, DELETE)
-- **Admin detection** via `is_admin()` function checking user metadata
+- **Admin detection** via `is_admin()`, backed by the `staff` table (dashboard access is managed on /admin/users; staff sign in with Supabase Auth magic links)
 - **Public access** to active locations and their offerings
 - **User isolation** for bookings (users can only see/modify their own bookings)
 - **Schedule view** for public display of offerings with location information

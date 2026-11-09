@@ -17,11 +17,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const { session } = await validateSession(context.cookies);
   if (!session.isAuthenticated || !session.user) {
-    // Forward any OAuth error (the auth callback redirects failures to
-    // /admin?error=...) so the login screen can show it.
+    // The login page sends them back here once they have signed in.
     const params = new URLSearchParams({ returnUrl: pathname });
-    const authError = context.url.searchParams.get('error');
-    if (authError) params.set('error', authError);
     return context.redirect(`/?${params.toString()}`, 302);
   }
 

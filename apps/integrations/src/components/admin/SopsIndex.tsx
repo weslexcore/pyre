@@ -27,6 +27,7 @@ import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
 import { optimistic } from '@/lib/client/optimistic';
+import { useBroadcastTopic } from '@/lib/client/realtime';
 import { useLiveReorder } from '@/lib/client/useLiveReorder';
 import type { SopRow } from '@/lib/db';
 import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
@@ -44,6 +45,7 @@ import {
   repositionSop,
 } from '@/lib/sops/order';
 import { sopPrintHref } from '@/lib/sops/print';
+import { SOP_RUNS_TOPIC } from '@/lib/sops/realtime';
 import type { ActiveRun } from '@/lib/sops/runs';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 import type { ShiftSops } from '@/lib/sops/shift-sops';
@@ -249,6 +251,8 @@ export function SopsIndex() {
   // view — runs are shared per document, so someone else's open checklist is
   // the one you walk up to and continue.
   const runsQuery = useCachedJson<ActiveRunsResponse>(ACTIVE_RUNS_URL);
+  // The in-progress strip follows runs starting and finishing anywhere.
+  useBroadcastTopic(SOP_RUNS_TOPIC, () => void runsQuery.reload());
   const activeRuns = useMemo(() => runsQuery.data?.runs ?? [], [runsQuery.data]);
   // The session email, from the runs response, so the strip can put the
   // viewer's own open checklists first and label them as theirs.

@@ -34,6 +34,7 @@ import { buttonClass, compactSelectClass, inputClass } from '@/components/admin/
 import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStampWithYear } from '@/lib/client/format';
+import { useChannel, useRealtimeSession } from '@/lib/client/realtime';
 import type { SopRow, SopVersionRow } from '@/lib/db';
 import {
   clearSopDrafts,
@@ -51,6 +52,7 @@ import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { sopPrintHref } from '@/lib/sops/print';
+import { collectOthers, type SopPresence, sopTopic } from '@/lib/sops/realtime';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
@@ -128,12 +130,42 @@ export function SopDocument({
     onNotice: setNotice,
   });
 
+  // Live: the document's Realtime channel says when a teammate changes the
+  // shared run (refetched at once — the box they ticked ticks here too), and
+  // carries who else has the checklist open and the item they last touched.
+  // This screen announces the same about its viewer, updated on every tap.
+  const [openedAt] = useState(() => new Date().toISOString());
+  const [lastTap, setLastTap] = useState<{ item: number; at: string } | null>(null);
+  const realtime = useRealtimeSession();
+  const announce = useMemo<SopPresence | null>(
+    () =>
+      data && viewerEmail
+        ? {
+            email: viewerEmail,
+            name: personName(viewerEmail, data.people),
+            item: lastTap?.item ?? null,
+            at: lastTap?.at ?? openedAt,
+          }
+        : null,
+    [data, viewerEmail, lastTap, openedAt]
+  );
+  const channel = useChannel<SopPresence>(
+    realtime,
+    data && taskCount > 0 && !data.sop.archived ? sopTopic(data.sop.id) : null,
+    { onChange: run.refresh, announce }
+  );
+  const others = useMemo(
+    () => collectOthers(channel.presence, viewerEmail),
+    [channel.presence, viewerEmail]
+  );
+
   // A tap checks the box, and — for an item that links to another checklist
   // — every item of that one too, so its bar fills (a skip cascades nothing:
   // the linked checklist wasn't done either).
   const onToggle = (items: CheckItems, checked: boolean) => {
     run.toggleCheck(items, checked);
     if (checked) cascadeLinked(items, linked, updateLinked, setError);
+    if (items[0]) setLastTap({ item: items[0].itemIndex, at: new Date().toISOString() });
   };
 
   const [mode, setMode] = useState<'view' | 'edit'>('view');
@@ -776,6 +808,7 @@ export function SopDocument({
                 run={run.runData?.run ?? null}
                 checks={run.runData?.checks ?? []}
                 people={people}
+                others={others}
                 linked={linked}
                 currentVersion={sop.current_version}
                 busy={run.runBusy || run.pending > 0}

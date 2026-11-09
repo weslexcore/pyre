@@ -12,11 +12,19 @@
 // grants every page would be unreachable); and access can't be granted to a
 // row with no email (nobody could log in as them). Rows referenced by assignments or
 // time off are deactivated instead of deleted, so schedule history survives.
+//
+// Logins are Supabase Auth and this table is the allowlist: the sign-in
+// route creates a person's auth user the first time they ask for a link, if
+// their email is on a row with dashboard access (lib/auth/users). Once one
+// exists (staff.user_id), edits here keep it in step — an email or name
+// change is written through, dropping the email or deleting the person
+// removes the login. Best effort: a failure never blocks the staff row.
 
 import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, CAPABILITIES_BY_PAGE, USERS_HREF } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { requirePage } from '@/lib/auth/admin';
+import { removeAuthUser, syncAuthUser } from '@/lib/auth/users';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { dbError, gateMutation, json, sessionEmail } from '@/lib/http/route';
@@ -106,9 +114,9 @@ function isLastPeopleHolder(rows: StaffRow[], row: StaffRow): boolean {
 }
 
 /**
- * Best-effort Momence lookup: people sign in with their Momence account, so
- * the email has to match their Momence login. A miss doesn't block the write
- * — staff logins aren't always host members — but the UI surfaces it.
+ * Best-effort Momence lookup, for the display name and the member id the
+ * schedule sync matches shifts on. A miss doesn't block the write — staff
+ * aren't always host members — but the UI surfaces it.
  */
 async function lookupMember(
   email: string
@@ -202,7 +210,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const pages = parsePages(body.pages, await liveBoardSlugs(db));
   if (pages instanceof Response) return pages;
   if (!email && (isAdmin || pages.length > 0)) {
-    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
+    return json({ error: 'Dashboard access needs a login email' }, 400);
   }
 
   let displayName = String(body.displayName ?? '').trim();
@@ -287,6 +295,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'active'
       | 'momence_member_id'
       | 'pay_rate'
+      | 'user_id'
     >
   > = {};
   let momenceMatch: boolean | undefined;
@@ -361,7 +370,21 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const willHavePages = fields.pages ?? row.pages;
   const willHaveEmail = fields.email !== undefined ? fields.email : row.email;
   if (!willHaveEmail && (willBeAdmin || willHavePages.length > 0)) {
-    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
+    return json({ error: 'Dashboard access needs a login email' }, 400);
+  }
+
+  // Keep an existing login in step with the row: an email or name change is
+  // written through to the auth user, and dropping the email removes it. A
+  // row without a login gets one from the sign-in route on first use. Best
+  // effort — the row is saved either way.
+  if (row.user_id && fields.email === null) {
+    const removed = await removeAuthUser(db, row.user_id);
+    if (removed.ok) fields.user_id = null;
+  } else if (row.user_id && (fields.email !== undefined || fields.display_name !== undefined)) {
+    await syncAuthUser(db, row.user_id, {
+      email: fields.email ?? undefined,
+      displayName: fields.display_name,
+    });
   }
 
   const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
@@ -393,6 +416,10 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (isLastPeopleHolder(rows, row)) {
     return json({ error: 'Someone else needs People access first' }, 400);
   }
+
+  // Their login goes with them, whether the row is deleted or only stripped
+  // of access below (the FK nulls staff.user_id either way).
+  if (row.user_id) await removeAuthUser(db, row.user_id);
 
   const { error } = await db.from('staff').delete().eq('id', id);
 

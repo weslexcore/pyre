@@ -55,6 +55,7 @@ const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
 
 // No rows share this array, so unchanged rows keep the same reference.
 const NO_LINKED: LinkedProgress[] = [];
+const NO_NAMES: string[] = [];
 
 // The per-row Skip / Undo control: quiet next to the box, but a real tap
 // target (staff are on phones).
@@ -166,6 +167,7 @@ const TaskRow = memo(function TaskRow({
   skipped,
   resolvedLabel,
   linked,
+  hereNames,
   locked,
   highlight,
   onSopLink,
@@ -183,6 +185,8 @@ const TaskRow = memo(function TaskRow({
   resolvedLabel: string | null;
   /** Progress of the sub-checklists this item links to (usually none or one). */
   linked: LinkedProgress[];
+  /** Teammates whose last tap was this item (live presence). */
+  hereNames: string[];
   highlight?: string;
   onSopLink?: (slug: string) => void;
   /** The box: complete the item (true) or un-resolve it (false). */
@@ -286,6 +290,11 @@ const TaskRow = memo(function TaskRow({
               {resolvedLabel && (
                 <div className="mt-0.5 font-mono text-[10px] text-white/35">{resolvedLabel}</div>
               )}
+              {hereNames.length > 0 && (
+                <div className="mt-0.5 font-mono text-[10px] text-[var(--pyre-sage)]">
+                  {hereNames.join(', ')} {hereNames.length === 1 ? 'is' : 'are'} here
+                </div>
+              )}
             </div>
           </label>
           {/* Skip is for an item that can't or shouldn't be done this time;
@@ -329,6 +338,7 @@ export function Checklist({
   locked = false,
   outstandingOnly = false,
   highlight,
+  presence,
   frameClassName = DEFAULT_FRAME,
   onSopLink,
   onToggle,
@@ -346,6 +356,8 @@ export function Checklist({
   /** Draw only the items still to do (plus their headings and parent items). */
   outstandingOnly?: boolean;
   highlight?: string;
+  /** Teammates' names by the item each last touched (live presence). */
+  presence?: Map<number, string[]>;
   /** The classes of the box the document sits in. */
   frameClassName?: string;
   onSopLink?: (slug: string) => void;
@@ -475,6 +487,7 @@ export function Checklist({
               skipped={skipped}
               locked={locked}
               linked={linkedByTask.get(task.index) ?? NO_LINKED}
+              hereNames={presence?.get(task.index) ?? NO_NAMES}
               resolvedLabel={mark ? markLabel(mark, people) : null}
               highlight={highlight}
               onSopLink={onSopLink}
