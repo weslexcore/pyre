@@ -62,6 +62,15 @@ rp_origins = ["http://localhost:4321"]
 enabled = true
 port = 54324
 
+# The global upload ceiling every bucket's own file_size_limit sits under.
+# SOP video walkthroughs (sop_media migration) go up to 500 MB, so this has
+# to be at least that; it is set the same locally and, through `supabase
+# config push`, on the production project. Above 50 MB needs the Pro plan:
+# on Free the push is refused and uploads stop at 50 MB.
+[storage]
+enabled = true
+file_size_limit = "500MiB"
+
 # The bell's live inbox channel (staff_notifications_realtime migration).
 [realtime]
 enabled = true
