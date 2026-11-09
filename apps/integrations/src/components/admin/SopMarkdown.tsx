@@ -23,6 +23,9 @@
 // `mentions` is the name directory for the @-mentions the text may carry
 // (messages, replies, notes, comments): each `@<email>` it has a name for is
 // drawn as a chip reading "@Name" (lib/mentions, components/admin/Mentions).
+//
+// An image whose target is a library video (`![Title](/api/admin/sop-videos/<id>)`,
+// see lib/sops/videos) is drawn as a player instead (SopVideoPlayer).
 import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -30,7 +33,9 @@ import { markdownWithMentions, mentionFromHref } from '@/lib/mentions';
 import { sopSlugFromHref } from '@/lib/sops/links';
 import type { PeopleNames } from '@/lib/sops/names';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import { parseSopVideoRef } from '@/lib/sops/videos';
 import { MentionChip } from './Mentions';
+import { SopVideoPlayer } from './SopVideoPlayer';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
 
@@ -286,6 +291,20 @@ export const SopMarkdown = memo(function SopMarkdown({
           td: ({ children }) => (
             <td className="border border-white/10 px-2 py-1 align-top">{hl(children)}</td>
           ),
+          img: ({ src, alt }) => {
+            const video = typeof src === 'string' ? parseSopVideoRef(src) : null;
+            if (video) {
+              return <SopVideoPlayer id={video.id} title={alt} start={video.start} />;
+            }
+            return (
+              <img
+                src={typeof src === 'string' ? src : undefined}
+                alt={alt ?? ''}
+                loading="lazy"
+                className="my-3 inline-block max-w-full rounded border border-white/10"
+              />
+            );
+          },
           hr: () => <hr className="my-6 border-white/10" />,
           strong: ({ children }) => (
             <strong className="font-semibold text-[var(--pyre-creme)]">{hl(children)}</strong>
