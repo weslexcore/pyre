@@ -24,17 +24,20 @@
 // (messages, replies, notes, comments): each `@<email>` it has a name for is
 // drawn as a chip reading "@Name" (lib/mentions, components/admin/Mentions).
 //
-// An image whose target is a library video (`![Title](/api/admin/sop-videos/<id>)`,
-// see lib/sops/videos) is drawn as a player instead (SopVideoPlayer).
+// Library media (see lib/sops/media) is drawn by its own components: an
+// image reference to `/api/admin/sop-images/<id>` as SopImage (tap to open full
+// size) and one to `/api/admin/sop-videos/<id>` as a player (SopVideoPlayer).
+// Any other image stays a plain image.
 import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { markdownWithMentions, mentionFromHref } from '@/lib/mentions';
 import { sopSlugFromHref } from '@/lib/sops/links';
+import { parseSopMediaRef } from '@/lib/sops/media';
 import type { PeopleNames } from '@/lib/sops/names';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
-import { parseSopVideoRef } from '@/lib/sops/videos';
 import { MentionChip } from './Mentions';
+import { SopImage } from './SopImage';
 import { SopVideoPlayer } from './SopVideoPlayer';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
@@ -292,10 +295,11 @@ export const SopMarkdown = memo(function SopMarkdown({
             <td className="border border-white/10 px-2 py-1 align-top">{hl(children)}</td>
           ),
           img: ({ src, alt }) => {
-            const video = typeof src === 'string' ? parseSopVideoRef(src) : null;
-            if (video) {
-              return <SopVideoPlayer id={video.id} title={alt} start={video.start} />;
+            const media = typeof src === 'string' ? parseSopMediaRef(src) : null;
+            if (media?.kind === 'video') {
+              return <SopVideoPlayer id={media.id} title={alt} start={media.start} />;
             }
+            if (media?.kind === 'image') return <SopImage id={media.id} alt={alt} />;
             return (
               <img
                 src={typeof src === 'string' ? src : undefined}

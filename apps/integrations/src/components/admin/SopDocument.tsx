@@ -49,12 +49,12 @@ import { diffSummary } from '@/lib/sops/diff';
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import { EVERYONE_LABEL } from '@/lib/sops/levels';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
+import { insertBlock } from '@/lib/sops/media';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { sopPrintHref } from '@/lib/sops/print';
 import { collectOthers, type SopPresence, sopTopic } from '@/lib/sops/realtime';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
-import { insertBlock } from '@/lib/sops/videos';
 import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkedRow, linkedChipClass } from './LinkedRow';
@@ -65,9 +65,9 @@ import { SopAccessPicker, withAdmins } from './SopAccessPicker';
 import { SopAssist } from './SopAssist';
 import { SopDiff } from './SopDiff';
 import { SopMarkdown } from './SopMarkdown';
+import { SopMediaLibrary } from './SopMediaLibrary';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
-import { SopVideoLibrary } from './SopVideoLibrary';
 import { useSopRun } from './useSopRun';
 
 type DocResponse = SopDocumentPayload;
@@ -217,8 +217,8 @@ export function SopDocument({
   const [draftContent, setDraftContent] = useState('');
   const [draftNote, setDraftNote] = useState('');
   const [preview, setPreview] = useState(false);
-  // The video library (admins only), and where in the text an insert lands.
-  const [showVideos, setShowVideos] = useState(false);
+  // The media library (admins only), and where in the text an insert lands.
+  const [showMedia, setShowMedia] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const editorCaret = useRef<number | null>(null);
   // The writing assistant panel, and whether it opened to review right away.
@@ -884,10 +884,10 @@ export function SopDocument({
                   editorCaret.current = preview
                     ? null
                     : (editorRef.current?.selectionStart ?? null);
-                  setShowVideos(true);
+                  setShowMedia(true);
                 }}
               >
-                Videos
+                Media
               </button>
             )}
             {data.assistEnabled && (
@@ -905,7 +905,7 @@ export function SopDocument({
             <span className="ml-auto font-mono text-[10px] text-white/40">
               Markdown — “- [ ]” for checklist items, “- [!]” for one that must be checked and can’t
               be skipped · type [name](/ to pick a page or SOP to link
-              {isAdmin && ' · Videos to embed a walkthrough'}
+              {isAdmin && ' · Media to embed an image or video'}
             </span>
           </div>
           {preview ? (
@@ -961,12 +961,12 @@ export function SopDocument({
         />
       )}
 
-      {showVideos && (
-        <SopVideoLibrary
-          onClose={() => setShowVideos(false)}
+      {showMedia && (
+        <SopMediaLibrary
+          onClose={() => setShowMedia(false)}
           onInsert={(markdown) => {
             setDraftContent((content) => insertBlock(content, markdown, editorCaret.current));
-            setShowVideos(false);
+            setShowMedia(false);
             setPreview(false);
           }}
         />

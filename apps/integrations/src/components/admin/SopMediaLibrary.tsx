@@ -1,26 +1,38 @@
-// The SOP video library, opened from the SOP editor's Videos button (admins
-// only). Lists every walkthrough already uploaded — with a preview, its size,
-// and the documents that embed it — and uploads new ones. Insert drops the
-// embed markdown (`![Title](/api/admin/sop-videos/<id>)`, see lib/sops/videos)
-// into the document at the caret; the editor owns where that is.
+// The SOP media library, opened from the SOP editor's Media button (admins
+// only). Lists every image and video walkthrough already uploaded, with a
+// preview, its size, and the documents that embed it, and uploads new ones.
+// Insert drops the embed markdown (`![Title](/api/admin/sop-images/<id>)` or
+// `…/sop-videos/<id>`, see lib/sops/media) into the document at the caret;
+// the editor owns where that is.
 //
 // Uploads go straight from the browser to storage on a signed URL the route
 // hands out (POST start), with a progress bar, then the route confirms the
-// file landed (POST complete). See /api/admin/sop-videos.
+// file landed (POST complete). See /api/admin/sop-media. Large phone photos
+// are shrunk first (downscaleImage), the same as every other photo upload in
+// the dashboard. Screenshots (PNG) are left alone so their text stays sharp.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, modalPanelClass } from '@/components/admin/Modal';
 import { buttonClass, compactInputClass, goldButtonClass } from '@/components/admin/ui';
-import { formatBytes } from '@/lib/media/attachments';
+import { downscaleImage, formatBytes } from '@/lib/media/attachments';
 import {
-  checkSopVideoFile,
+  checkSopMediaFile,
   normalizeMime,
-  SOP_VIDEO_ACCEPT,
-  SOP_VIDEO_ROUTE,
-  type SopVideo,
-  sopVideoMarkdown,
-  sopVideoSrc,
+  SOP_MEDIA_ACCEPT,
+  SOP_MEDIA_ROUTE,
+  type SopMedia,
+  type SopMediaKind,
+  sopMediaMarkdown,
+  sopMediaSrc,
   titleFromFileName,
-} from '@/lib/sops/videos';
+} from '@/lib/sops/media';
+
+type Filter = 'all' | SopMediaKind;
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'image', label: 'Images' },
+  { value: 'video', label: 'Videos' },
+];
 
 interface Upload {
   fileName: string;
@@ -73,7 +85,14 @@ function putToStorage(url: string, file: File, onProgress: (fraction: number) =>
   });
 }
 
-export function SopVideoLibrary({
+/** Phone photos get shrunk before upload; screenshots and GIFs go as they are. */
+async function prepare(file: File): Promise<File> {
+  const mime = normalizeMime(file.type);
+  if (mime === 'image/jpeg' || mime === 'image/webp') return downscaleImage(file);
+  return file;
+}
+
+export function SopMediaLibrary({
   onInsert,
   onClose,
 }: {
@@ -83,9 +102,10 @@ export function SopVideoLibrary({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [videos, setVideos] = useState<SopVideo[] | null>(null);
+  const [media, setMedia] = useState<SopMedia[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [upload, setUpload] = useState<Upload | null>(null);
+  const [kindFilter, setKindFilter] = useState<Filter>('all');
   const [filter, setFilter] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; title: string } | null>(null);
@@ -95,12 +115,12 @@ export function SopVideoLibrary({
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const res = await fetch(SOP_VIDEO_ROUTE);
+      const res = await fetch(SOP_MEDIA_ROUTE);
       if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as { videos: SopVideo[] };
-      setVideos(body.videos);
+      const body = (await res.json()) as { media: SopMedia[] };
+      setMedia(body.media);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Could not load the videos');
+      setLoadError(err instanceof Error ? err.message : 'Could not load the library');
     }
   }, []);
 
@@ -110,15 +130,16 @@ export function SopVideoLibrary({
 
   const uploading = upload !== null && upload.error === null;
 
-  async function startUpload(file: File) {
-    const problem = checkSopVideoFile(file);
+  async function startUpload(picked: File) {
+    const problem = checkSopMediaFile(picked);
     if (problem) {
-      setUpload({ fileName: file.name, progress: 0, error: problem });
+      setUpload({ fileName: picked.name, progress: 0, error: problem });
       return;
     }
-    setUpload({ fileName: file.name, progress: 0, error: null });
+    setUpload({ fileName: picked.name, progress: 0, error: null });
     try {
-      const start = await fetch(SOP_VIDEO_ROUTE, {
+      const file = await prepare(picked);
+      const start = await fetch(SOP_MEDIA_ROUTE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,7 +147,7 @@ export function SopVideoLibrary({
           fileName: file.name,
           mimeType: normalizeMime(file.type),
           sizeBytes: file.size,
-          title: titleFromFileName(file.name),
+          title: titleFromFileName(picked.name),
         }),
       });
       if (!start.ok) throw new Error(await readError(start));
@@ -136,77 +157,82 @@ export function SopVideoLibrary({
         setUpload((u) => (u ? { ...u, progress } : u))
       );
 
-      const done = await fetch(SOP_VIDEO_ROUTE, {
+      const done = await fetch(SOP_MEDIA_ROUTE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'complete', id }),
       });
       if (!done.ok) throw new Error(await readError(done));
-      const { video } = (await done.json()) as { video: SopVideo };
+      const { media: added } = (await done.json()) as { media: SopMedia };
 
-      setVideos((list) => [video, ...(list ?? []).filter((v) => v.id !== video.id)]);
+      setMedia((list) => [added, ...(list ?? []).filter((m) => m.id !== added.id)]);
       setUpload(null);
-      // A fresh upload almost always gets a better name than its file had.
-      setEditing({ id: video.id, title: video.title });
+      // Make sure the new file is visible, and prompt for a better name than
+      // the file had: it becomes the alt text and the video caption.
+      if (kindFilter !== 'all' && kindFilter !== added.kind) setKindFilter('all');
+      setEditing({ id: added.id, title: added.title });
     } catch (err) {
       setUpload((u) => ({
-        fileName: u?.fileName ?? file.name,
+        fileName: u?.fileName ?? picked.name,
         progress: 0,
         error: err instanceof Error ? err.message : 'Upload failed',
       }));
     }
   }
 
-  async function rename(id: string, title: string) {
+  async function rename(item: SopMedia, title: string) {
     const trimmed = title.trim();
     if (!trimmed) return;
-    setBusyId(id);
+    setBusyId(item.id);
     setRowError(null);
     try {
-      const res = await fetch(`${SOP_VIDEO_ROUTE}/${id}`, {
+      const res = await fetch(sopMediaSrc(item), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: trimmed }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const { video } = (await res.json()) as { video: SopVideo };
-      setVideos((list) => (list ?? []).map((v) => (v.id === id ? video : v)));
+      const { media: renamed } = (await res.json()) as { media: SopMedia };
+      setMedia((list) => (list ?? []).map((m) => (m.id === item.id ? renamed : m)));
       setEditing(null);
     } catch (err) {
-      setRowError({ id, message: err instanceof Error ? err.message : 'Rename failed' });
+      setRowError({ id: item.id, message: err instanceof Error ? err.message : 'Rename failed' });
     } finally {
       setBusyId(null);
     }
   }
 
-  async function remove(video: SopVideo) {
+  async function remove(item: SopMedia) {
+    const noun = item.kind === 'image' ? 'image' : 'video';
     const usedNote =
-      video.used_in.length > 0
-        ? `\n\nIt is still embedded in: ${video.used_in.map((s) => s.title).join(', ')}. Those players will stop working.`
+      item.used_in.length > 0
+        ? `\n\nIt is still embedded in: ${item.used_in.map((s) => s.title).join(', ')}. The ${noun} will disappear from those SOPs.`
         : '';
-    if (!window.confirm(`Delete “${video.title}” from the library?${usedNote}`)) return;
-    setBusyId(video.id);
+    if (!window.confirm(`Delete “${item.title}” from the library?${usedNote}`)) return;
+    setBusyId(item.id);
     setRowError(null);
     try {
-      const force = video.used_in.length > 0 ? '?force=1' : '';
-      const res = await fetch(`${SOP_VIDEO_ROUTE}/${video.id}${force}`, { method: 'DELETE' });
+      const force = item.used_in.length > 0 ? '?force=1' : '';
+      const res = await fetch(`${sopMediaSrc(item)}${force}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readError(res));
-      setVideos((list) => (list ?? []).filter((v) => v.id !== video.id));
+      setMedia((list) => (list ?? []).filter((m) => m.id !== item.id));
     } catch (err) {
-      setRowError({ id: video.id, message: err instanceof Error ? err.message : 'Delete failed' });
+      setRowError({ id: item.id, message: err instanceof Error ? err.message : 'Delete failed' });
     } finally {
       setBusyId(null);
     }
   }
 
   const term = filter.trim().toLowerCase();
-  const shown = (videos ?? []).filter(
-    (v) => !term || v.title.toLowerCase().includes(term) || v.file_name.toLowerCase().includes(term)
+  const shown = (media ?? []).filter(
+    (m) =>
+      (kindFilter === 'all' || m.kind === kindFilter) &&
+      (!term || m.title.toLowerCase().includes(term) || m.file_name.toLowerCase().includes(term))
   );
 
   return (
     <Modal
-      labelledBy="sop-video-library-title"
+      labelledBy="sop-media-library-title"
       onClose={onClose}
       initialFocus={closeRef}
       // Don't lose a running upload to a stray Escape.
@@ -215,10 +241,10 @@ export function SopVideoLibrary({
     >
       <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
         <h2
-          id="sop-video-library-title"
+          id="sop-media-library-title"
           className="text-base font-semibold text-[var(--pyre-creme)]"
         >
-          Video library
+          Media library
         </h2>
         <button
           ref={closeRef}
@@ -239,12 +265,12 @@ export function SopVideoLibrary({
             disabled={uploading}
             onClick={() => fileRef.current?.click()}
           >
-            Upload video
+            Upload image or video
           </button>
           <input
             ref={fileRef}
             type="file"
-            accept={SOP_VIDEO_ACCEPT}
+            accept={SOP_MEDIA_ACCEPT}
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -252,18 +278,33 @@ export function SopVideoLibrary({
               if (file) void startUpload(file);
             }}
           />
+          <fieldset className="flex gap-1">
+            <legend className="sr-only">Show</legend>
+            {FILTERS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={kindFilter === option.value}
+                className={`${buttonClass} ${kindFilter === option.value ? 'border-white/40 text-white' : ''}`}
+                onClick={() => setKindFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </fieldset>
           <input
             type="search"
             className={`${compactInputClass} min-w-40 flex-1`}
-            placeholder="Filter videos"
-            aria-label="Filter videos"
+            placeholder="Filter by name"
+            aria-label="Filter by name"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
         <p className="font-mono text-[10px] text-white/40">
-          MP4, WebM or MOV, up to 500 MB. Stored in Pyre’s own storage — nothing is shared publicly.
-          Insert adds the video at the cursor; add #t=1:30 to the link to start partway through.
+          Images: JPEG, PNG, WebP or GIF, up to 20 MB. Videos: MP4, WebM or MOV, up to 500 MB.
+          Stored in Pyre’s own storage — nothing is shared publicly. Insert adds it at the cursor;
+          add #t=1:30 to a video link to start partway through.
         </p>
         {upload && (
           <div className="rounded border border-white/10 bg-white/5 px-3 py-2 text-xs">
@@ -314,33 +355,36 @@ export function SopVideoLibrary({
               Retry
             </button>
           </div>
-        ) : videos === null ? (
+        ) : media === null ? (
           <p className="text-sm text-white/50">Loading…</p>
         ) : shown.length === 0 ? (
           <p className="text-sm text-white/50">
-            {videos.length === 0
-              ? 'No videos yet. Upload a walkthrough to embed it in this SOP.'
-              : 'No videos match.'}
+            {media.length === 0
+              ? 'Nothing here yet. Upload a photo or a walkthrough to embed it in this SOP.'
+              : 'Nothing matches.'}
           </p>
         ) : (
           <ul className="space-y-3">
-            {shown.map((video) => (
-              <li key={video.id} className="rounded border border-white/10 bg-white/5 p-3">
-                {editing?.id === video.id ? (
+            {shown.map((item) => (
+              <li key={item.id} className="rounded border border-white/10 bg-white/5 p-3">
+                {editing?.id === item.id ? (
                   <form
                     className="flex flex-wrap items-center gap-2"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      void rename(video.id, editing.title);
+                      void rename(item, editing.title);
                     }}
                   >
                     <input
                       className={`${compactInputClass} min-w-48 flex-1`}
-                      aria-label="Video title"
+                      aria-label={item.kind === 'image' ? 'Image description' : 'Video title'}
+                      placeholder={
+                        item.kind === 'image' ? 'What the image shows' : 'What the video shows'
+                      }
                       value={editing.title}
                       maxLength={200}
-                      disabled={busyId === video.id}
-                      onChange={(e) => setEditing({ id: video.id, title: e.target.value })}
+                      disabled={busyId === item.id}
+                      onChange={(e) => setEditing({ id: item.id, title: e.target.value })}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') {
                           e.stopPropagation();
@@ -351,7 +395,7 @@ export function SopVideoLibrary({
                     <button
                       type="submit"
                       className={goldButtonClass}
-                      disabled={busyId === video.id || !editing.title.trim()}
+                      disabled={busyId === item.id || !editing.title.trim()}
                     >
                       Save
                     </button>
@@ -360,68 +404,88 @@ export function SopVideoLibrary({
                     </button>
                   </form>
                 ) : (
-                  <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex flex-wrap items-start gap-3">
+                    {item.kind === 'image' && (
+                      <img
+                        src={sopMediaSrc(item)}
+                        alt=""
+                        loading="lazy"
+                        className="h-14 w-20 shrink-0 rounded border border-white/10 bg-black object-cover"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-[var(--pyre-creme)]">{video.title}</p>
+                      <p className="truncate text-sm text-[var(--pyre-creme)]">
+                        <span className="mr-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                          {item.kind}
+                        </span>
+                        {item.title}
+                      </p>
                       <p className="truncate font-mono text-[10px] text-white/40">
-                        {formatBytes(video.size_bytes)} · {video.file_name} ·{' '}
-                        {new Date(video.created_at).toLocaleDateString()}
+                        {formatBytes(item.size_bytes)} · {item.file_name} ·{' '}
+                        {new Date(item.created_at).toLocaleDateString()}
                       </p>
                       <p className="mt-0.5 text-[11px] text-white/50">
-                        {video.used_in.length === 0
+                        {item.used_in.length === 0
                           ? 'Not used in any SOP yet'
-                          : `Used in ${video.used_in.map((s) => s.title).join(', ')}`}
+                          : `Used in ${item.used_in.map((s) => s.title).join(', ')}`}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
                         className={goldButtonClass}
-                        onClick={() => onInsert(sopVideoMarkdown(video))}
+                        onClick={() => onInsert(sopMediaMarkdown(item))}
                       >
                         Insert
                       </button>
                       <button
                         type="button"
                         className={buttonClass}
-                        aria-expanded={previewId === video.id}
-                        onClick={() => setPreviewId((id) => (id === video.id ? null : video.id))}
+                        aria-expanded={previewId === item.id}
+                        onClick={() => setPreviewId((id) => (id === item.id ? null : item.id))}
                       >
-                        {previewId === video.id ? 'Hide' : 'Preview'}
+                        {previewId === item.id ? 'Hide' : 'Preview'}
                       </button>
                       <button
                         type="button"
                         className={buttonClass}
-                        onClick={() => setEditing({ id: video.id, title: video.title })}
+                        onClick={() => setEditing({ id: item.id, title: item.title })}
                       >
                         Rename
                       </button>
                       <button
                         type="button"
                         className={buttonClass}
-                        disabled={busyId === video.id}
-                        onClick={() => void remove(video)}
+                        disabled={busyId === item.id}
+                        onClick={() => void remove(item)}
                       >
                         Delete
                       </button>
                     </div>
                   </div>
                 )}
-                {rowError?.id === video.id && (
+                {rowError?.id === item.id && (
                   <p role="alert" className="mt-2 text-xs text-red-300">
                     {rowError.message}
                   </p>
                 )}
-                {previewId === video.id && (
-                  // biome-ignore lint/a11y/useMediaCaption: staff walkthroughs carry no caption track
-                  <video
-                    src={sopVideoSrc(video.id)}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="mt-3 block aspect-video w-full rounded bg-black"
-                  />
-                )}
+                {previewId === item.id &&
+                  (item.kind === 'image' ? (
+                    <img
+                      src={sopMediaSrc(item)}
+                      alt={item.title}
+                      className="mt-3 block max-h-[50vh] max-w-full rounded border border-white/10"
+                    />
+                  ) : (
+                    // biome-ignore lint/a11y/useMediaCaption: staff walkthroughs carry no caption track
+                    <video
+                      src={sopMediaSrc(item)}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="mt-3 block aspect-video w-full rounded bg-black"
+                    />
+                  ))}
               </li>
             ))}
           </ul>
