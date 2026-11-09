@@ -10,10 +10,9 @@
 // request made before the switch flipped must still be resolvable.
 
 import { availabilityFor, timeToMinutes, todayEastern } from '@pyre/schedule-core';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
-import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import {
   getDb,
   type ShiftAssignmentRow,
@@ -26,9 +25,11 @@ import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { dbError, json, readJsonBody } from '@/lib/http/route';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
+import { selfStaff } from '@/lib/schedule/self-staff';
 import { getScheduleSettings } from '@/lib/schedule/settings';
 import {
   claimSubRequest,
+  declinePendingOffersForSub,
   formatDateLabel,
   formatWindowLabel,
   listAdminRecipients,
@@ -36,16 +37,6 @@ import {
 import { createSubClaimToken } from '@/lib/schedule/sub-token';
 
 export const prerender = false;
-
-/** The staff row matching the caller's login email, or null. */
-async function selfStaff(db: SupabaseClient, gate: AdminGate): Promise<StaffRow | null> {
-  const email = (gate.user.email ?? '').toLowerCase();
-  if (!email) return null;
-
-  const { data } = await db.from('staff').select('*');
-  const rows = (data ?? []) as StaffRow[];
-  return rows.find((s) => (s.email ?? '').toLowerCase() === email) ?? null;
-}
 
 /** Claim links outlive the shift date by a couple of days; the claim path
  * re-validates everything anyway, so expiry is just a hygiene backstop. */
@@ -369,8 +360,10 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (cancelError) return dbError(cancelError);
   if (!cancelled) return json({ error: 'Someone just took this shift' }, 409);
 
-  // The blackout came in with the request, so it leaves with it too.
+  // The blackout came in with the request, so it leaves with it too, and any
+  // swap offers waiting on the requester have nothing left to answer.
   if (sub.time_off_id) await db.from('time_off').delete().eq('id', sub.time_off_id);
+  await declinePendingOffersForSub(db, sub.id);
 
   const { data: shift } = await db
     .from('shifts')

@@ -17,6 +17,8 @@ import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
+import { SubSwapAcceptedNotice } from './templates/SubSwapAcceptedNotice';
+import { SubSwapOfferNotice } from './templates/SubSwapOfferNotice';
 import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
@@ -83,6 +85,15 @@ export const EMAIL_TEMPLATES: Registry = {
   'sub-claimed-notice': {
     subject: (p) => `${p.takerName} is covering ${p.shiftLabel} on ${p.dateLabel}`,
     Component: SubClaimedNotice,
+  },
+  'sub-swap-offer-notice': {
+    subject: (p) => `${p.offererName} offered to swap shifts: ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: SubSwapOfferNotice,
+  },
+  'sub-swap-accepted-notice': {
+    subject: (p) =>
+      `${p.offererName} and ${p.requesterName} swapped: ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: SubSwapAcceptedNotice,
   },
   'weekly-shifts': {
     subject: (p) => `Your shifts this week — ${p.weekLabel}`,

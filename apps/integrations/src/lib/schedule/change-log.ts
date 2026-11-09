@@ -25,7 +25,9 @@ export type ChangeEntityType =
   /** Who does an off-shift duty on a day (duty_assignments). */
   | 'duty_assignment'
   /** Who is trained on a duty (staff_duty_training). */
-  | 'duty_training';
+  | 'duty_training'
+  /** A teammate's offer to swap shifts with someone who asked for a sub. */
+  | 'swap_offer';
 
 export type ChangeAction =
   | 'create'

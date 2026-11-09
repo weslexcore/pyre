@@ -31,6 +31,21 @@ export async function listAdminRecipients(): Promise<string[]> {
   return adminEmails((await listStaff()) ?? []);
 }
 
+/**
+ * Close out the pending swap offers on a sub request that just resolved
+ * another way — taken outright, or cancelled. Best-effort: the sub is already
+ * settled, so a failure here only leaves stale offers the board hides anyway
+ * (it shows offers on open subs only).
+ */
+export async function declinePendingOffersForSub(db: SupabaseClient, subId: string): Promise<void> {
+  const { error } = await db
+    .from('sub_swap_offers')
+    .update({ status: 'declined', decided_at: new Date().toISOString() })
+    .eq('sub_request_id', subId)
+    .eq('status', 'pending');
+  if (error) console.warn('[shift-sub] declining swap offers failed:', error.message);
+}
+
 export type ClaimOutcome =
   | { outcome: 'claimed'; sub: SubRequestRow; shift: ShiftRow }
   | { outcome: 'already-claimed'; byName: string | null }
@@ -168,6 +183,9 @@ export async function claimSubRequest(
     return { outcome: 'error', message: insertError.message };
   }
   const assignment = insertedRow as ShiftAssignmentRow;
+
+  // Anyone who offered a swap instead lost the race to a plain take.
+  await declinePendingOffersForSub(db, sub.id);
 
   const requesterName = (await nameOf(db, sub.requester_staff_id)) ?? 'Unknown staff';
   const claimerName = (await nameOf(db, claimerId)) ?? 'Unknown staff';

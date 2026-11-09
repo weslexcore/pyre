@@ -172,6 +172,44 @@ export interface SubClaimedNoticeProps {
   untrainedDuties?: string;
 }
 
+/** To the requester when a teammate offers to swap shifts instead of just taking theirs. */
+export interface SubSwapOfferNoticeProps {
+  /** The recipient — the person who asked for the sub. */
+  firstName: string;
+  offererName: string;
+  /** The requested shift (the one the offerer would take). */
+  shiftLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  /** The offerer's shift (the one the requester would take). */
+  offeredShiftLabel: string;
+  offeredDateLabel: string;
+  offeredTimeLabel: string;
+  /** The offerer's message, if they left one. */
+  note?: string | null;
+  /** The board, where Accept / Decline live. */
+  scheduleUrl: string;
+}
+
+/** To the admins and the offerer once a swap is accepted — both sides already moved. */
+export interface SubSwapAcceptedNoticeProps {
+  offererName: string;
+  requesterName: string;
+  /** The requested shift (now the offerer's). */
+  shiftLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  /** The offered shift (now the requester's). */
+  offeredShiftLabel: string;
+  offeredDateLabel: string;
+  offeredTimeLabel: string;
+  scheduleUrl: string;
+  /** Duties on the requested shift the offerer isn't trained on — left unassigned. */
+  untrainedDuties?: string;
+  /** Duties on the offered shift the requester isn't trained on — left unassigned. */
+  untrainedOfferedDuties?: string;
+}
+
 /** One shift on the Monday roundup, from the recipient's point of view. */
 export interface WeeklyShiftItem {
   /** e.g. "Mon, Aug 17" */
@@ -406,6 +444,8 @@ export interface EmailPropsByTemplate {
   'sub-request-notice': SubRequestNoticeProps;
   'sub-open-notice': SubOpenNoticeProps;
   'sub-claimed-notice': SubClaimedNoticeProps;
+  'sub-swap-offer-notice': SubSwapOfferNoticeProps;
+  'sub-swap-accepted-notice': SubSwapAcceptedNoticeProps;
   'weekly-shifts': WeeklyShiftsProps;
   'shift-request-decision': ShiftRequestDecisionProps;
   'hours-change-decision': HoursChangeDecisionProps;

@@ -254,6 +254,7 @@ export type {
   StaffStipendRow,
   StipendOverrideRow,
   SubRequestRow,
+  SubSwapOfferRow,
   TimeOffRow,
 } from '@pyre/schedule-core';
 

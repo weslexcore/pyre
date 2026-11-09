@@ -33,6 +33,7 @@ import {
   formatCompactTime,
   formatDutyList,
   formatShiftNotes,
+  formatShortDay,
   HOURS_CHANGE_LOOKBACK_DAYS,
   isShiftDuty,
   isTentativeShift,
@@ -74,10 +75,12 @@ import type {
   ShiftRow,
   StaffRow,
   SubRequestRow,
+  SubSwapOfferRow,
   TimeOffRow,
 } from '@/lib/db';
 import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
+import type { SwapCandidate } from '@/lib/schedule/swap';
 import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { OffShiftDuties } from './OffShiftDuties';
@@ -137,6 +140,12 @@ interface BoardData {
   hoursChangeRequests?: HoursChangeRequestRow[];
   /** Open sub requests — visible to everyone so any teammate can take one. */
   subRequests?: SubRequestRow[];
+  /** Pending swap offers on those sub requests (note redacted server-side for bystanders). */
+  swapOffers?: SubSwapOfferRow[];
+  /** Offered shifts that fall outside the fetched range, for the offer's label. */
+  swapOfferShifts?: Array<Pick<ShiftRow, 'id' | 'label' | 'shift_date' | 'starts_at' | 'ends_at'>>;
+  /** Per open sub request, the viewer's own shifts they could offer in exchange. */
+  swapCandidates?: Record<string, SwapCandidate[]>;
   /** Manage side: outstanding shift + sub requests on upcoming shifts and pending
    * hours changes, whole horizon. */
   pendingRequestCount?: number;
@@ -2723,6 +2732,75 @@ function ShiftDetail({
     void run(() => api('PATCH', '/api/admin/shift-sub', { id: sub.id, action: 'claim' }));
   };
 
+  // Swap offers: the second way to answer a sub request. The server works
+  // out which of the viewer's shifts could be offered against each open sub
+  // (data.swapCandidates); with none, the button simply isn't there.
+  const offersOn = (subId: string): SubSwapOfferRow[] =>
+    (data.swapOffers ?? []).filter((o) => o.sub_request_id === subId);
+  const myOfferOnTakeable =
+    takeableSub && selfId
+      ? (offersOn(takeableSub.id).find((o) => o.offerer_staff_id === selfId) ?? null)
+      : null;
+  const swapCandidates = takeableSub ? (data.swapCandidates?.[takeableSub.id] ?? []) : [];
+  const describeOffered = (offer: SubSwapOfferRow): string => {
+    const offered =
+      data.shifts.find((s) => s.id === offer.offered_shift_id) ??
+      data.swapOfferShifts?.find((s) => s.id === offer.offered_shift_id) ??
+      null;
+    const window = `${formatCompactTime(offer.starts_at)}–${formatCompactTime(offer.ends_at)}`;
+    return offered
+      ? `${formatShortDay(offered.shift_date)} · ${offered.label} · ${window}`
+      : window;
+  };
+  const describeCandidate = (c: SwapCandidate): string =>
+    `${formatShortDay(c.shift_date)} · ${c.label} · ${formatCompactTime(c.starts_at)}–${formatCompactTime(c.ends_at)}`;
+
+  const [swapDraft, setSwapDraft] = useState<{ shiftId: string | null; note: string } | null>(null);
+
+  const offerSwap = () => {
+    const draft = swapDraft;
+    if (!draft?.shiftId || !takeableSub) return;
+    setSwapDraft(null);
+    const note = draft.note.trim();
+    void run(() =>
+      api('POST', '/api/admin/shift-swap', {
+        subId: takeableSub.id,
+        shiftId: draft.shiftId,
+        ...(note ? { note } : {}),
+      })
+    );
+  };
+
+  const withdrawSwap = (offer: SubSwapOfferRow) =>
+    void run(
+      () => api('PATCH', '/api/admin/shift-swap', { id: offer.id, action: 'withdraw' }),
+      (board) => ({ ...board, swapOffers: board.swapOffers?.filter((o) => o.id !== offer.id) })
+    );
+
+  const decideSwap = async (offer: SubSwapOfferRow, action: 'accept' | 'decline') => {
+    const offererName = staffById.get(offer.offerer_staff_id)?.display_name ?? 'They';
+    if (action === 'accept') {
+      const sub = subs.find((s) => s.id === offer.sub_request_id);
+      if (
+        !(await confirmAction({
+          title: `Swap shifts with ${offererName}?`,
+          body: `${offererName} takes your ${shift.label} shift${
+            sub ? ` (${formatCompactTime(sub.starts_at)}–${formatCompactTime(sub.ends_at)})` : ''
+          } and you take their ${describeOffered(offer)}. Both change right away.`,
+          confirmLabel: 'Swap shifts',
+        }))
+      ) {
+        return;
+      }
+      void run(() => api('PATCH', '/api/admin/shift-swap', { id: offer.id, action }));
+      return;
+    }
+    void run(
+      () => api('PATCH', '/api/admin/shift-swap', { id: offer.id, action }),
+      (board) => ({ ...board, swapOffers: board.swapOffers?.filter((o) => o.id !== offer.id) })
+    );
+  };
+
   return (
     <div className="space-y-3 border-t border-white/10 px-3 py-3">
       {shift.assignments.length > 0 && (
@@ -2778,6 +2856,12 @@ function ShiftDetail({
                     </span>
                   )}
                   {personSub && <EmergencyChip emergency={personSub.is_emergency} />}
+                  {personSub && (isSelf || canManage) && offersOn(personSub.id).length > 0 && (
+                    <span className="rounded bg-[var(--pyre-sage)]/20 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-sage)]">
+                      {offersOn(personSub.id).length} swap offer
+                      {offersOn(personSub.id).length === 1 ? '' : 's'}
+                    </span>
+                  )}
                   {hoursChange && (
                     <span
                       className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]"
@@ -2955,6 +3039,50 @@ function ShiftDetail({
                     )}
                   </span>
                 </div>
+                {personSub && (isSelf || canManage) && offersOn(personSub.id).length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {offersOn(personSub.id).map((offer) => (
+                      <li
+                        key={offer.id}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-[var(--pyre-sage)]/10 px-2 py-1.5"
+                      >
+                        <span className="font-medium">
+                          {staffById.get(offer.offerer_staff_id)?.display_name ?? '?'}
+                        </span>
+                        <span className="font-mono text-xs text-[var(--pyre-sage)]">
+                          offers to swap: they take this shift,{' '}
+                          {isSelf ? 'you' : (person?.display_name ?? 'the requester')} take
+                          {isSelf ? '' : 's'} {describeOffered(offer)}
+                        </span>
+                        {offer.note && (
+                          <span className="font-mono text-xs text-white/60">{offer.note}</span>
+                        )}
+                        <span className="ml-auto flex items-center gap-2">
+                          {isSelf && (
+                            <button
+                              type="button"
+                              className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
+                              title="Accept — both shifts change right away and your sub request closes"
+                              disabled={busy}
+                              onClick={() => decideSwap(offer, 'accept')}
+                            >
+                              accept swap
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="font-mono text-xs text-white/50 underline hover:text-white disabled:opacity-40"
+                            title="Decline — the sub request stays open"
+                            disabled={busy}
+                            onClick={() => decideSwap(offer, 'decline')}
+                          >
+                            decline
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {isSelf && !personSub && subDraft && (
                   <div className="mt-1.5 space-y-2 rounded bg-white/5 px-2 py-2">
                     <p className="font-mono text-xs text-white/50">
@@ -3365,21 +3493,101 @@ function ShiftDetail({
       )}
 
       {takeableSub && (
-        <div className="flex flex-wrap items-center gap-2 rounded bg-[var(--pyre-gold)]/10 px-2 py-1.5">
-          <span className="font-mono text-xs text-[var(--pyre-gold)]">
-            {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'Someone'} needs a sub
-            for {formatCompactTime(takeableSub.starts_at)}–{formatCompactTime(takeableSub.ends_at)}{' '}
-            — first come, first served.
-          </span>
-          <EmergencyChip emergency={takeableSub.is_emergency} />
-          <button
-            type="button"
-            className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}
-            disabled={busy}
-            onClick={() => takeSub(takeableSub)}
-          >
-            Take this shift
-          </button>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 rounded bg-[var(--pyre-gold)]/10 px-2 py-1.5">
+            <span className="font-mono text-xs text-[var(--pyre-gold)]">
+              {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'Someone'} needs a sub
+              for {formatCompactTime(takeableSub.starts_at)}–
+              {formatCompactTime(takeableSub.ends_at)} — first come, first served.
+            </span>
+            <EmergencyChip emergency={takeableSub.is_emergency} />
+            <button
+              type="button"
+              className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}
+              disabled={busy}
+              onClick={() => takeSub(takeableSub)}
+            >
+              Take this shift
+            </button>
+            {myOfferOnTakeable ? (
+              <>
+                <span className="font-mono text-xs text-[var(--pyre-sage)]">
+                  You offered {describeOffered(myOfferOnTakeable)} — waiting on{' '}
+                  {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'them'}.
+                </span>
+                <button
+                  type="button"
+                  className="font-mono text-xs text-white/50 underline hover:text-white disabled:opacity-40"
+                  title="Withdraw your swap offer"
+                  disabled={busy}
+                  onClick={() => withdrawSwap(myOfferOnTakeable)}
+                >
+                  withdraw
+                </button>
+              </>
+            ) : (
+              swapCandidates.length > 0 && (
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                  title="Offer one of your shifts in exchange — they choose whether to accept"
+                  disabled={busy}
+                  onClick={() =>
+                    setSwapDraft(
+                      swapDraft ? null : { shiftId: swapCandidates[0]?.shiftId ?? null, note: '' }
+                    )
+                  }
+                >
+                  Offer a swap
+                </button>
+              )
+            )}
+          </div>
+          {!myOfferOnTakeable && swapDraft && swapCandidates.length > 0 && (
+            <div className="space-y-2 rounded bg-white/5 px-2 py-2">
+              <p className="font-mono text-xs text-white/50">
+                You take this shift, and{' '}
+                {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'they'} take the one
+                you pick. Nothing changes until they accept.
+              </p>
+              <ul className="space-y-1">
+                {swapCandidates.map((c) => (
+                  <li key={c.shiftId}>
+                    <label className="flex cursor-pointer items-center gap-2 font-mono text-xs text-white/80">
+                      <input
+                        type="radio"
+                        name={`swap-${takeableSub.id}`}
+                        checked={swapDraft.shiftId === c.shiftId}
+                        onChange={() => setSwapDraft({ ...swapDraft, shiftId: c.shiftId })}
+                      />
+                      {describeCandidate(c)}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  className={`${inputClass} flex-1 min-w-48`}
+                  maxLength={500}
+                  placeholder="Note (optional)"
+                  value={swapDraft.note}
+                  onChange={(e) => setSwapDraft({ ...swapDraft, note: e.target.value })}
+                  aria-label="Note to go with the swap offer"
+                />
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                  disabled={busy || !swapDraft.shiftId}
+                  onClick={offerSwap}
+                >
+                  Send offer
+                </button>
+                <button type="button" className={buttonClass} onClick={() => setSwapDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -36,6 +36,7 @@ const ENTITY_LABEL: Record<ScheduleChangeRow['entity_type'], string> = {
   staff_prefs: 'Shift preferences',
   duty_assignment: 'Off-shift duty',
   duty_training: 'Duty training',
+  swap_offer: 'Swap offer',
 };
 
 const ACTOR_TINT: Record<ScheduleChangeRow['actor_kind'], string> = {

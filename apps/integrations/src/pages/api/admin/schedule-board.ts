@@ -32,11 +32,13 @@ import {
   type StaffStipendRow,
   type StipendOverrideRow,
   type SubRequestRow,
+  type SubSwapOfferRow,
   type TimeOffRow,
 } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import { getPaySchedule } from '@/lib/schedule/pay-schedule';
 import { getScheduleSettings, type ScheduleSettings } from '@/lib/schedule/settings';
+import { loadSwapCandidates, type SwapCandidate } from '@/lib/schedule/swap';
 
 export const prerender = false;
 
@@ -99,6 +101,23 @@ export interface ScheduleBoardPayload {
    */
   subRequests: SubRequestRow[];
   /**
+   * Pending swap offers on those sub requests. Everyone sees who offered
+   * what; the note travels only to the requester, the offerer and managers.
+   */
+  swapOffers: SubSwapOfferRow[];
+  /**
+   * The offered shifts behind swapOffers that fall outside the fetched
+   * range, so the board can still say "Tue Nov 18 · Evening".
+   */
+  swapOfferShifts: SwapOfferShift[];
+  /**
+   * For each open sub request in range made by someone else, the caller's
+   * own upcoming shifts that could be offered in exchange (lib/schedule/swap).
+   * Subs with nothing to offer have no entry — the Offer a swap button
+   * renders only when one exists.
+   */
+  swapCandidates: Record<string, SwapCandidate[]>;
+  /**
    * Manage side: outstanding asks on today-or-future shifts across the whole
    * horizon (not just the fetched range) — pending shift requests, open sub
    * requests, and pending hours changes, the Requests badge. 0 otherwise.
@@ -122,6 +141,11 @@ export interface ScheduleBoardPayload {
    */
   neighborAssignments: NeighborAssignment[];
 }
+
+export type SwapOfferShift = Pick<
+  ShiftRow,
+  'id' | 'label' | 'shift_date' | 'starts_at' | 'ends_at'
+>;
 
 export interface NeighborAssignment {
   staff_id: string;
@@ -330,9 +354,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Why someone needs a sub is between them and the managers; teammates
   // still see whether it's an emergency, so they know how much it matters.
-  const subRequests = ((subsRes.data ?? []) as SubRequestRow[]).map((sub) =>
+  const openSubs = (subsRes.data ?? []) as SubRequestRow[];
+  const subRequests = openSubs.map((sub) =>
     canManage || sub.requester_staff_id === selfStaffId ? sub : { ...sub, reason: null }
   );
+  const subIds = openSubs.map((s) => s.id);
+  const requesterOf = new Map(openSubs.map((s) => [s.id, s.requester_staff_id]));
 
   // The second round: the rows the first round's answers point at — the
   // neighbouring days' assignments, and the drafting conversations behind
@@ -343,7 +370,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const sessionIds = [
     ...new Set(proposals.map((p) => p.agent_session_id).filter(Boolean)),
   ] as string[];
-  const [neighborRowsRes, messagesRes] = await Promise.all([
+  const [neighborRowsRes, messagesRes, offersRes, swapCandidates] = await Promise.all([
     dateOf.size > 0
       ? db
           .from('shift_assignments')
@@ -358,9 +385,51 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           .in('agent_session_id', sessionIds)
           .order('created_at', { ascending: true })
       : none,
+    // Pending swap offers on the open subs in view, and (for a viewer on the
+    // roster) which of their own shifts they could offer against each one.
+    subIds.length > 0
+      ? db
+          .from('sub_swap_offers')
+          .select('*')
+          .eq('status', 'pending')
+          .in('sub_request_id', subIds)
+          .order('created_at')
+      : none,
+    selfStaffId && openSubs.length > 0
+      ? loadSwapCandidates(db, { subs: openSubs, offererId: selfStaffId }).catch((e: unknown) => {
+          console.warn(
+            '[schedule-board] swap candidates failed:',
+            e instanceof Error ? e.message : e
+          );
+          return {} as Record<string, SwapCandidate[]>;
+        })
+      : Promise.resolve({} as Record<string, SwapCandidate[]>),
   ]);
   if (neighborRowsRes.error) return dbError(neighborRowsRes.error);
   if (messagesRes.error) return dbError(messagesRes.error);
+  if (offersRes.error) return dbError(offersRes.error);
+
+  // The offerer's message is for the requester and the managers, same as a
+  // sub request's reason.
+  const swapOffers = ((offersRes.data ?? []) as SubSwapOfferRow[]).map((offer) =>
+    canManage ||
+    offer.offerer_staff_id === selfStaffId ||
+    requesterOf.get(offer.sub_request_id) === selfStaffId
+      ? offer
+      : { ...offer, note: null }
+  );
+  const offeredOutOfRange = [
+    ...new Set(swapOffers.map((o) => o.offered_shift_id).filter((id) => !byShift.has(id))),
+  ];
+  let swapOfferShifts: SwapOfferShift[] = [];
+  if (offeredOutOfRange.length > 0) {
+    const { data, error } = await db
+      .from('shifts')
+      .select('id, label, shift_date, starts_at, ends_at')
+      .in('id', offeredOutOfRange);
+    if (error) return dbError(error);
+    swapOfferShifts = (data ?? []) as SwapOfferShift[];
+  }
 
   const neighborAssignments: NeighborAssignment[] = [];
   for (const a of (neighborRowsRes.data ?? []) as Array<{
@@ -439,6 +508,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     shiftRequests,
     hoursChangeRequests,
     subRequests,
+    swapOffers,
+    swapOfferShifts,
+    swapCandidates,
     pendingRequestCount,
     settings,
     paydays: paySchedule ? paydaysBetween(paySchedule, start, end) : [],

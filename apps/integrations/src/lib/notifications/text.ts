@@ -102,7 +102,16 @@ export function sopSavedText(input: {
   };
 }
 
-export type SubEvent = 'requested' | 'claimed' | 'cancelled';
+export type SubEvent =
+  | 'requested'
+  | 'claimed'
+  | 'cancelled'
+  /** A teammate offered one of their shifts in exchange for the requested one. */
+  | 'swap_offered'
+  /** The requester took the offer — both assignments were exchanged. */
+  | 'swap_accepted'
+  /** The requester (or a manager) turned the offer down; the sub stays open. */
+  | 'swap_declined';
 
 export function subRequestText(input: {
   event: SubEvent;
@@ -116,9 +125,19 @@ export function subRequestText(input: {
   forRequester?: boolean;
   /** The reader could claim it (requested: "Can you cover…?"). */
   forCandidate?: boolean;
+  /** Swap events: the shift the offerer put up in exchange, and their hours on it. */
+  offeredShift?: ShiftLike | null;
+  offeredWindow?: { starts_at: string; ends_at: string } | null;
+  /** The reader made the offer (accepted/declined: "X accepted your swap"). */
+  forOfferer?: boolean;
 }): { title: string; body: string } {
   const when = `${shiftPhrase(input.shift)}, ${shortWindow(input.window)}`;
   const severity = input.emergency ? ' · Emergency' : '';
+  const offerer = input.claimerName ?? 'Someone';
+  const offered =
+    input.offeredShift && input.offeredWindow
+      ? `${shiftPhrase(input.offeredShift)}, ${shortWindow(input.offeredWindow)}`
+      : 'one of their shifts';
   switch (input.event) {
     case 'requested':
       return input.forCandidate
@@ -136,6 +155,31 @@ export function subRequestText(input: {
           };
     case 'cancelled':
       return { title: `${input.requesterName} cancelled a sub request`, body: when };
+    case 'swap_offered':
+      return input.forRequester
+        ? {
+            title: `${offerer} offered to swap shifts with you`,
+            body: `They take ${when}; you take ${offered}`,
+          }
+        : {
+            title: `${offerer} offered ${input.requesterName} a swap`,
+            body: `${offerer} takes ${when}; ${input.requesterName} takes ${offered}`,
+          };
+    case 'swap_accepted':
+      return input.forOfferer
+        ? {
+            title: `${input.requesterName} accepted your swap`,
+            body: `You're on ${when}; they're on ${offered}`,
+          }
+        : {
+            title: `${offerer} and ${input.requesterName} swapped shifts`,
+            body: `${offerer} takes ${when}; ${input.requesterName} takes ${offered}`,
+          };
+    case 'swap_declined':
+      return {
+        title: `${input.requesterName} declined your swap offer`,
+        body: `${when} is still open to take outright`,
+      };
   }
 }
 

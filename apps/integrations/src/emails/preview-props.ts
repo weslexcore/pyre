@@ -21,6 +21,8 @@ import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
+import { SubSwapAcceptedNotice } from './templates/SubSwapAcceptedNotice';
+import { SubSwapOfferNotice } from './templates/SubSwapOfferNotice';
 import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate } from './types';
 
@@ -37,6 +39,8 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'sub-request-notice': SubRequestNotice.PreviewProps,
   'sub-open-notice': SubOpenNotice.PreviewProps,
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
+  'sub-swap-offer-notice': SubSwapOfferNotice.PreviewProps,
+  'sub-swap-accepted-notice': SubSwapAcceptedNotice.PreviewProps,
   'weekly-shifts': WeeklyShifts.PreviewProps,
   'shift-request-decision': ShiftRequestDecision.PreviewProps,
   'hours-change-decision': HoursChangeDecision.PreviewProps,

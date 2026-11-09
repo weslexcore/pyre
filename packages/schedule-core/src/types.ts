@@ -247,6 +247,32 @@ export interface SubRequestRow {
 	updated_at: string;
 }
 
+/**
+ * A teammate's offer to swap shifts with someone who asked for a sub: the
+ * offerer takes the requested shift, the requester takes the offerer's
+ * `offered_shift_id`. The offerer's window and duties are snapshotted at
+ * offer time so accepting can recreate them for the requester after the
+ * original assignment row is deleted. Pending until the requester (or a
+ * manager) decides, or the offerer withdraws; accepting also closes the
+ * sub request as claimed by the offerer.
+ */
+export interface SubSwapOfferRow {
+	id: string;
+	sub_request_id: string;
+	offerer_staff_id: string;
+	offered_shift_id: string;
+	starts_at: string;
+	ends_at: string;
+	/** The offerer's duties on the offered shift, snapshotted at offer time. */
+	duties: AssignmentDuty[];
+	/** Optional message to the requester — requester, offerer and managers only. */
+	note: string | null;
+	status: "pending" | "accepted" | "declined" | "withdrawn";
+	decided_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface TimeOffRow {
 	id: string;
 	staff_id: string;

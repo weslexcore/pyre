@@ -207,7 +207,9 @@ export async function notifyProposalApproved(
 /**
  * Sub-request activity. `requested` reaches the people who could claim it
  * (the same list the emails go to) and the admins; `claimed` reaches the
- * requester and the admins; `cancelled` reaches the admins. The actor is
+ * requester and the admins; `cancelled` reaches the admins. Swap offers:
+ * `swap_offered` reaches the requester and the admins, `swap_accepted` the
+ * offerer and the admins, `swap_declined` the offerer only. The actor is
  * never among them.
  */
 export async function notifySubEvent(
@@ -218,11 +220,15 @@ export async function notifySubEvent(
     shift: ShiftForNotice;
     window: { starts_at: string; ends_at: string };
     requesterStaffId: string;
+    /** The claimer (claimed), or the offerer (swap events). */
     claimerStaffId?: string | null;
     /** Staff ids of the people asked to cover (requested only). */
     candidateStaffIds?: string[];
     /** Marked an emergency (requested only). */
     emergency?: boolean;
+    /** Swap events: the shift the offerer put up, and their hours on it. */
+    offeredShift?: ShiftLike | null;
+    offeredWindow?: { starts_at: string; ends_at: string } | null;
     actorEmail: string | null;
   }
 ): Promise<void> {
@@ -234,6 +240,7 @@ export async function notifySubEvent(
   const requesterName = requester?.display_name?.trim() || 'Someone';
   const claimerName = claimer?.display_name?.trim() || null;
   const requesterEmail = normalizeEmail(requester?.email);
+  const claimerEmail = normalizeEmail(claimer?.email);
   const common = {
     event: input.event,
     shift: input.shift,
@@ -241,6 +248,8 @@ export async function notifySubEvent(
     requesterName,
     claimerName,
     emergency: input.emergency ?? false,
+    offeredShift: input.offeredShift ?? null,
+    offeredWindow: input.offeredWindow ?? null,
   };
   const base = {
     kind: 'sub_request' as const,
@@ -268,7 +277,7 @@ export async function notifySubEvent(
     );
     return;
   }
-  if (input.event === 'claimed') {
+  if (input.event === 'claimed' || input.event === 'swap_offered') {
     if (requesterEmail) {
       await createNotifications(db, [requesterEmail], {
         ...base,
@@ -280,6 +289,29 @@ export async function notifySubEvent(
       admins.filter((email) => email !== requesterEmail),
       { ...base, ...subRequestText(common) }
     );
+    return;
+  }
+  if (input.event === 'swap_accepted') {
+    if (claimerEmail) {
+      await createNotifications(db, [claimerEmail], {
+        ...base,
+        ...subRequestText({ ...common, forOfferer: true }),
+      });
+    }
+    await createNotifications(
+      db,
+      admins.filter((email) => email !== claimerEmail),
+      { ...base, ...subRequestText(common) }
+    );
+    return;
+  }
+  if (input.event === 'swap_declined') {
+    if (claimerEmail) {
+      await createNotifications(db, [claimerEmail], {
+        ...base,
+        ...subRequestText({ ...common, forOfferer: true }),
+      });
+    }
     return;
   }
   await createNotifications(db, admins, { ...base, ...subRequestText(common) });
