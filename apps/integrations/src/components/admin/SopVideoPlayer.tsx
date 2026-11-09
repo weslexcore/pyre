@@ -1,4 +1,4 @@
-// A library video embedded in an SOP (see lib/sops/videos): drawn by
+// A library video embedded in an SOP (see lib/sops/media): drawn by
 // SopMarkdown wherever a document has `![Title](/api/admin/sop-videos/<id>)`.
 //
 // The src is the app's own route, which redirects to a signed link that
@@ -6,7 +6,7 @@
 // hit an expired link mid-stream, so on a playback error the player asks the
 // route for a fresh link once and carries on from where it was.
 import { useRef, useState } from 'react';
-import { sopVideoSrc } from '@/lib/sops/videos';
+import { sopMediaSrc } from '@/lib/sops/media';
 
 export function SopVideoPlayer({
   id,
@@ -24,7 +24,10 @@ export function SopVideoPlayer({
   const [failed, setFailed] = useState(false);
   const resumeAt = useRef<number | null>(start ?? null);
 
-  const src = attempt === 0 ? sopVideoSrc(id) : `${sopVideoSrc(id)}?r=${attempt}`;
+  const src =
+    attempt === 0
+      ? sopMediaSrc({ kind: 'video', id })
+      : `${sopMediaSrc({ kind: 'video', id })}?r=${attempt}`;
   const caption = title?.trim();
 
   return (
