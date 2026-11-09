@@ -1,6 +1,7 @@
-# Apply new database migrations to the production Supabase project when they
-# land on master — the same `supabase db push` that used to be run by hand
-# from a laptop (yarn workspace @pyre/supabase db:push).
+# Apply new database migrations and the project config to the production
+# Supabase project when they land on master — the same `supabase db push`
+# and `supabase config push` that used to be run by hand from a laptop
+# (yarn workspace @pyre/supabase db:push).
 #
 # Needs three secrets on the `supabase-production` environment (Settings →
 # Environments → supabase-production), with deployment branches restricted to
@@ -13,6 +14,14 @@
 # If a push fails because a migration is older than one already applied (two
 # PRs merged out of timestamp order), rename that file to a newer timestamp
 # and merge again; nothing is applied from a failed run.
+#
+# The config push applies apps/supabase/config.toml — auth settings, the
+# email templates, the [remotes.production] override whose project_id matches
+# the linked project — so dashboard settings are owned by the repo, not by
+# whoever last clicked. config.toml holds no secrets (the project ref and
+# the public origins are not secret); a value that is one, such as an SMTP
+# password, must be written as env(NAME) and the secret added both to the
+# environment and to the `env:` block below so the CLI can read it.
 
 name: Supabase migrations
 
@@ -22,6 +31,7 @@ on:
     paths:
       - 'apps/supabase/migrations/**'
       - 'apps/supabase/config.toml'
+      - 'apps/supabase/templates/**'
   # Re-run by hand from the Actions tab, e.g. right after adding the secrets.
   workflow_dispatch:
 
@@ -67,3 +77,9 @@ jobs:
 
       - name: Push migrations
         run: supabase db push --workdir apps
+
+      # Interactively this prints the diff against the project and asks;
+      # --yes answers it. Review the first push of a new section by hand
+      # (from a laptop, without --yes) before relying on this step for it.
+      - name: Push config
+        run: supabase config push --workdir apps --yes
