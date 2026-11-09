@@ -54,6 +54,7 @@ import type { CheckItems } from '@/lib/sops/optimistic';
 import { sopPrintHref } from '@/lib/sops/print';
 import { collectOthers, type SopPresence, sopTopic } from '@/lib/sops/realtime';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
+import { insertBlock } from '@/lib/sops/videos';
 import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkedRow, linkedChipClass } from './LinkedRow';
@@ -66,6 +67,7 @@ import { SopDiff } from './SopDiff';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
+import { SopVideoLibrary } from './SopVideoLibrary';
 import { useSopRun } from './useSopRun';
 
 type DocResponse = SopDocumentPayload;
@@ -215,6 +217,10 @@ export function SopDocument({
   const [draftContent, setDraftContent] = useState('');
   const [draftNote, setDraftNote] = useState('');
   const [preview, setPreview] = useState(false);
+  // The video library (admins only), and where in the text an insert lands.
+  const [showVideos, setShowVideos] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editorCaret = useRef<number | null>(null);
   // The writing assistant panel, and whether it opened to review right away.
   const [showAssist, setShowAssist] = useState(false);
   const [autoReview, setAutoReview] = useState(false);
@@ -868,6 +874,22 @@ export function SopDocument({
             >
               Preview
             </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={busy}
+                onClick={() => {
+                  // Remember the caret before the dialog takes focus.
+                  editorCaret.current = preview
+                    ? null
+                    : (editorRef.current?.selectionStart ?? null);
+                  setShowVideos(true);
+                }}
+              >
+                Videos
+              </button>
+            )}
             {data.assistEnabled && (
               <button
                 type="button"
@@ -883,6 +905,7 @@ export function SopDocument({
             <span className="ml-auto font-mono text-[10px] text-white/40">
               Markdown — “- [ ]” for checklist items, “- [!]” for one that must be checked and can’t
               be skipped · type [name](/ to pick a page or SOP to link
+              {isAdmin && ' · Videos to embed a walkthrough'}
             </span>
           </div>
           {preview ? (
@@ -891,6 +914,7 @@ export function SopDocument({
             </div>
           ) : (
             <LinkTextarea
+              ref={editorRef}
               className={`${inputClass} min-h-[50vh] w-full resize-y font-mono text-xs leading-relaxed`}
               value={draftContent}
               disabled={busy}
@@ -934,6 +958,17 @@ export function SopDocument({
           busy={run.runBusy}
           onConfirm={() => void run.discardRun()}
           onCancel={run.cancelConfirm}
+        />
+      )}
+
+      {showVideos && (
+        <SopVideoLibrary
+          onClose={() => setShowVideos(false)}
+          onInsert={(markdown) => {
+            setDraftContent((content) => insertBlock(content, markdown, editorCaret.current));
+            setShowVideos(false);
+            setPreview(false);
+          }}
         />
       )}
 

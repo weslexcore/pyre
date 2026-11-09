@@ -10,6 +10,7 @@
 // in the stack carries its own.
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { parseSopVideoRef } from '@/lib/sops/videos';
 import { renderable } from './SopMarkdown';
 
 export interface PrintableSop {
@@ -87,7 +88,15 @@ function PrintMarkdown({ content }: { content: string }) {
           hr: () => <hr className="my-4 border-black/30" />,
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
-          img: ({ src, alt }) => <img src={src} alt={alt ?? ''} className="my-2 max-h-[4in]" />,
+          img: ({ src, alt }) =>
+            // Paper can't play a walkthrough: say there is one, and what it shows.
+            parseSopVideoRef(typeof src === 'string' ? src : null) ? (
+              <span className="my-2 block border border-dashed border-black/40 px-2 py-1 text-[10pt] italic">
+                ▶ Video walkthrough{alt ? `: ${alt}` : ''} — watch it in the SOP on the dashboard
+              </span>
+            ) : (
+              <img src={src} alt={alt ?? ''} className="my-2 max-h-[4in]" />
+            ),
         }}
       >
         {renderable(content)}

@@ -151,4 +151,18 @@ describe('keepLineBreaks', () => {
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('checked=""');
   });
+  it('draws a library video reference as a player, and other images as images', () => {
+    const id = '3f2b8c1e-9a4d-4e7b-8c2a-1d5e6f7a8b9c';
+    const html = renderToStaticMarkup(
+      <SopMarkdown
+        content={`![Banking the stove](/api/admin/sop-videos/${id})\n\n![Diagram](/diagram.png)`}
+      />
+    );
+    expect(html).toContain(`<video src="/api/admin/sop-videos/${id}"`);
+    expect(html).toContain('Banking the stove');
+    expect(html).toContain('<img src="/diagram.png"');
+    // The player sits inside the paragraph markdown wraps it in, so it must
+    // not introduce block elements there.
+    expect(html).not.toMatch(/<p[^>]*>(?:(?!<\/p>).)*<(?:div|figure)/);
+  });
 });
