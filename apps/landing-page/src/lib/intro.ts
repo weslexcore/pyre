@@ -146,7 +146,7 @@ const intro = {
   claim: {
     eyebrow: 'Ready to start?',
     heading: `Claim your ${WEEKS} weeks`,
-    body: 'Checkout takes about a minute, and your first session can be today.',
+    body: 'Get a feel for what sauna can do for you.',
     price: introOffer.price,
     priceNote: introPriceNote,
     perks: [

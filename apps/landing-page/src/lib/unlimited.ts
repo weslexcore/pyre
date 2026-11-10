@@ -163,7 +163,7 @@ const unlimited = {
   join: {
     eyebrow: 'Ready to join?',
     heading: 'Lock in your founding rate',
-    body: `${founding.availability}. Checkout takes about a minute, and your first session can be today.`,
+    body: `${founding.availability}.`,
     price,
     originalPrice,
     period: '/mo for life',
