@@ -376,6 +376,10 @@ export function SopMediaLibrary({
                     }}
                   >
                     <input
+                      // Rename (or a finished upload) swaps this field in for the row,
+                      // so put the cursor in it rather than leaving focus on nothing.
+                      // biome-ignore lint/a11y/noAutofocus: the field appears in response to the user's own action
+                      autoFocus
                       className={`${compactInputClass} min-w-48 flex-1`}
                       aria-label={item.kind === 'image' ? 'Image description' : 'Video title'}
                       placeholder={
