@@ -7,7 +7,7 @@
 // the tab order because Close and Escape are the keyboard paths. Each dialog
 // focuses its own first control (usually Close or Cancel) via `initialFocus`.
 
-import { type ReactNode, type RefObject, useEffect } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef } from 'react';
 
 export function Modal({
   labelledBy,
@@ -29,14 +29,28 @@ export function Modal({
   closeOnEscape?: () => boolean;
   children: ReactNode;
 }) {
+  // Callers usually pass inline `onClose` / `closeOnEscape` functions, which
+  // change identity on every render. Read them through refs so the listener
+  // and the initial focus are set up once, on open: re-running the focus on
+  // each render would yank focus out of any field inside the dialog after the
+  // first keystroke.
+  const onCloseRef = useRef(onClose);
+  const closeOnEscapeRef = useRef(closeOnEscape);
+  onCloseRef.current = onClose;
+  closeOnEscapeRef.current = closeOnEscape;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus once on open, not when the ref object changes
   useEffect(() => {
     initialFocus?.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (closeOnEscape?.() ?? true)) onClose();
+      if (event.key === 'Escape' && (closeOnEscapeRef.current?.() ?? true)) onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose, initialFocus, closeOnEscape]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
