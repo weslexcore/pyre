@@ -50,6 +50,7 @@ import {
   currentStepIndex,
   frequencyCapUntil,
   isStale,
+  nextLookAt,
   nextStepIndex,
   sendKeyFor,
   stepDueAt,
@@ -84,9 +85,7 @@ function isFastMode(): boolean {
 function scheduleAt(step: JourneyStep, anchors: AnchorTimes, now: number): string {
   if (step.sendImmediately) return new Date(now).toISOString();
   const fastMode = isFastMode();
-  // Unknown anchor (no intro offer): due now, and the due-time check skips it.
-  const due = stepDueAt(step.timing, anchors, { fastMode }) ?? now;
-  const at = Math.max(due, now);
+  const at = nextLookAt(step.timing, anchors, now, { fastMode });
   return new Date(fastMode ? at : clampToSendWindow(at)).toISOString();
 }
 

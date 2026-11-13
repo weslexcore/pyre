@@ -229,8 +229,20 @@ function TimingEditor({
     const u = next.unit ?? unit;
     const anchor = next.anchor ?? timing.anchor;
     // Only the expiry dates can be counted backwards from.
-    const b = EXPIRY_ANCHORS.includes(anchor) ? (next.before ?? before) : false;
-    onChange({ anchor, offsetHours: (b ? -1 : 1) * a * UNITS[u] });
+    const expiry = EXPIRY_ANCHORS.includes(anchor);
+    const b = expiry ? (next.before ?? before) : false;
+    onChange({
+      anchor,
+      offsetHours: (b ? -1 : 1) * a * UNITS[u],
+      // The no-date fallback only means something for the expiry anchors.
+      ...(expiry && timing.fallbackHours !== undefined && { fallbackHours: timing.fallbackHours }),
+    });
+  };
+  const fallbackDays =
+    timing.fallbackHours === undefined ? null : Math.round((timing.fallbackHours / 24) * 10) / 10;
+  const setFallback = (days: number | null) => {
+    const { fallbackHours: _drop, ...rest } = timing;
+    onChange(days === null ? rest : { ...rest, fallbackHours: Math.max(0, days) * 24 });
   };
 
   return (
@@ -282,6 +294,33 @@ function TimingEditor({
           ))}
         </select>
       </div>
+      {EXPIRY_ANCHORS.includes(timing.anchor) && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={fallbackDays !== null}
+              onChange={(e) => setFallback(e.target.checked ? 13 : null)}
+            />
+            If there's no date yet, send it
+          </label>
+          {fallbackDays !== null && (
+            <>
+              <input
+                aria-label="Days after they enter the journey"
+                type="number"
+                min={0}
+                step="any"
+                className={`${compactInputClass} w-20`}
+                value={fallbackDays}
+                onChange={(e) => setFallback(Math.max(0, Number(e.target.value) || 0))}
+              />
+              <span>days after they enter the journey</span>
+            </>
+          )}
+          {fallbackDays === null && <span className="text-white/45">(otherwise it's skipped)</span>}
+        </div>
+      )}
       <p className="text-xs leading-relaxed text-white/45">
         {timing.anchor === 'trigger' && sessionTrigger
           ? 'Counted from when the booked session ends.'

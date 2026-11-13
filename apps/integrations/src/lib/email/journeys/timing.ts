@@ -44,7 +44,8 @@ export function anchorTime(timing: StepTiming, anchors: AnchorTimes): number | n
 }
 
 /**
- * When a step is due, or null when its anchor is unknown (no intro offer).
+ * When a step is due, or null when its anchor is unknown (no intro offer) and
+ * it has no fallback.
  * Fast mode (JOURNEY_FAST_MODE) compresses everything after the trigger 60x —
  * hours become minutes — so a whitelist test walks a multi-week journey in
  * an afternoon.
@@ -55,10 +56,37 @@ export function stepDueAt(
   { fastMode = false }: { fastMode?: boolean } = {}
 ): number | null {
   const anchor = anchorTime(timing, anchors);
-  if (anchor === null) return null;
-  const due = anchor + timing.offsetHours * HOUR;
+  let due: number;
+  if (anchor !== null) {
+    due = anchor + timing.offsetHours * HOUR;
+  } else if (timing.fallbackHours !== undefined && timing.anchor !== 'previous') {
+    // No date to count from yet: fall back to hours after enrollment.
+    due = anchors.triggerAt + timing.fallbackHours * HOUR;
+  } else {
+    return null;
+  }
   if (!fastMode) return due;
   return anchors.triggerAt + (due - anchors.triggerAt) / 60;
+}
+
+/** While a step waits on its no-date fallback, look for the real date this often. */
+export const EXPIRY_RECHECK_MS = 6 * HOUR;
+
+/**
+ * When to next look at a step: when it's due, but while it waits on its
+ * no-date fallback, no later than the next recheck. The real date can turn up
+ * meanwhile (the intro gets started) and be sooner than the fallback.
+ */
+export function nextLookAt(
+  timing: StepTiming,
+  anchors: AnchorTimes,
+  now: number,
+  { fastMode = false }: { fastMode?: boolean } = {}
+): number {
+  // Unknown anchor and no fallback: due now, and the due-time check skips it.
+  const at = Math.max(stepDueAt(timing, anchors, { fastMode }) ?? now, now);
+  if (timing.fallbackHours === undefined || anchorTime(timing, anchors) !== null) return at;
+  return Math.min(at, now + (fastMode ? EXPIRY_RECHECK_MS / 60 : EXPIRY_RECHECK_MS));
 }
 
 /**

@@ -6,8 +6,10 @@ import { definitionProblems } from './store';
 import {
   clampToSendWindow,
   currentStepIndex,
+  EXPIRY_RECHECK_MS,
   frequencyCapUntil,
   isStale,
+  nextLookAt,
   nextStepIndex,
   sendKeyFor,
   stepDueAt,
@@ -56,10 +58,37 @@ describe('stepDueAt', () => {
     ).toBeNull();
   });
 
+  it('falls back to hours after the trigger when the expiry date is unknown', () => {
+    const timing = { anchor: 'intro-expiry' as const, offsetHours: -24, fallbackHours: 312 };
+    // A known date still wins.
+    expect(stepDueAt(timing, anchors)).toBe(anchors.introExpiresAt - DAY);
+    expect(stepDueAt(timing, { ...anchors, introExpiresAt: null })).toBe(
+      anchors.triggerAt + 13 * DAY
+    );
+  });
+
   it('compresses time after the trigger 60x in fast mode', () => {
     expect(stepDueAt({ anchor: 'trigger', offsetHours: 60 }, anchors, { fastMode: true })).toBe(
       anchors.triggerAt + 60 * 60_000
     );
+  });
+});
+
+describe('nextLookAt', () => {
+  const anchors = { triggerAt: 0, previousAt: null, introExpiresAt: null };
+  const timing = { anchor: 'intro-expiry' as const, offsetHours: -24, fallbackHours: 312 };
+
+  it('rechecks for the real date while waiting on the fallback', () => {
+    expect(nextLookAt(timing, anchors, DAY)).toBe(DAY + EXPIRY_RECHECK_MS);
+    expect(nextLookAt(timing, anchors, 13 * DAY - HOUR)).toBe(13 * DAY);
+  });
+
+  it('waits for the due time once the date is known', () => {
+    expect(nextLookAt(timing, { ...anchors, introExpiresAt: 10 * DAY }, DAY)).toBe(9 * DAY);
+  });
+
+  it('is due now when the date is unknown and there is no fallback', () => {
+    expect(nextLookAt({ anchor: 'intro-expiry', offsetHours: -24 }, anchors, DAY)).toBe(DAY);
   });
 });
 

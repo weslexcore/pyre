@@ -294,6 +294,7 @@ export async function saveJourney(
             before &&
             (before.timing.anchor !== step.timing.anchor ||
               before.timing.offsetHours !== step.timing.offsetHours ||
+              before.timing.fallbackHours !== step.timing.fallbackHours ||
               before.sendImmediately !== step.sendImmediately)
           );
         })

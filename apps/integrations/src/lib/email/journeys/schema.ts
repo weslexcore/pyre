@@ -192,6 +192,16 @@ export const timingSchema = z.object({
     .number()
     .min(-24 * 365)
     .max(24 * 365),
+  /**
+   * For the expiry anchors: hours after enrollment to send instead when that
+   * date isn't known yet (e.g. an intro bought but not started). Without it,
+   * a step with no date is skipped.
+   */
+  fallbackHours: z
+    .number()
+    .min(0)
+    .max(24 * 365)
+    .optional(),
 });
 
 export type StepTiming = z.infer<typeof timingSchema>;
@@ -209,7 +219,7 @@ export const ANCHORS: Record<TimingAnchor, { label: string; description: string 
   'intro-expiry': {
     label: 'Intro offer expiry',
     description:
-      'When their intro offer pack expires. The step is skipped if they have no intro offer.',
+      "When their intro offer pack expires. Without a no-date fallback, the step is skipped if that date isn't known.",
   },
   'credits-expiry': {
     label: 'Credits expiry',
@@ -460,5 +470,8 @@ export function describeTiming(t: StepTiming, sessionTrigger = false): string {
     if (t.anchor === 'previous') return 'Right after the previous email';
     return t.anchor === 'trigger' && sessionTrigger ? 'When the session ends' : `At ${anchor}`;
   }
-  return `${amount} ${t.offsetHours < 0 ? 'before' : 'after'} ${anchor}`;
+  const main = `${amount} ${t.offsetHours < 0 ? 'before' : 'after'} ${anchor}`;
+  if (t.fallbackHours === undefined || !EXPIRY_ANCHORS.includes(t.anchor)) return main;
+  const fallback = describeTiming({ anchor: 'trigger', offsetHours: t.fallbackHours });
+  return `${main} (no date yet: ${fallback.charAt(0).toLowerCase()}${fallback.slice(1)})`;
 }
