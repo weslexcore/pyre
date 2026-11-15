@@ -5,7 +5,9 @@
 // by the 3hr session's bookings), the Open Hours 1hr/2hr pair, an Open Hours
 // slot selling 1/2/3/4 hours (every full-length session surfaces as an option,
 // sorted by duration), the sold-out 2-hour fallback on a partner-less Open
-// Hours slot, and a legacy high-capacity social that bypasses the pool.
+// Hours slot, a hidden 2hr partner created with a capacity above the cap (it
+// must still be held to the entry row's cap and count toward the pool), and a
+// high-capacity social that sells past the cap while still sharing the space.
 
 import { buildPooledBookingModel } from '../src/lib/booking-model';
 import { MAX_OCCUPANCY } from '../src/lib/capacity';
@@ -132,7 +134,28 @@ const events: EventItem[] = [
     spotsRemaining: MAX - 10,
     priceUsd: 25,
   }),
-  // Legacy high-capacity social — bypasses the pool, renders standalone.
+  // Open Hours at 4pm where the 1hr was created at the cap but the hidden 2hr
+  // partner at MAX + 10: 3 booked in each. The 2hr must not sell past the cap,
+  // and both must count toward the same pool (6 in the space at 4pm).
+  makeEvent({
+    id: 'oh-1hr-4pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-02T20:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: MAX,
+    spotsRemaining: MAX - 3,
+    priceUsd: 25,
+  }),
+  makeEvent({
+    id: 'oh-2hr-4pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-02T20:00:00.000Z',
+    durationMinutes: 120,
+    totalSpots: MAX + 10,
+    spotsRemaining: MAX + 7,
+    priceUsd: 50,
+  }),
+  // High-capacity social — sells to its own capacity, renders standalone.
   makeEvent({
     id: 'social-bypass',
     tags: ['Social'],
@@ -141,6 +164,17 @@ const events: EventItem[] = [
     totalSpots: MAX * 2,
     spotsRemaining: MAX * 2 - 15,
     priceUsd: 40,
+  }),
+  // Open Hours hour overlapping the high-capacity social: the social's 15
+  // guests are in the same space, leaving MAX - 15 under the regular cap.
+  makeEvent({
+    id: 'oh-1hr-during-social',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-08T23:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: MAX,
+    spotsRemaining: MAX,
+    priceUsd: 25,
   }),
   // Non-pooled event — should get no options at all.
   makeEvent({
@@ -221,9 +255,18 @@ check('noon slot has two options', opts('oh-1hr-noon')?.length, 2);
 check('fallback is sold out', noonFallback?.soldOut, true);
 check('fallback minutes/credits', [noonFallback?.minutes, noonFallback?.credits], [120, 2]);
 
-console.log('Bypass + non-pooled events');
+console.log('Hidden partner with a capacity above the cap');
+check('4pm 1hr shares the pool with the 2hr (6 booked)', opts('oh-1hr-4pm')?.[0].spotsLeft, MAX - 6);
+check('4pm 2hr held to the entry cap, not its own', opts('oh-1hr-4pm')?.[1].spotsLeft, MAX - 6);
+
+console.log('High-capacity + non-pooled events');
 check('high-capacity social not hidden', model.hiddenIds.has('social-bypass'), false);
 check('high-capacity social sells own capacity', opts('social-bypass')?.[0].spotsLeft, MAX * 2 - 15);
+check(
+  'regular slot during a high-capacity social counts its guests',
+  opts('oh-1hr-during-social')?.[0].spotsLeft,
+  MAX - 15
+);
 check('guided session gets no options', opts('guided-7pm'), undefined);
 
 if (failures > 0) {
