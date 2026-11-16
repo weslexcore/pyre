@@ -33,6 +33,7 @@ function ctxWith(packs: BoughtMembership[], remembered?: string): JourneyContext
       throw new Error('not needed');
     },
     activePacks: async () => packs,
+    freshActivePacks: async () => packs,
     boughtMemberships: async () => packs,
   };
 }

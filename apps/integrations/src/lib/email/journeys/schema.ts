@@ -15,6 +15,7 @@ import { z } from 'zod';
 export const CONDITION_TYPES = [
   'has-active-membership',
   'has-active-intro',
+  'intro-activated',
   'ever-bought-intro',
   'has-non-intro-purchase',
   'has-credits',
@@ -60,6 +61,12 @@ export const CONDITIONS: Record<ConditionType, ConditionMeta> = {
     label: 'Has an active intro offer',
     negatedLabel: 'Has no active intro offer',
     description: 'The intro offer pack is on their account and not expired.',
+  },
+  'intro-activated': {
+    label: 'Intro offer is activated',
+    negatedLabel: 'Intro offer not activated yet',
+    description:
+      'They have booked with their intro offer, so its two weeks are running (Momence sets its start and end dates at the first booking).',
   },
   'ever-bought-intro': {
     label: 'Has ever bought the intro offer',

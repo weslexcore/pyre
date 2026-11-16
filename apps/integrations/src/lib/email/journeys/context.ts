@@ -41,6 +41,8 @@ export interface JourneyContext extends MemberIdentity {
   member(): Promise<HostMember>;
   /** Active subscriptions + credit packs. */
   activePacks(): Promise<BoughtMembership[]>;
+  /** Active packs straight from Momence, bypassing (and refreshing) the cache. */
+  freshActivePacks(): Promise<BoughtMembership[]>;
   /** Every purchase, expired included; null when Momence won't serve history. */
   boughtMemberships(): Promise<BoughtMembership[] | null>;
   enrolledAt: number | null;
@@ -65,6 +67,7 @@ export function buildContext(
   let memberPromise: Promise<HostMember> | null = member ? Promise.resolve(member) : null;
   let packsPromise: Promise<BoughtMembership[]> | null = null;
   let boughtPromise: Promise<BoughtMembership[] | null> | null = null;
+  let freshPromise: Promise<BoughtMembership[]> | null = null;
 
   return {
     ...identity,
@@ -77,6 +80,15 @@ export function buildContext(
     activePacks() {
       packsPromise ??= fetchMemberActivePacks(identity.memberId, { fresh: freshPacks });
       return packsPromise;
+    },
+    freshActivePacks() {
+      // Already fresh: the one activePacks() read is the live one.
+      if (freshPacks) return this.activePacks();
+      if (!freshPromise) {
+        freshPromise = fetchMemberActivePacks(identity.memberId, { fresh: true });
+        packsPromise = freshPromise;
+      }
+      return freshPromise;
     },
     boughtMemberships() {
       boughtPromise ??= fetchMemberBoughtMemberships(identity.memberId);
@@ -155,6 +167,25 @@ const CHECKS: Record<ConditionType, ConditionCheck> = {
     return (await ctx.activePacks()).some(
       (p) => isIntro(p, introIds) && (!p.endDate || Date.parse(p.endDate) > now)
     );
+  },
+  async 'intro-activated'(ctx) {
+    const introIds = await getIntroOfferMembershipIds();
+    const now = Date.now();
+    const activated = (packs: BoughtMembership[]) =>
+      packs.some(
+        (p) =>
+          isIntro(p, introIds) &&
+          Boolean(p.startDate) &&
+          Boolean(p.endDate) &&
+          Date.parse(p.endDate as string) > now
+      );
+    const packs = await ctx.activePacks();
+    if (activated(packs)) return true;
+    // A bought-but-unused intro has no dates yet. The packs cache can be up to
+    // 20h old, so before saying "not yet" re-read Momence — only people still
+    // holding an unactivated intro pay for the extra call.
+    if (!packs.some((p) => isIntro(p, introIds) && !p.endDate)) return false;
+    return activated(await ctx.freshActivePacks());
   },
   async 'ever-bought-intro'(ctx) {
     const introIds = await getIntroOfferMembershipIds();
