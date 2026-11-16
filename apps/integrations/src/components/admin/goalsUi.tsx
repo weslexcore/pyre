@@ -19,6 +19,7 @@ import { formatKpiValue, kpiFreshness, kpiProgress } from '@/lib/goals/kpis';
 import { PACE_LABELS, type PaceState, type TaskProgress } from '@/lib/goals/progress';
 import { GOAL_STATUS_LABELS } from '@/lib/goals/types';
 import { TermsMarked } from './Marked';
+import { StaffAvatar } from './StaffAvatar';
 
 // min-w-0 lets a date or time input, which carries its own intrinsic width,
 // shrink with a flex row or a grid cell on a phone instead of widening it.
@@ -221,32 +222,7 @@ export function RepeatIcon({ className = 'h-3 w-3' }: { className?: string }) {
   );
 }
 
-/** "Maya Lin" → "ML"; "jo@x.com" → "JO". */
-export function initialsOf(name: string): string {
-  const words = name
-    .trim()
-    .split(/[\s._-]+/)
-    .filter(Boolean);
-  if (words.length === 0) return '?';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-}
-
-// A person keeps one tint everywhere, so a face is recognisable across rows.
-const AVATAR_TINTS = [
-  'bg-[var(--pyre-gold)]/20 text-[var(--pyre-gold)]',
-  'bg-[var(--pyre-sage)]/20 text-[var(--pyre-sage)]',
-  'bg-[var(--pyre-red)]/20 text-[var(--pyre-red)]',
-  'bg-white/15 text-[var(--pyre-creme)]',
-];
-
-function tintFor(email: string): string {
-  let hash = 0;
-  for (const char of email) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return AVATAR_TINTS[hash % AVATAR_TINTS.length];
-}
-
-/** One person as a round initials badge. */
+/** One person as a round badge: their photo, or their initial (StaffAvatar). */
 export function Avatar({
   email,
   name,
@@ -256,16 +232,7 @@ export function Avatar({
   name: string;
   size?: 'sm' | 'md';
 }) {
-  const dims = size === 'md' ? 'h-7 w-7 text-[11px]' : 'h-5 w-5 text-[9px]';
-  return (
-    <span
-      aria-hidden="true"
-      title={name}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-mono font-semibold ring-2 ring-[var(--pyre-black)] ${dims} ${tintFor(email)}`}
-    >
-      {initialsOf(name)}
-    </span>
-  );
+  return <StaffAvatar email={email} name={name} size={size} ring />;
 }
 
 /** Everyone on a card, overlapped; past `max` the rest are a count. */

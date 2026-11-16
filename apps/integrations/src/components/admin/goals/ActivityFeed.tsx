@@ -22,6 +22,7 @@ import { FilesField } from '../boards/FilesField';
 import { SectionTitle, textareaClass } from '../goalsUi';
 import { MentionTextarea } from '../MentionTextarea';
 import { SopMarkdown } from '../SopMarkdown';
+import { StaffAvatar } from '../StaffAvatar';
 
 interface EventsResponse {
   events: BoardEventRow[];
@@ -311,7 +312,10 @@ export function EventEntries({
             // links and checklists render; the outer margins are trimmed to
             // keep a one-line comment on one line's worth of space.
             <div className="min-w-0 flex-1 break-words">
-              <span className="text-[var(--pyre-creme)]">
+              <span className="inline-flex items-center gap-1.5 align-middle text-[var(--pyre-creme)]">
+                {entry.actor && (
+                  <StaffAvatar email={entry.actor} name={personName(entry.actor, people)} />
+                )}
                 {entry.actor ? personName(entry.actor, people) : 'You'}
               </span>
               {entry.note?.trim() && (
@@ -337,7 +341,10 @@ export function EventEntries({
             </div>
           ) : (
             <span className="min-w-0 flex-1 break-words">
-              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
+              <span className="inline-flex items-center gap-1.5 align-middle text-[var(--pyre-creme)]">
+                <StaffAvatar email={entry.actor} name={personName(entry.actor, people)} size="xs" />
+                {personName(entry.actor, people)}
+              </span>{' '}
               <span className="text-white/45">
                 {describeEvent(entry, subjectTitle, columnsById, people)}
               </span>

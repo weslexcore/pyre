@@ -44,6 +44,7 @@ import {
   selectClass,
   TaskBar,
 } from '../goalsUi';
+import { StaffAvatar } from '../StaffAvatar';
 import { GoalPanel } from './GoalPanel';
 
 const GOAL_HASH = /^#goal-([0-9a-f-]{36})$/i;
@@ -378,7 +379,18 @@ function GoalRowCard({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <GoalStatusBadge status={goal.status} />
               <PaceChip pace={rollup.pace} />
-              {goal.owner_email && <QuietChip>{personName(goal.owner_email, people)}</QuietChip>}
+              {goal.owner_email && (
+                <QuietChip>
+                  <span className="inline-flex items-center gap-1.5">
+                    <StaffAvatar
+                      email={goal.owner_email}
+                      name={personName(goal.owner_email, people)}
+                      size="xs"
+                    />
+                    {personName(goal.owner_email, people)}
+                  </span>
+                </QuietChip>
+              )}
               {goal.area && <QuietChip>{goal.area}</QuietChip>}
               {goal.target_date && (
                 <QuietChip>

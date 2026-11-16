@@ -30,6 +30,7 @@ import type { CheckItems, RunState } from '@/lib/sops/optimistic';
 import { presenceByItem, type SopPresence } from '@/lib/sops/realtime';
 import { Checklist, type ChecklistMark } from './Checklist';
 import { ConfirmDialog } from './ConfirmDialog';
+import { StaffAvatar } from './StaffAvatar';
 
 // Where the progress header pins: under the page nav, or at the top of the
 // peek modal's own scroll container. Literal class names, for Tailwind.
@@ -126,7 +127,8 @@ export function ChecklistView({
           />
           <span>Also here:</span>
           {others.map((person) => (
-            <span key={person.email} className="text-white/70">
+            <span key={person.email} className="inline-flex items-center gap-1 text-white/70">
+              <StaffAvatar email={person.email} name={person.name} size="xs" />
               {person.name}
               {person.item !== null && (
                 <span className="text-white/40"> · item {person.item + 1}</span>

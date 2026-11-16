@@ -54,6 +54,7 @@ import {
 } from './messagesUi';
 import type { GrantablePerson } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
+import { StaffAvatar } from './StaffAvatar';
 
 interface ThreadResponse extends MessageThreadPayload {
   viewer: SopViewer;
@@ -115,7 +116,8 @@ function AckPanel({
           {done.length > 0 && (
             <ul className="space-y-0.5 text-xs text-white/70">
               {done.map((a) => (
-                <li key={a.email}>
+                <li key={a.email} className="flex items-center gap-1.5">
+                  <StaffAvatar email={a.email} name={personName(a.email, people)} size="xs" />
                   {personName(a.email, people)}{' '}
                   <span className="font-mono text-[10px] text-white/40">{etStamp(a.at)}</span>
                 </li>
@@ -477,13 +479,19 @@ export function MessageThread({
                   Acknowledgment required
                 </span>
               )}
-              <span className="font-mono text-[10px] text-white/40">
-                {personName(message.author_email, people)} ·{' '}
-                {unsent
-                  ? `saved ${etStamp(message.updated_at)}`
-                  : etStamp(message.sent_at ?? message.created_at)}
-                {message.updated_by && ` · edited by ${personName(message.updated_by, people)}`}
-                {unsent && ` · ${draftSharing(message, people)}`}
+              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-white/40">
+                <StaffAvatar
+                  email={message.author_email}
+                  name={personName(message.author_email, people)}
+                />
+                <span>
+                  {personName(message.author_email, people)} ·{' '}
+                  {unsent
+                    ? `saved ${etStamp(message.updated_at)}`
+                    : etStamp(message.sent_at ?? message.created_at)}
+                  {message.updated_by && ` · edited by ${personName(message.updated_by, people)}`}
+                  {unsent && ` · ${draftSharing(message, people)}`}
+                </span>
               </span>
               {isAdmin && (
                 <span className="font-mono text-[10px] text-white/30">
@@ -588,7 +596,11 @@ export function MessageThread({
           {replies.map((reply) => (
             <div key={reply.id} className="rounded border border-white/10 bg-white/5 px-3 py-2">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5 self-center text-xs font-semibold">
+                  <StaffAvatar
+                    email={reply.author_email}
+                    name={personName(reply.author_email, people)}
+                  />
                   {personName(reply.author_email, people)}
                 </span>
                 <span className="font-mono text-[10px] text-white/40">

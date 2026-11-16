@@ -86,6 +86,13 @@ export interface StaffRow {
 	 * redacted like target_hours_per_week.
 	 */
 	scheduling_notes: string | null;
+	/**
+	 * Object key of their photo in the `staff-avatars` bucket; null = the
+	 * initials badge. A new upload gets a new key, so it also busts caches.
+	 */
+	avatar_path: string | null;
+	/** Palette key for the initials badge, picked at random per row. */
+	avatar_color: string;
 	created_at: string;
 	updated_at: string;
 }

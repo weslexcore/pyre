@@ -3,6 +3,7 @@ import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
 import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import { ACCOUNT_HREF, ADMIN_TOOL_SECTIONS, type AdminTool, STAFF_PAGES } from './adminTools';
+import { StaffAvatar } from './StaffAvatar';
 
 interface AdminNavProps {
   currentPath: string;
@@ -208,10 +209,11 @@ export function AdminNav({
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-3 md:px-3">
             <a
               href={ACCOUNT_HREF}
-              title="Sign-in methods"
-              className="truncate font-mono text-xs text-white/40 hover:text-white"
+              title="Your account: photo and sign-in methods"
+              className="flex min-w-0 items-center gap-2 font-mono text-xs text-white/40 hover:text-white"
             >
-              {userEmail}
+              <StaffAvatar email={userEmail} size="md" />
+              <span className="truncate">{userEmail}</span>
             </a>
             {/* A POST, so nothing can sign someone out by fetching a URL.
                 data-astro-reload forces a full navigation rather than a

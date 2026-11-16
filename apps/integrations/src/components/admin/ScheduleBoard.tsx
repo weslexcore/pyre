@@ -86,6 +86,7 @@ import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { OffShiftDuties } from './OffShiftDuties';
 import { PayScheduleSettings } from './PayScheduleSettings';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
+import { StaffAvatar } from './StaffAvatar';
 import { StaffingRulesSettings } from './StaffingRulesSettings';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
@@ -2943,7 +2944,10 @@ function ShiftDetail({
                 className={`rounded px-2 py-1.5 ${isSelf ? 'bg-[var(--pyre-gold)]/10' : 'bg-white/5'}`}
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className={isSelf ? selfNameClass : 'font-medium'}>
+                  <span
+                    className={`inline-flex items-center gap-2 ${isSelf ? selfNameClass : 'font-medium'}`}
+                  >
+                    <StaffAvatar email={person?.email} name={person?.display_name} size="md" />
                     {person?.display_name ?? '?'}
                   </span>
                   <span className="font-mono text-xs text-white/60">
@@ -3886,6 +3890,12 @@ function ShiftDetail({
                     )
                   }
                 >
+                  <StaffAvatar
+                    email={s.email}
+                    name={s.display_name}
+                    size="xs"
+                    className="mr-1.5 align-middle"
+                  />
                   <span className="font-medium">{s.display_name}</span>{' '}
                   <span className={`font-mono text-xs ${badge.className}`}>{badge.label}</span>{' '}
                   <span className="font-mono text-xs text-white/40">
