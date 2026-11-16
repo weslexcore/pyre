@@ -1,7 +1,8 @@
 // "Draft schedule" trigger: sync Momence coverage windows first (so the agent
 // sees current reality), then start one pyre-agents Eve session per requested
-// week. The week view sends a single week; the month view sends every week
-// that still has uncovered shifts. Drafts only fill uncovered shifts — the
+// week. The week view sends a single week; the month and Set views send every
+// week in view that still has uncovered shifts, and the To draft view the
+// weeks the admin picked. Drafts only fill uncovered shifts — the
 // agent is instructed to and /api/agent/proposals enforces it. Returns
 // immediately with the session ids — the board polls for the resulting
 // proposals rather than holding this request open through the agent runs.
@@ -17,6 +18,7 @@ import { actorFromGate } from '@/lib/schedule/change-log';
 import {
   buildDraftMessage,
   MAX_DRAFT_PROMPT_LENGTH,
+  MAX_DRAFT_WEEKS,
   sanitizeDraftPrompt,
 } from '@/lib/schedule/draft-prompt';
 import { startEveSession } from '@/lib/schedule/eve-session';
@@ -25,9 +27,6 @@ import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
 export const prerender = false;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A month view spans at most 6 Mondays; anything more is a client bug. */
-const MAX_WEEKS = 6;
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requireScheduleManage(cookies);
@@ -65,8 +64,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       ? [body.weekStart]
       : [];
   const uniqueWeeks = [...new Set(rawWeeks)];
-  if (uniqueWeeks.length === 0 || uniqueWeeks.length > MAX_WEEKS) {
-    return json({ error: `weekStarts must list 1–${MAX_WEEKS} weeks` }, 400);
+  if (uniqueWeeks.length === 0 || uniqueWeeks.length > MAX_DRAFT_WEEKS) {
+    return json({ error: `weekStarts must list 1–${MAX_DRAFT_WEEKS} weeks` }, 400);
   }
   for (const week of uniqueWeeks) {
     if (typeof week !== 'string' || !DATE_RE.test(week) || weekStartOf(week) !== week) {

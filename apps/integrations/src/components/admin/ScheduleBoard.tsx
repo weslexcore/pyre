@@ -78,7 +78,7 @@ import type {
   SubSwapOfferRow,
   TimeOffRow,
 } from '@/lib/db';
-import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
+import { MAX_DRAFT_PROMPT_LENGTH, MAX_DRAFT_WEEKS } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
 import type { SwapCandidate } from '@/lib/schedule/swap';
 import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
@@ -245,9 +245,22 @@ const hhmm = (t: string) => t.slice(0, 5);
 // calendar month as the same day list, or — manage side only — every
 // under-staffed shift coming up, or every shift with an outstanding request.
 // 'set' is the locked schedule: today through the last set-in-stone date.
-type BoardView = 'week' | 'month' | 'set' | 'uncovered' | 'requests';
+// 'draft' (manage side) lists every upcoming week that still has uncovered
+// shifts, so they can be drafted in one run instead of a week at a time.
+type BoardView = 'week' | 'month' | 'set' | 'draft' | 'uncovered' | 'requests';
 
-/** How far ahead the uncovered and requests views look. Momence sync only
+/** One row of the To draft view: an upcoming week with uncovered shifts. */
+interface DraftWeekRow {
+  week: string;
+  /** Uncovered live shifts from today on. */
+  shifts: number;
+  /** Staff still needed across those shifts (live assignments only). */
+  openSlots: number;
+  /** An open draft proposal for the week is waiting for review. */
+  hasDraft: boolean;
+}
+
+/** How far ahead the uncovered, to-draft and requests views look. Momence sync only
  * creates shifts ~3 weeks out, but manual and drafted shifts can sit further
  * ahead. */
 const UNCOVERED_HORIZON_DAYS = 182;
@@ -344,7 +357,14 @@ const emptyShiftForm: ShiftFormState = {
   notes: '',
 };
 
-const BOARD_VIEWS: readonly BoardView[] = ['set', 'week', 'month', 'uncovered', 'requests'];
+const BOARD_VIEWS: readonly BoardView[] = [
+  'set',
+  'week',
+  'month',
+  'draft',
+  'uncovered',
+  'requests',
+];
 
 /**
  * Deep-link params — /admin/schedule?view=month&date=2026-08-24&shift=<id>
@@ -502,6 +522,9 @@ export function ScheduleBoard() {
   // composer is where the run is actually started.
   const [draftComposerOpen, setDraftComposerOpen] = useState(false);
   const [draftNote, setDraftNote] = useState('');
+  // To draft view: the weeks ticked for the next run. Null until the admin
+  // touches a checkbox, meaning "every week without a draft yet" (capped).
+  const [draftPick, setDraftPick] = useState<ReadonlySet<string> | null>(null);
   // "My shifts": filter the week/month lists to shifts the viewer is on.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
   // Month view opens upcoming-only; this reveals the days already behind us.
@@ -565,7 +588,7 @@ export function ScheduleBoard() {
     if (view === 'set') {
       return { start: weekStartOf(todayLocal()), end: addDays(weekStartOf(setEnd), 6) };
     }
-    if (view === 'uncovered') {
+    if (view === 'uncovered' || view === 'draft') {
       const start = weekStartOf(todayLocal());
       return { start, end: addDays(start, UNCOVERED_HORIZON_DAYS) };
     }
@@ -586,7 +609,7 @@ export function ScheduleBoard() {
   // entries whose ranges line up, and lib/client/pageData warms the current
   // week's entry (this exact URL shape) when a link to the board is hovered.
   const boardUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}${
-    view === 'week' || view === 'month' ? '&includeDrafts=1' : ''
+    view === 'uncovered' || view === 'requests' ? '' : '&includeDrafts=1'
   }`;
   const {
     data,
@@ -698,7 +721,7 @@ export function ScheduleBoard() {
   };
   // Week, month and set lay days out as a calendar; the uncovered and
   // requests views are filtered work lists, so the calendar-only controls
-  // hide there. Set fetches live shifts only, so the draft tools stay off it.
+  // hide there. The To draft view is a week list, not a calendar either.
   const calendarView = view === 'week' || view === 'month' || view === 'set';
 
   const toggleMineOnly = () => {
@@ -765,6 +788,7 @@ export function ScheduleBoard() {
     if (view === 'uncovered') {
       return [...new Set(uncoveredShifts.map((s) => s.shift_date))].sort();
     }
+    if (view === 'draft') return [];
     if (view === 'requests') {
       return [...new Set(requestShifts.map((s) => s.shift_date))].sort();
     }
@@ -1031,27 +1055,73 @@ export function ScheduleBoard() {
   };
 
   // Draft proposals to show banners for: the visible week's in week view,
-  // every fetched one (sorted by week) in month view.
+  // every fetched one (sorted by week) in month and To draft, and in Set the
+  // ones for weeks the locked window touches.
   const visibleProposals = useMemo(() => {
     const drafts = (data?.proposals ?? []).filter((p) => p.status === 'draft');
     if (view === 'week') return drafts.filter((p) => p.week_start === weekStart);
-    if (view === 'month')
-      return [...drafts].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    const sorted = [...drafts].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    if (view === 'month' || view === 'draft') return sorted;
+    if (view === 'set') return sorted.filter((p) => p.week_start <= setEnd);
     return [];
-  }, [data, view, weekStart]);
+  }, [data, view, weekStart, setEnd]);
 
-  // Weeks the Draft button targets: the visible week, or in month view every
-  // week that still has an uncovered shift today or later.
+  // To draft view: every upcoming week with an uncovered shift today or
+  // later, with how much is open and whether a draft is already waiting.
+  const draftWeekRows = useMemo((): DraftWeekRow[] => {
+    if (view !== 'draft') return [];
+    const today = todayLocal();
+    const byWeek = new Map<string, DraftWeekRow>();
+    for (const s of data?.shifts ?? []) {
+      if (s.shift_date < today || !isUncovered(s)) continue;
+      const week = weekStartOf(s.shift_date);
+      const row = byWeek.get(week) ?? { week, shifts: 0, openSlots: 0, hasDraft: false };
+      row.shifts += 1;
+      row.openSlots += s.staff_needed - s.assignments.filter((a) => !a.is_draft).length;
+      byWeek.set(week, row);
+    }
+    const draftedWeeks = new Set(
+      (data?.proposals ?? []).filter((p) => p.status === 'draft').map((p) => p.week_start)
+    );
+    return [...byWeek.values()]
+      .sort((a, b) => a.week.localeCompare(b.week))
+      .map((row) => ({ ...row, hasDraft: draftedWeeks.has(row.week) }));
+  }, [view, data]);
+
+  // The weeks ticked in the To draft view: the admin's pick (dropping weeks
+  // no longer listed), else every week without a draft, up to one run's cap.
+  const draftPicked = useMemo(() => {
+    const listed = new Set(draftWeekRows.map((r) => r.week));
+    if (draftPick) return [...draftPick].filter((w) => listed.has(w)).sort();
+    return draftWeekRows
+      .filter((r) => !r.hasDraft)
+      .slice(0, MAX_DRAFT_WEEKS)
+      .map((r) => r.week);
+  }, [draftWeekRows, draftPick]);
+
+  const toggleDraftPick = (week: string) => {
+    const next = new Set(draftPicked);
+    if (next.has(week)) next.delete(week);
+    else if (next.size < MAX_DRAFT_WEEKS) next.add(week);
+    setDraftPick(next);
+  };
+
+  // Weeks the Draft button targets: the visible week; in month view every
+  // week that still has an uncovered shift today or later; in Set the same,
+  // through the last locked day; in To draft the weeks ticked.
   const draftTargetWeeks = useMemo(() => {
     if (view === 'week') return [weekStart];
-    if (view !== 'month') return [];
+    if (view === 'draft') return draftPicked;
+    if (view !== 'month' && view !== 'set') return [];
     const today = todayLocal();
     const weeks = new Set<string>();
     for (const s of data?.shifts ?? []) {
-      if (s.shift_date >= today && isUncovered(s)) weeks.add(weekStartOf(s.shift_date));
+      if (s.shift_date < today || !isUncovered(s)) continue;
+      if (view === 'set' && s.shift_date > setEnd) continue;
+      weeks.add(weekStartOf(s.shift_date));
     }
     return [...weeks].sort();
-  }, [view, weekStart, data]);
+  }, [view, weekStart, data, setEnd, draftPicked]);
 
   const syncMomence = async () => {
     await run(async () => {
@@ -1173,7 +1243,11 @@ export function ScheduleBoard() {
     }
     pollForNewProposals(newPendingRun('draft', targetWeeks, Boolean(draftNote.trim())), (ok) => {
       setDrafting(false);
-      if (ok) setDraftNote('');
+      if (ok) {
+        setDraftNote('');
+        // The drafted weeks now have proposals; let the default pick move on.
+        setDraftPick(null);
+      }
     });
   };
 
@@ -1309,6 +1383,17 @@ export function ScheduleBoard() {
             {canManage && (
               <button
                 type="button"
+                className={pillClass(view === 'draft')}
+                aria-pressed={view === 'draft'}
+                title="Every upcoming week that still has unstaffed shifts, to draft in one run"
+                onClick={() => setView('draft')}
+              >
+                To draft
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
                 className={pillClass(view === 'uncovered')}
                 aria-pressed={view === 'uncovered'}
                 onClick={() => setView('uncovered')}
@@ -1392,6 +1477,13 @@ export function ScheduleBoard() {
             </span>
           )}
 
+          {view === 'draft' && (
+            <span className="font-mono text-xl font-bold text-white/80">
+              {draftWeekRows.length} week{draftWeekRows.length === 1 ? '' : 's'} with unstaffed
+              shifts
+            </span>
+          )}
+
           {view === 'requests' && (
             <span className="font-mono text-xl font-bold text-white/80">
               {pendingRequestCount} outstanding request{pendingRequestCount === 1 ? '' : 's'}
@@ -1429,7 +1521,7 @@ export function ScheduleBoard() {
                   Auto on-call
                 </button>
               )}
-              {(view === 'week' || view === 'month') && (
+              {(view === 'week' || view === 'month' || view === 'set' || view === 'draft') && (
                 <button
                   type="button"
                   className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
@@ -1438,14 +1530,20 @@ export function ScheduleBoard() {
                   title={
                     view === 'month'
                       ? 'Drafts every week this month that still has uncovered shifts'
-                      : undefined
+                      : view === 'set'
+                        ? 'Drafts the unstaffed shifts in every week of the set schedule'
+                        : view === 'draft'
+                          ? `Drafts the weeks ticked below (up to ${MAX_DRAFT_WEEKS} per run)`
+                          : undefined
                   }
                 >
                   {drafting
                     ? 'Drafting…'
-                    : view === 'month'
+                    : view === 'month' || view === 'set'
                       ? `✦ Draft uncovered (${draftTargetWeeks.length} wk)`
-                      : '✦ Draft schedule'}
+                      : view === 'draft'
+                        ? `✦ Draft selected (${draftTargetWeeks.length} wk)`
+                        : '✦ Draft schedule'}
                 </button>
               )}
             </span>
@@ -1536,7 +1634,7 @@ export function ScheduleBoard() {
         <div className="min-w-0 space-y-6">
           {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
-          {view !== 'set' && range.end >= firstTentative && (
+          {view !== 'set' && view !== 'draft' && range.end >= firstTentative && (
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
               Set in stone through{' '}
               <span className="font-bold text-[var(--pyre-creme)]">
@@ -1555,60 +1653,64 @@ export function ScheduleBoard() {
             </p>
           )}
 
-          {draftComposerOpen && !drafting && canManage && (view === 'week' || view === 'month') && (
-            <section className="space-y-2 rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/[0.06] p-3">
-              <label
-                className="block font-mono text-xs font-bold uppercase tracking-wide text-white/50"
-                htmlFor="draft-note"
-              >
-                Anything to keep in mind? (optional)
-              </label>
-              <textarea
-                id="draft-note"
-                // biome-ignore lint/a11y/noAutofocus: the composer only opens on an explicit click
-                autoFocus
-                rows={3}
-                maxLength={MAX_DRAFT_PROMPT_LENGTH}
-                className={inputClass}
-                placeholder="e.g. Asana and Cortney need training shifts with Wes, give Sarah and Omar each a shift to lead, and Liz needs 1 setup + 1 full shift."
-                value={draftNote}
-                onChange={(e) => setDraftNote(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setDraftComposerOpen(false);
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void draftSchedule();
-                }}
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
-                  onClick={() => void draftSchedule()}
-                  disabled={busy || draftTargetWeeks.length === 0}
+          {draftComposerOpen &&
+            !drafting &&
+            canManage &&
+            view !== 'uncovered' &&
+            view !== 'requests' && (
+              <section className="space-y-2 rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/[0.06] p-3">
+                <label
+                  className="block font-mono text-xs font-bold uppercase tracking-wide text-white/50"
+                  htmlFor="draft-note"
                 >
-                  ✦ Draft{draftTargetWeeks.length > 1 ? ` ${draftTargetWeeks.length} weeks` : ''}
-                </button>
-                <button
-                  type="button"
-                  className={buttonClass}
-                  onClick={() => setDraftComposerOpen(false)}
-                >
-                  Cancel
-                </button>
-                <span className="font-mono text-xs text-white/40">
-                  Guides the agent's judgment for{' '}
-                  {draftTargetWeeks.length > 1
-                    ? `all ${draftTargetWeeks.length} weeks in this run`
-                    : `the week of ${formatChipDate(draftTargetWeeks[0] ?? weekStart)}`}
-                  . Availability and staffing limits still win. ⌘⏎ to draft.
-                </span>
-                {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
+                  Anything to keep in mind? (optional)
+                </label>
+                <textarea
+                  id="draft-note"
+                  // biome-ignore lint/a11y/noAutofocus: the composer only opens on an explicit click
+                  autoFocus
+                  rows={3}
+                  maxLength={MAX_DRAFT_PROMPT_LENGTH}
+                  className={inputClass}
+                  placeholder="e.g. Asana and Cortney need training shifts with Wes, give Sarah and Omar each a shift to lead, and Liz needs 1 setup + 1 full shift."
+                  value={draftNote}
+                  onChange={(e) => setDraftNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setDraftComposerOpen(false);
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void draftSchedule();
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+                    onClick={() => void draftSchedule()}
+                    disabled={busy || draftTargetWeeks.length === 0}
+                  >
+                    ✦ Draft{draftTargetWeeks.length > 1 ? ` ${draftTargetWeeks.length} weeks` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => setDraftComposerOpen(false)}
+                  >
+                    Cancel
+                  </button>
                   <span className="font-mono text-xs text-white/40">
-                    {MAX_DRAFT_PROMPT_LENGTH - draftNote.length} left
+                    Guides the agent's judgment for{' '}
+                    {draftTargetWeeks.length > 1
+                      ? `all ${draftTargetWeeks.length} weeks in this run`
+                      : `the week of ${formatChipDate(draftTargetWeeks[0] ?? weekStart)}`}
+                    . Availability and staffing limits still win. ⌘⏎ to draft.
                   </span>
-                )}
-              </div>
-            </section>
-          )}
+                  {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
+                    <span className="font-mono text-xs text-white/40">
+                      {MAX_DRAFT_PROMPT_LENGTH - draftNote.length} left
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
 
           {drafting && (
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
@@ -1862,6 +1964,21 @@ export function ScheduleBoard() {
               onRefine={(prompt) => refineDraft(p.week_start, prompt)}
             />
           ))}
+
+          {view === 'draft' && (
+            <DraftWeekList
+              rows={draftWeekRows}
+              picked={draftPicked}
+              setEnd={setEnd}
+              loading={loading || refreshing}
+              disabled={busy || drafting}
+              onToggle={toggleDraftPick}
+              onOpen={(week) => {
+                setWeekStart(week);
+                setView('week');
+              }}
+            />
+          )}
 
           {view === 'uncovered' && days.length === 0 && !refreshing && (
             <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
@@ -4272,6 +4389,93 @@ interface OnCallRecommendation {
 }
 
 /** A proposal's on-call recommendations (summary.onCall), tolerating old rows. */
+/**
+ * The To draft view's body: one row per upcoming week that still has
+ * unstaffed shifts, ticked for the next draft run (up to MAX_DRAFT_WEEKS).
+ * Weeks with a draft already waiting say so, and start unticked; their
+ * proposals sit in the banners below for review. "Open" jumps to the week.
+ */
+function DraftWeekList({
+  rows,
+  picked,
+  setEnd,
+  loading,
+  disabled,
+  onToggle,
+  onOpen,
+}: {
+  rows: DraftWeekRow[];
+  picked: readonly string[];
+  setEnd: string;
+  loading: boolean;
+  disabled: boolean;
+  onToggle: (week: string) => void;
+  onOpen: (week: string) => void;
+}) {
+  if (rows.length === 0) {
+    if (loading) return null;
+    return (
+      <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
+        Nothing to draft — every upcoming shift is fully staffed.
+      </p>
+    );
+  }
+  const pickedSet = new Set(picked);
+  const atCap = picked.length >= MAX_DRAFT_WEEKS;
+  return (
+    <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+      <p className="font-mono text-xs text-white/50">
+        Tick the weeks to draft, then choose Draft selected. One run covers up to {MAX_DRAFT_WEEKS}{' '}
+        weeks.
+      </p>
+      <ul className="divide-y divide-white/10">
+        {rows.map((row) => {
+          const checked = pickedSet.has(row.week);
+          return (
+            <li key={row.week} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+              <label className="flex min-w-0 flex-1 items-center gap-3 font-mono text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled || (!checked && atCap)}
+                  onChange={() => onToggle(row.week)}
+                />
+                <span className="font-bold">Week of {formatChipDate(row.week)}</span>
+                <span className="text-xs text-white/50">
+                  {row.shifts} shift{row.shifts === 1 ? '' : 's'} · {row.openSlots} open slot
+                  {row.openSlots === 1 ? '' : 's'}
+                </span>
+              </label>
+              <span className="flex items-center gap-2">
+                {row.week <= setEnd && (
+                  <span
+                    className="rounded bg-white/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/60"
+                    title="This week is part of the set schedule"
+                  >
+                    Set
+                  </span>
+                )}
+                {row.hasDraft ? (
+                  <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                    Draft to review
+                  </span>
+                ) : (
+                  <span className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-red)]">
+                    Needs a draft
+                  </span>
+                )}
+                <button type="button" className={buttonClass} onClick={() => onOpen(row.week)}>
+                  Open
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function proposalOnCall(proposal: ScheduleProposalRow): OnCallRecommendation[] {
   const raw = (proposal.summary as { onCall?: unknown }).onCall;
   if (!Array.isArray(raw)) return [];

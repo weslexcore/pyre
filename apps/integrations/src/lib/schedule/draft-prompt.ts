@@ -6,6 +6,10 @@
 /** Longer than this and it stops being a note; the UI caps at the same size. */
 export const MAX_DRAFT_PROMPT_LENGTH = 1000;
 
+/** Most weeks one draft run may cover (one agent session each). A month view
+ * spans at most 6 Mondays, and the board's To draft view caps its pick here. */
+export const MAX_DRAFT_WEEKS = 6;
+
 /** Control characters that have no business in a note — newlines and tabs stay. */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
