@@ -1,12 +1,22 @@
 ---
-// Sign-in methods: a password and passkeys, so someone who cannot reach
+// Your account: your profile photo (or initials badge colour), and your
+// sign-in methods: a password and passkeys, so someone who cannot reach
 // their inbox can still sign in. Open to anyone with dashboard access (see
 // ACCOUNT_HREF in adminTools); /api/auth/account/* acts only on the session's
 // own user.
 import { AccountSecurity } from '@/components/admin/AccountSecurity';
+import { ProfilePhoto } from '@/components/admin/ProfilePhoto';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { listStaff } from '@/lib/auth/access';
+
+const email = (Astro.locals.adminUser?.email ?? '').toLowerCase();
+const name = (await listStaff())?.find((row) => row.email === email)?.display_name ?? email;
 ---
 
-<AdminLayout title="Sign-in methods" subtitle="Ways to sign in besides the emailed link">
+<AdminLayout title="Your account" subtitle="Your photo, and ways to sign in besides the emailed link">
+  {/* client:only: it reads the page's staff directory, which the server never sees. */}
+  <div class="mb-6 max-w-xl">
+    <ProfilePhoto client:only="react" email={email} name={name} />
+  </div>
   <AccountSecurity client:load />
 </AdminLayout>

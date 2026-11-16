@@ -26,8 +26,10 @@ import Favicon from '@/components/Favicon.astro';
 import PullToRefresh from '@/components/PullToRefresh.astro';
 import PyreMark from '@/components/PyreMark.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
+import { listStaff } from '@/lib/auth/access';
 import { getUnreadCount } from '@/lib/notifications/unread';
 import { getSetting } from '@/lib/settings/store';
+import { directoryEntryOf, STAFF_DIRECTORY_ELEMENT_ID } from '@/lib/staff/avatar';
 import { getPendingSuggestionCount } from '@/lib/suggestions/unread';
 import '@/styles/admin.css';
 
@@ -56,7 +58,7 @@ const allowed = !!user && !!access && canViewPath(access, Astro.url.pathname);
 // four queries used to run one after another on every admin page, and their
 // round trips added up ahead of the first byte.
 const grantedTools = access ? toolsForAccess(access) : [];
-const [hiddenTools, pinnedHrefs, unreadCount, pendingCount] = await Promise.all([
+const [hiddenTools, pinnedHrefs, unreadCount, pendingCount, staffRows] = await Promise.all([
   access ? getSetting('navigation.hiddenTools') : Promise.resolve([] as string[]),
   // The user's pin order for the nav's Pinned group — reuse the page's fetch
   // when it already made one (the /admin index memoizes into locals).
@@ -70,7 +72,15 @@ const [hiddenTools, pinnedHrefs, unreadCount, pendingCount] = await Promise.all(
   allowed && grantedTools.some((tool) => tool.href === SUGGESTIONS_HREF)
     ? getPendingSuggestionCount()
     : Promise.resolve(0),
+  // Everyone's avatar (photo or initial + colour), so any island can draw a
+  // person's badge from their email (lib/client/staffDirectory). The roster
+  // is cached, so this is usually free.
+  allowed ? listStaff() : Promise.resolve(null),
 ]);
+// Inert JSON for the islands; `<` escaped so a name can't close the tag.
+const staffDirectoryJson = JSON.stringify(
+  (staffRows ?? []).flatMap((row) => directoryEntryOf(row) ?? [])
+).replace(/</g, '\\u003c');
 const tools = access ? visibleTools(grantedTools, hiddenTools) : [];
 // Pages the global search (cmd+K, or the magnifier in the header) can open:
 // the same tools plus their sub-pages, filtered the same way.
@@ -186,6 +196,11 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               )
             }
           </main>
+          <script
+            type="application/json"
+            id={STAFF_DIRECTORY_ELEMENT_ID}
+            set:html={staffDirectoryJson}
+          />
           {/* A card link opens its drawer over this page, not on its board. */}
           <CardPeek client:load />
         </>

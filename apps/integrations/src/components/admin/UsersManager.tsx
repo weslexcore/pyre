@@ -34,6 +34,7 @@ import {
   SHIFT_NOTES_HREF,
   USERS_HREF,
 } from './adminTools';
+import { StaffAvatar } from './StaffAvatar';
 
 /** One board a 'board:<slug>' checkbox can grant, as the API lists them. */
 interface BoardOption {
@@ -866,6 +867,8 @@ export function UsersManager() {
     preferred_shifts_per_week: null,
     max_shifts_per_week: null,
     scheduling_notes: null,
+    avatar_path: null,
+    avatar_color: 'ember',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
@@ -1120,6 +1123,7 @@ export function UsersManager() {
                 >
                   ›
                 </span>
+                <StaffAvatar email={person.email} name={person.display_name} size="md" />
                 <span className="font-medium text-[var(--pyre-creme)]">{person.display_name}</span>
                 {isSelf && <span className={chipClass}>you</span>}
                 <span className="truncate font-mono text-xs text-white/35">

@@ -21,6 +21,7 @@ import { emptyDraft, hasContent, type MessageDraft } from './MessageComposer';
 import { buttonClass, chipClass, draftSharing } from './messagesUi';
 import { NewMessageComposer, type NewMessageMeta, newMessageBackupKey } from './NewMessageComposer';
 import type { GrantablePerson } from './SopAccessPicker';
+import { StaffAvatar } from './StaffAvatar';
 
 interface ListResponse {
   messages: MessageSummary[];
@@ -133,7 +134,14 @@ export function MessagesIndex() {
                     {excerpt(m.body_md, 220)}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/40">
-                    <span>{personName(m.author_email, people)}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <StaffAvatar
+                        email={m.author_email}
+                        name={personName(m.author_email, people)}
+                        size="xs"
+                      />
+                      {personName(m.author_email, people)}
+                    </span>
                     <span>
                       saved {etStamp(m.updated_at)}
                       {m.updated_by && ` by ${personName(m.updated_by, people)}`}
@@ -188,7 +196,14 @@ export function MessagesIndex() {
                 </div>
                 <p className="mt-1 line-clamp-2 text-sm text-white/60">{excerpt(m.body_md, 220)}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/40">
-                  <span>{personName(m.author_email, people)}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <StaffAvatar
+                      email={m.author_email}
+                      name={personName(m.author_email, people)}
+                      size="xs"
+                    />
+                    {personName(m.author_email, people)}
+                  </span>
                   <span>{etStamp(m.sent_at ?? m.created_at)}</span>
                   <span>
                     {m.reply_count === 0

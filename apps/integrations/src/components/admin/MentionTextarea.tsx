@@ -13,6 +13,7 @@
 import { type ComponentProps, useCallback, useRef, useState } from 'react';
 import { type MentionPerson, matchMentions, mentionQuery, mentionToken } from '@/lib/mentions';
 import { LinkTextarea } from './LinkTextarea';
+import { StaffAvatar } from './StaffAvatar';
 
 type Props = Omit<ComponentProps<typeof LinkTextarea>, 'onChange'> & {
   onChange: (value: string) => void;
@@ -135,13 +136,16 @@ export function MentionTextarea({
               aria-selected={index === selected}
               type="button"
               tabIndex={-1}
-              className={`w-full rounded px-3 py-2 text-left text-sm ${index === selected ? 'bg-white/15' : 'hover:bg-white/10'}`}
+              className={`flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-sm ${index === selected ? 'bg-white/15' : 'hover:bg-white/10'}`}
               onPointerDown={(event) => event.preventDefault()}
               onPointerMove={() => setActive(index)}
               onClick={() => choose(person)}
             >
-              <span className="block text-white">{person.name}</span>
-              <span className="block text-xs text-white/50">{person.email}</span>
+              <StaffAvatar email={person.email} name={person.name} size="md" />
+              <span className="min-w-0">
+                <span className="block text-white">{person.name}</span>
+                <span className="block truncate text-xs text-white/50">{person.email}</span>
+              </span>
             </button>
           ))}
         </div>

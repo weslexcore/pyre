@@ -107,6 +107,7 @@ import {
   useClassifications,
 } from './Signals';
 import { SopMarkdown } from './SopMarkdown';
+import { StaffAvatar } from './StaffAvatar';
 import { SuggestionPanel } from './suggestions/SuggestionPanel';
 import { useSuggestions } from './suggestions/useSuggestions';
 
@@ -938,7 +939,12 @@ export function ShiftNotes() {
               className="scroll-mt-20 rounded border border-white/10 bg-white/5 p-3 target:border-[var(--pyre-gold)]/60"
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-sm font-semibold">
+                <span className="inline-flex items-center gap-2 self-center text-sm font-semibold">
+                  <StaffAvatar
+                    email={note.author_email}
+                    name={personName(note.author_email, names)}
+                    size="md"
+                  />
                   {personName(note.author_email, names)}
                 </span>
                 <span className="font-mono text-[10px] text-white/40">
@@ -1254,7 +1260,13 @@ export function ShiftNotes() {
                         }`}
                       >
                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                          <span className="text-xs font-semibold">
+                          <span className="inline-flex items-center gap-1.5 self-center text-xs font-semibold">
+                            {reply.author_email && (
+                              <StaffAvatar
+                                email={reply.author_email}
+                                name={personName(reply.author_email, names)}
+                              />
+                            )}
                             {personName(reply.author_email ?? '', names)}
                           </span>
                           <span className="font-mono text-[10px] text-white/40">
