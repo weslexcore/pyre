@@ -85,8 +85,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .eq('source_id', conversationId)
     .eq('requested_by', email)
     .limit(MAX_ACTIONS);
-  if (runError) return dbError(runError);
-  const runIds = ((runs ?? []) as { id: string }[]).map((r) => r.id);
+  // A failed read (e.g. before the pyre_agent_suggestions migration, when
+  // source_id is still a uuid) must not take the proposals down with it.
+  if (runError) console.error('[agent-actions] suggestion runs read failed:', runError.message);
+  const runIds = runError ? [] : ((runs ?? []) as { id: string }[]).map((r) => r.id);
   let rows: AgentSuggestionRow[] = [];
   if (runIds.length > 0) {
     const { data: found, error: suggestionError } = await db
@@ -95,8 +97,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .in('run_id', runIds)
       .neq('status', 'superseded')
       .order('created_at', { ascending: true });
-    if (suggestionError) return dbError(suggestionError);
-    rows = (found ?? []) as AgentSuggestionRow[];
+    if (suggestionError) {
+      console.error('[agent-actions] suggestions read failed:', suggestionError.message);
+    } else {
+      rows = (found ?? []) as AgentSuggestionRow[];
+    }
   }
   const links = await resolveLinks(db, rows);
   const people = await getPeopleNames(
