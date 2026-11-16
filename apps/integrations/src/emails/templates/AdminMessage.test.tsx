@@ -26,6 +26,13 @@ describe('AdminMessage', () => {
     expect(html).toContain('Open the message');
   });
 
+  it('asks for acknowledgment only when the message does', async () => {
+    const asking = await renderHtml({ requiresAck: true });
+    expect(asking).toContain('needs your acknowledgment');
+    expect(asking).toContain('Open and acknowledge');
+    expect(await renderHtml({})).not.toContain('acknowledgment');
+  });
+
   it('draws markdown as formatting', async () => {
     const html = await renderHtml({
       bodyMd: '## Steps\n\n- Fold **in thirds**\n- Restock\n\nSee [the SOP](https://x.test/s).',

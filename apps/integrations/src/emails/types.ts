@@ -124,6 +124,8 @@ export interface AdminMessageEmailProps {
   bodyMd: string;
   /** The message's thread on the dashboard. */
   messageUrl: string;
+  /** The message asks the reader to confirm on the dashboard that they've read it. */
+  requiresAck?: boolean;
 }
 
 // Staff scheduling sub requests (all transactional — no unsubscribeUrl).

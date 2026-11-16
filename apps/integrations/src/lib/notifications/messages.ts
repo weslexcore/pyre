@@ -136,6 +136,7 @@ export async function emailMessagePosted(
       namesOf(messageMentionPeople(rows, message))
     ),
     messageUrl: `${origin}${messageHref(message.id)}`,
+    requiresAck: message.requires_ack,
   };
   const results = await sendToEach(
     recipients,

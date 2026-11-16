@@ -5,9 +5,9 @@
 // lib/messages/templates); nothing here sends or touches a message.
 //
 //   GET                         → { templates, people }
-//   POST  { name, title, bodyMd, audienceRoles, audienceEmails, pinned? }
+//   POST  { name, title, bodyMd, audienceRoles, audienceEmails, pinned?, requiresAck? }
 //                               → { template }
-//   PATCH { id, name?, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?,
+//   PATCH { id, name?, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, requiresAck?,
 //           expectedUpdatedAt? }
 //                               → { template }
 //   DELETE ?id=<uuid>           → { ok: true }
@@ -82,6 +82,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
     return json({ error: 'pinned must be a boolean' }, 400);
   }
+  if (body.requiresAck !== undefined && typeof body.requiresAck !== 'boolean') {
+    return json({ error: 'requiresAck must be a boolean' }, 400);
+  }
 
   const { data, error } = await db
     .from('admin_message_templates')
@@ -92,6 +95,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       audience_roles: audience.roles,
       audience_emails: audience.emails,
       pinned: body.pinned === true,
+      requires_ack: body.requiresAck === true,
       created_by: email,
     })
     .select('*')
@@ -156,6 +160,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body.pinned !== undefined) {
     if (typeof body.pinned !== 'boolean') return json({ error: 'pinned must be a boolean' }, 400);
     patch.pinned = body.pinned;
+  }
+  if (body.requiresAck !== undefined) {
+    if (typeof body.requiresAck !== 'boolean') {
+      return json({ error: 'requiresAck must be a boolean' }, 400);
+    }
+    patch.requires_ack = body.requiresAck;
   }
   if (Object.keys(patch).length === 0) return json({ error: 'Nothing to update' }, 400);
   patch.updated_by = email;

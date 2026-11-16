@@ -67,6 +67,7 @@ function draftOf(template: AdminMessageTemplateRow): MessageDraft {
     bodyMd: template.body_md,
     audience: { roles: template.audience_roles, emails: template.audience_emails },
     pinned: template.pinned,
+    requiresAck: template.requires_ack,
   };
 }
 

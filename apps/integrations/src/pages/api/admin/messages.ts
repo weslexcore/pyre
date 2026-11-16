@@ -8,10 +8,10 @@
 //   GET  [?archived=1]         → { messages, people, viewer, staff? }
 //   GET  ?id=<uuid>            → { message, replies, people, viewer }
 //   POST { title, bodyMd, audienceRoles, audienceEmails, pinned?, email?,
-//          draft?, sharedWith? }
+//          draft?, sharedWith?, requiresAck? }
 //                              → { message, people, notified, emailed }
 //   PATCH { id, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, archived?,
-//           sharedWith?, send?, email?, expectedUpdatedAt? }
+//           sharedWith?, send?, email?, requiresAck?, expectedUpdatedAt? }
 //                              → { message, people, notified, emailed }
 //   DELETE ?id=<uuid>          → { ok: true }
 //
@@ -30,6 +30,10 @@
 // it while it's being written — but all three are required to send.
 // `expectedUpdatedAt` is the updated_at the editor started from: if someone
 // else saved since, the PATCH is refused with 409 rather than overwriting.
+//
+// `requiresAck` asks the audience to check off that they've read it
+// (/api/admin/message-acks); it can be switched on or off after sending,
+// and the thread response's `ack` says where that stands.
 //
 // Opening one message marks the viewer's notifications about it read.
 // `staff` (the roster the audience picker offers) rides only on the admin
@@ -168,6 +172,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.email !== undefined && typeof body.email !== 'boolean') {
     return json({ error: 'email must be a boolean' }, 400);
   }
+  if (body.requiresAck !== undefined && typeof body.requiresAck !== 'boolean') {
+    return json({ error: 'requiresAck must be a boolean' }, 400);
+  }
   let sharedWith: string[] = [];
   if (body.sharedWith !== undefined) {
     if (!draft) return json({ error: 'Only a draft can be shared' }, 400);
@@ -185,6 +192,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       audience_roles: audience.roles,
       audience_emails: audience.emails,
       pinned: body.pinned === true,
+      requires_ack: body.requiresAck === true,
       // Left out for a send, so the column's now() default stamps it.
       ...(draft ? { sent_at: null, shared_with: sharedWith } : {}),
     })
@@ -277,6 +285,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body.pinned !== undefined) {
     if (typeof body.pinned !== 'boolean') return json({ error: 'pinned must be a boolean' }, 400);
     patch.pinned = body.pinned;
+  }
+  if (body.requiresAck !== undefined) {
+    if (typeof body.requiresAck !== 'boolean') {
+      return json({ error: 'requiresAck must be a boolean' }, 400);
+    }
+    patch.requires_ack = body.requiresAck;
   }
   if (body.archived !== undefined) {
     if (typeof body.archived !== 'boolean')

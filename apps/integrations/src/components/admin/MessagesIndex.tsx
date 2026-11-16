@@ -3,12 +3,15 @@
 // composer for a new message (send it, or save it as a draft) and can peek
 // at the archive; the drafts they can work on sit above the sent list. The
 // composer offers the message templates (/admin/messages/templates).
+// A message waiting on the viewer's acknowledgment is flagged; admins see
+// how many of its audience have acknowledged it.
 import { useEffect, useRef, useState } from 'react';
 import { goldButtonClass } from '@/components/admin/ui';
 import { type Backup, readBackup } from '@/lib/client/autosave';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp } from '@/lib/client/format';
 import type { AdminMessageTemplateRow } from '@/lib/db';
+import { canAcknowledgeMessage } from '@/lib/messages/access';
 import type { MessageSummary } from '@/lib/messages/store';
 import { displayTitle } from '@/lib/messages/validate';
 import { excerpt } from '@/lib/notifications/types';
@@ -40,6 +43,9 @@ export function MessagesIndex() {
   const all = feed.data?.messages ?? [];
   const drafts = all.filter((m) => m.sent_at === null);
   const sent = all.filter((m) => m.sent_at !== null);
+  const viewer = feed.data?.viewer;
+  const needsAck = (m: MessageSummary) =>
+    !!viewer && !m.acked_at && canAcknowledgeMessage(viewer, m);
 
   // A new message that was being written when this admin last left reopens
   // here with what they'd typed (NewMessageComposer keeps it on the device
@@ -169,6 +175,13 @@ export function MessagesIndex() {
                   {m.archived_at && (
                     <span className={`${chipClass} border-white/15 text-white/40`}>Archived</span>
                   )}
+                  {needsAck(m) && (
+                    <span
+                      className={`${chipClass} border-[var(--pyre-red)]/60 text-[var(--pyre-red)]`}
+                    >
+                      Needs your acknowledgment
+                    </span>
+                  )}
                   <span className="text-base font-semibold text-[var(--pyre-creme)]">
                     {m.title}
                   </span>
@@ -182,6 +195,12 @@ export function MessagesIndex() {
                       ? 'no replies'
                       : `${m.reply_count} ${m.reply_count === 1 ? 'reply' : 'replies'} · last ${etStamp(m.last_activity_at)}`}
                   </span>
+                  {m.requires_ack && m.acked_at && <span>acknowledged</span>}
+                  {isAdmin && m.requires_ack && m.ack_total !== undefined && (
+                    <span>
+                      {m.ack_done ?? 0}/{m.ack_total} acknowledged
+                    </span>
+                  )}
                   {isAdmin && (
                     <span className="ml-auto">
                       to {describeGrants(m.audience_roles, m.audience_emails)}

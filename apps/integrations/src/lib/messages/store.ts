@@ -5,17 +5,38 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
-import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
+import type { AdminMessageAckRow, AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
 import { type MentionPerson, mentionedAddresses } from '@/lib/mentions';
 import type { SopViewer } from '@/lib/sops/levels';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
-import { canViewMessage, messageMentionPeople } from './access';
+import { ackRoster, ackStatus, canViewMessage, messageMentionPeople } from './access';
 
 /** A message as the list shows it: the row plus what its thread is up to. */
 export interface MessageSummary extends AdminMessageRow {
   reply_count: number;
   last_activity_at: string;
+  /** When the viewer acknowledged it (requires_ack messages); null if they haven't. */
+  acked_at: string | null;
+  /** Admins only, on requires_ack messages: how many of the roster have acknowledged. */
+  ack_done?: number;
+  /** Admins only, on requires_ack messages: how many the message asks to acknowledge. */
+  ack_total?: number;
+}
+
+/**
+ * Where a message's acknowledgments stand. Everyone learns their own; only
+ * admins see who else has (and hasn't) — it's an accountability record.
+ */
+export interface AckSummary {
+  /** When the viewer acknowledged it; null if they haven't. */
+  mine: string | null;
+  /** Admins only: everyone who has acknowledged, earliest first. */
+  done?: { email: string; at: string }[];
+  /** Admins only: who the message asks (ackRoster) that hasn't yet. */
+  pending?: string[];
+  /** Admins only: how many the message asks (the roster's size). */
+  total?: number;
 }
 
 export interface MessageThreadPayload {
@@ -26,6 +47,8 @@ export interface MessageThreadPayload {
   emailedTo: string[];
   /** Who a reply may @-mention: everyone who can open the message (lib/messages/access). */
   mentionPeople: MentionPerson[];
+  /** Acknowledgments, when the message asks for them (null otherwise). */
+  ack: AckSummary | null;
 }
 
 export type LoadResult =
@@ -67,6 +90,14 @@ export async function listMessagesForViewer(
     );
   if (replyError) return { messages: [], people: {}, error: replyError.message };
 
+  const asking = visible.filter((m) => m.requires_ack);
+  const acks = await loadAcks(
+    db,
+    asking.map((m) => m.id)
+  );
+  const isAdmin = viewer.role === 'admin';
+  const staffRows = isAdmin && asking.length > 0 ? ((await listStaff()) ?? []) : [];
+
   const counts = new Map<string, number>();
   const latest = new Map<string, string>();
   const authors: string[] = [];
@@ -80,16 +111,72 @@ export async function listMessagesForViewer(
     authors.push(r.author_email);
   }
 
-  const messages: MessageSummary[] = visible.map((m) => ({
-    ...m,
-    reply_count: counts.get(m.id) ?? 0,
-    last_activity_at: latest.get(m.id) ?? m.sent_at ?? m.updated_at,
-  }));
+  const messages: MessageSummary[] = visible.map((m) => {
+    const summary: MessageSummary = {
+      ...m,
+      reply_count: counts.get(m.id) ?? 0,
+      last_activity_at: latest.get(m.id) ?? m.sent_at ?? m.updated_at,
+      acked_at: null,
+    };
+    if (!m.requires_ack) return summary;
+    const rows = acks.filter((a) => a.message_id === m.id);
+    summary.acked_at = rows.find((a) => a.email === viewer.email)?.acknowledged_at ?? null;
+    if (isAdmin) {
+      const roster = ackRoster(staffRows, m);
+      summary.ack_done = ackStatus(
+        roster,
+        rows.map((a) => a.email)
+      ).done.length;
+      summary.ack_total = roster.length;
+    }
+    return summary;
+  });
   const people = await getPeopleNames([
     ...visible.flatMap((m) => [m.author_email, m.updated_by ?? '', ...m.shared_with]),
     ...authors,
   ]);
   return { messages, people, error: null };
+}
+
+/** The acknowledgments of these messages, earliest first. Best-effort — [] on failure. */
+async function loadAcks(db: SupabaseClient, ids: string[]): Promise<AdminMessageAckRow[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from('admin_message_acks')
+    .select('*')
+    .in('message_id', ids)
+    .order('acknowledged_at', { ascending: true });
+  if (error) {
+    console.warn('[messages] acks read failed:', error.message);
+    return [];
+  }
+  return (data ?? []) as AdminMessageAckRow[];
+}
+
+/**
+ * Where one message's acknowledgments stand for `viewer` (AckSummary), or
+ * null when it doesn't ask for them.
+ */
+export async function ackSummaryFor(
+  db: SupabaseClient,
+  viewer: SopViewer,
+  message: AdminMessageRow,
+  staffRows?: Awaited<ReturnType<typeof listStaff>>
+): Promise<AckSummary | null> {
+  if (!message.requires_ack) return null;
+  const acks = await loadAcks(db, [message.id]);
+  const mine = acks.find((a) => a.email === viewer.email)?.acknowledged_at ?? null;
+  if (viewer.role !== 'admin') return { mine };
+  const roster = ackRoster(staffRows ?? (await listStaff()) ?? [], message);
+  return {
+    mine,
+    done: acks.map((a) => ({ email: a.email, at: a.acknowledged_at })),
+    pending: ackStatus(
+      roster,
+      acks.map((a) => a.email)
+    ).pending,
+    total: roster.length,
+  };
 }
 
 /**
@@ -136,7 +223,11 @@ export async function loadMessageForViewer(
   const replies = (replyRows ?? []) as AdminMessageReplyRow[];
 
   const emailedTo = await loadEmailedTo(db, id);
+  const staffRows = (await listStaff()) ?? [];
+  const ack = await ackSummaryFor(db, viewer, message, staffRows);
   const people = await getPeopleNames([
+    ...(ack?.done ?? []).map((a) => a.email),
+    ...(ack?.pending ?? []),
     message.author_email,
     message.updated_by ?? '',
     ...message.shared_with,
@@ -146,8 +237,9 @@ export async function loadMessageForViewer(
     ...mentionedAddresses(message.body_md),
     ...replies.flatMap((r) => mentionedAddresses(r.body_md)),
   ]);
-  const mentionPeople = messageMentionPeople((await listStaff()) ?? [], message).map(
-    ({ email, name }) => ({ email, name })
-  );
-  return { ok: true, thread: { message, replies, people, emailedTo, mentionPeople } };
+  const mentionPeople = messageMentionPeople(staffRows, message).map(({ email, name }) => ({
+    email,
+    name,
+  }));
+  return { ok: true, thread: { message, replies, people, emailedTo, mentionPeople, ack } };
 }

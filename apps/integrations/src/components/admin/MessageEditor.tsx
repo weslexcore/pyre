@@ -43,6 +43,7 @@ export function draftOfMessage(message: AdminMessageRow): MessageDraft {
     bodyMd: message.body_md,
     audience: { roles: message.audience_roles, emails: message.audience_emails },
     pinned: message.pinned,
+    requiresAck: message.requires_ack,
     // A draft hasn't been emailed yet, so sending it from here offers it.
     email: isDraft(message),
     sharedWith: message.shared_with,

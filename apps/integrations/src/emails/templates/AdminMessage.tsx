@@ -125,7 +125,13 @@ const components: Components = {
   ),
 };
 
-export function AdminMessage({ authorName, title, bodyMd, messageUrl }: AdminMessageEmailProps) {
+export function AdminMessage({
+  authorName,
+  title,
+  bodyMd,
+  messageUrl,
+  requiresAck = false,
+}: AdminMessageEmailProps) {
   return (
     <EmailLayout preview={`${authorName}: ${title}`}>
       <Text style={heading}>{title}</Text>
@@ -133,11 +139,17 @@ export function AdminMessage({ authorName, title, bodyMd, messageUrl }: AdminMes
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {bodyMd}
       </ReactMarkdown>
+      {requiresAck && (
+        <Text style={{ ...text, fontWeight: 600 }}>
+          This message needs your acknowledgment. Open it on the dashboard and press "I've read
+          this" to confirm you've read and understood it.
+        </Text>
+      )}
       <Text style={text}>
         Questions, or something to add? Reply in the message thread on the dashboard.
       </Text>
       <Button style={button} href={messageUrl}>
-        Open the message
+        {requiresAck ? 'Open and acknowledge' : 'Open the message'}
       </Button>
     </EmailLayout>
   );

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ackRoster,
+  ackStatus,
   addedAudience,
   addedCollaborators,
+  canAcknowledgeMessage,
   canChangeMessage,
   canReplyToMessage,
   canTouchReply,
@@ -191,5 +194,32 @@ describe('drafts', () => {
   it('sharing pings only the admins it adds, never the editor', () => {
     expect(addedCollaborators(['a@x'], ['a@x', 'b@x', 'me@x'], 'me@x')).toEqual(['b@x']);
     expect(addedCollaborators(['a@x', 'b@x'], ['a@x'], 'me@x')).toEqual([]);
+  });
+});
+
+describe('acknowledgment', () => {
+  const asking = { ...message, requires_ack: true };
+
+  it('only a sent, unarchived message that asks for it can be acknowledged', () => {
+    expect(canAcknowledgeMessage(lead, asking)).toBe(true);
+    expect(canAcknowledgeMessage(named, asking)).toBe(true);
+    expect(canAcknowledgeMessage(lead, { ...asking, requires_ack: false })).toBe(false);
+    expect(canAcknowledgeMessage(lead, { ...asking, archived_at: 'x' })).toBe(false);
+    expect(canAcknowledgeMessage(lead, { ...asking, sent_at: null })).toBe(false);
+  });
+
+  it('someone outside the audience, or the author, cannot', () => {
+    expect(canAcknowledgeMessage(staff, asking)).toBe(false);
+    expect(canAcknowledgeMessage({ role: 'admin', email: 'wes@pyre.test' }, asking)).toBe(false);
+    expect(canAcknowledgeMessage({ role: 'staff', email: '' }, asking)).toBe(false);
+  });
+
+  it('the roster is the audience without the author; status splits it', () => {
+    const roster = ackRoster(rows, { ...message, author_email: 'admin@pyre.test' });
+    expect(roster).toEqual(['lead@pyre.test', 'named@pyre.test', 'owner@pyre.test']);
+    expect(ackStatus(roster, ['named@pyre.test', 'someone@pyre.test'])).toEqual({
+      done: ['named@pyre.test'],
+      pending: ['lead@pyre.test', 'owner@pyre.test'],
+    });
   });
 });

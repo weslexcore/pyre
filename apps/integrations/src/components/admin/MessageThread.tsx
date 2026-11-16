@@ -13,6 +13,10 @@
 //
 // Replies can @-mention anyone who can open the message (the payload's
 // mentionPeople); the message and its replies draw mentions as names.
+//
+// A message sent with "require acknowledgment" asks its audience to check
+// off that they've read it (AckPanel). The check-off is one-way; admins see
+// who has and who hasn't.
 import { useEffect, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
@@ -25,13 +29,14 @@ import { optimistic, tempId } from '@/lib/client/optimistic';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
 import { namesOf } from '@/lib/mentions';
 import {
+  canAcknowledgeMessage,
   canChangeMessage,
   canReplyToMessage,
   canTouchReply,
   isDraft,
   roleIsNotified,
 } from '@/lib/messages/access';
-import type { MessageThreadPayload } from '@/lib/messages/store';
+import type { AckSummary, MessageThreadPayload } from '@/lib/messages/store';
 import { REPLY_MAX, sendProblem } from '@/lib/messages/validate';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
@@ -53,6 +58,82 @@ import { SopMarkdown } from './SopMarkdown';
 interface ThreadResponse extends MessageThreadPayload {
   viewer: SopViewer;
   staff?: GrantablePerson[];
+}
+
+/**
+ * The acknowledgment block under a message that asks for one: the
+ * check-off for whoever it's for, and for admins the tally of who has and
+ * who hasn't.
+ */
+function AckPanel({
+  ack,
+  canAck,
+  isAdmin,
+  busy,
+  people,
+  onAcknowledge,
+}: {
+  ack: AckSummary;
+  canAck: boolean;
+  isAdmin: boolean;
+  busy: boolean;
+  people: PeopleNames;
+  onAcknowledge: () => void;
+}) {
+  const done = ack.done ?? [];
+  const pending = ack.pending ?? [];
+  const total = ack.total ?? 0;
+  return (
+    <div className="mt-4 space-y-3 border-t border-white/10 pt-3">
+      {ack.mine ? (
+        <p className="text-sm text-white/70">
+          <span className="font-semibold text-[var(--pyre-gold)]">Acknowledged.</span> You confirmed
+          you read this on {etStamp(ack.mine)}.
+        </p>
+      ) : canAck ? (
+        <div className="flex flex-wrap items-center gap-3 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 px-3 py-3">
+          <p className="text-sm text-[var(--pyre-creme)]">
+            Please confirm you've read and understood this message.
+          </p>
+          <button
+            type="button"
+            className={`${goldButtonClass} ml-auto`}
+            disabled={busy}
+            onClick={onAcknowledge}
+          >
+            I've read this
+          </button>
+        </div>
+      ) : null}
+      {isAdmin && (
+        <div className="space-y-2">
+          <h2 className="font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">
+            {total === 0
+              ? 'Acknowledgment required · nobody on the roster is asked yet'
+              : `Acknowledged by ${total - pending.length} of ${total}`}
+          </h2>
+          {done.length > 0 && (
+            <ul className="space-y-0.5 text-xs text-white/70">
+              {done.map((a) => (
+                <li key={a.email}>
+                  {personName(a.email, people)}{' '}
+                  <span className="font-mono text-[10px] text-white/40">{etStamp(a.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {pending.length > 0 && (
+            <p className="text-xs text-white/50">
+              <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-red)]">
+                Not yet:
+              </span>{' '}
+              {pending.map((email) => personName(email, people)).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
@@ -77,6 +158,8 @@ export function MessageThread({
   const [replies, setReplies] = useState<AdminMessageReplyRow[]>(initial?.replies ?? []);
   const [people, setPeople] = useState<PeopleNames>(initial?.people ?? {});
   const emailedTo = initial?.emailedTo ?? [];
+  const [ack, setAck] = useState<AckSummary | null>(initial?.ack ?? null);
+  const [acking, setAcking] = useState(false);
   const mentionPeople = initial?.mentionPeople ?? [];
   // The candidates' names too, so a reply still on its way draws its
   // mentions as names before the server's directory arrives.
@@ -107,6 +190,65 @@ export function MessageThread({
       })
       .catch(() => undefined);
   }, [editingMessage, unsent, isAdmin, staff.length]);
+
+  // Switching acknowledgment on from the editor leaves no summary to draw;
+  // fetch the thread's so the tally shows without a reload.
+  const asksAck = message?.requires_ack === true;
+  const messageId = message?.id;
+  useEffect(() => {
+    if (!asksAck || ack || !messageId) return;
+    void fetch(`/api/admin/messages?id=${encodeURIComponent(messageId)}`)
+      .then((res) => (res.ok ? (res.json() as Promise<ThreadResponse>) : null))
+      .then((data) => {
+        if (!data) return;
+        setPeople((prev) => ({ ...prev, ...data.people }));
+        setAck(data.ack);
+      })
+      .catch(() => undefined);
+  }, [asksAck, ack, messageId]);
+
+  const acknowledge = async () => {
+    if (!message || !ack) return;
+    setError(null);
+    setAcking(true);
+    const before = ack;
+    const now = new Date().toISOString();
+    // Show it at once; the server's timestamp replaces the guess.
+    setAck({
+      ...before,
+      mine: now,
+      ...(before.pending
+        ? {
+            pending: before.pending.filter((email) => email !== viewer.email),
+            done: [...(before.done ?? []), { email: viewer.email, at: now }],
+          }
+        : {}),
+    });
+    try {
+      const data = await requestJson<{ acknowledgedAt: string }>('/api/admin/message-acks', {
+        method: 'POST',
+        body: JSON.stringify({ messageId: message.id }),
+      });
+      setAck((current) =>
+        current
+          ? {
+              ...current,
+              mine: data.acknowledgedAt,
+              done: current.done?.map((a) =>
+                a.email === viewer.email ? { ...a, at: data.acknowledgedAt } : a
+              ),
+            }
+          : current
+      );
+      invalidateJson('/api/admin/messages');
+      invalidateJson('/api/admin/notifications');
+    } catch (e) {
+      setAck(before);
+      setError(e instanceof Error ? e.message : 'Failed to acknowledge the message');
+    } finally {
+      setAcking(false);
+    }
+  };
 
   /** The thread with `reply` in place of the row it replaces (or added), in writing order. */
   const withReply = (
@@ -330,6 +472,11 @@ export function MessageThread({
               {message.archived_at && (
                 <span className={`${chipClass} border-white/15 text-white/40`}>Archived</span>
               )}
+              {message.requires_ack && (
+                <span className={`${chipClass} border-white/30 text-white/60`}>
+                  Acknowledgment required
+                </span>
+              )}
               <span className="font-mono text-[10px] text-white/40">
                 {personName(message.author_email, people)} ·{' '}
                 {unsent
@@ -351,6 +498,16 @@ export function MessageThread({
               <p className="mt-3 font-mono text-[10px] text-white/40">
                 Emailed to {emailedTo.map((email) => personName(email, people)).join(', ')}
               </p>
+            )}
+            {!unsent && message.requires_ack && ack && (
+              <AckPanel
+                ack={ack}
+                canAck={canAcknowledgeMessage(viewer, message)}
+                isAdmin={isAdmin}
+                busy={acking}
+                people={people}
+                onAcknowledge={() => void acknowledge()}
+              />
             )}
             {isAdmin && unsent && (
               <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-3">

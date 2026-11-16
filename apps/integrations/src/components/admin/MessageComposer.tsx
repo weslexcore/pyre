@@ -1,6 +1,8 @@
 // Writing (or editing) an admin message: a title, a markdown body with a
 // live preview through the same renderer the SOP library uses, the audience
-// picker the SOP access settings use, a pin toggle, and — for a new message —
+// picker the SOP access settings use, a pin toggle, a "require
+// acknowledgment" toggle (the audience checks off that they've read it), and
+// — for a new message —
 // whether to email it to the audience too (on by default). A message that
 // hasn't gone out yet can also be saved as a draft, kept private or shared
 // with other admins to work on together. A new message can start from a
@@ -31,6 +33,8 @@ export interface MessageDraft {
   bodyMd: string;
   audience: SopGrant;
   pinned: boolean;
+  /** Ask the audience to check off that they've read it (/api/admin/message-acks). */
+  requiresAck: boolean;
   /** Also email it to everyone it reaches; only a new message offers this. */
   email: boolean;
   /** Admins the draft is shared with besides its author; empty = private. */
@@ -52,6 +56,7 @@ export function messageFields(draft: MessageDraft) {
     audienceRoles: draft.audience.roles,
     audienceEmails: draft.audience.emails,
     pinned: draft.pinned,
+    requiresAck: draft.requiresAck,
   };
 }
 
@@ -66,6 +71,7 @@ export function draftFromTemplate(
     bodyMd: fillPlaceholders(template.body_md),
     audience: { roles: template.audience_roles.slice(), emails: template.audience_emails.slice() },
     pinned: template.pinned,
+    requiresAck: template.requires_ack,
   };
 }
 
@@ -75,6 +81,7 @@ export function emptyDraft(): MessageDraft {
     bodyMd: '',
     audience: { roles: EVERYONE.slice(), emails: [] },
     pinned: false,
+    requiresAck: false,
     email: true,
     sharedWith: [],
   };
@@ -397,7 +404,26 @@ export function MessageComposer({
           />
           pin to top
         </label>
+        <label
+          className="flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40"
+          title="Everyone it's for gets a button to confirm they've read it, and you see who has and who hasn't."
+        >
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 accent-[var(--pyre-gold)]"
+            checked={draft.requiresAck}
+            disabled={busy}
+            onChange={(e) => setDraft((d) => ({ ...d, requiresAck: e.target.checked }))}
+          />
+          require acknowledgment
+        </label>
       </div>
+      {draft.requiresAck && (
+        <p className="font-mono text-[10px] text-white/40">
+          Everyone it's for will be asked to confirm they've read it. You'll see who has and who
+          hasn't on the message.
+        </p>
+      )}
       {status}
     </form>
   );

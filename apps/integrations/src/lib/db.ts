@@ -644,6 +644,8 @@ export interface AdminMessageRow {
   sent_at: string | null;
   /** Admins besides the author who may open and edit the draft; empty = private. */
   shared_with: string[];
+  /** The audience is asked to acknowledge they've read it (admin_message_acks). */
+  requires_ack: boolean;
   /** Session email of the last admin to edit it; null until edited. */
   updated_by: string | null;
   created_at: string;
@@ -661,12 +663,24 @@ export interface AdminMessageTemplateRow {
   audience_roles: ('staff' | 'shift_lead' | 'admin')[];
   audience_emails: string[];
   pinned: boolean;
+  /** A message started from it asks for acknowledgment. */
+  requires_ack: boolean;
   /** Session email of the admin who made it. */
   created_by: string;
   /** Session email of the last admin to edit it; null until edited. */
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Someone confirming they read a message that requires it (see the
+// admin message acknowledgments migration). One per person per message,
+// and never taken back.
+export interface AdminMessageAckRow {
+  message_id: string;
+  /** Session email (lowercased) of whoever acknowledged it. */
+  email: string;
+  acknowledged_at: string;
 }
 
 // One reply in a message's thread — anyone who can see the message may

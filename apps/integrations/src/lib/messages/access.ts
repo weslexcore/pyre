@@ -165,3 +165,41 @@ export function addedAudience(
   const had = new Set(resolveAudience(rows, before));
   return resolveAudience(rows, after).filter((email) => !had.has(email));
 }
+
+/**
+ * Whether `viewer` may acknowledge this message: it asks for acknowledgment,
+ * it's sent and not archived, they can open it, and they didn't write it.
+ */
+export function canAcknowledgeMessage(
+  viewer: SopViewer,
+  message: MessageAccessFields & Pick<AdminMessageRow, 'requires_ack'>
+): boolean {
+  if (!message.requires_ack) return false;
+  if (viewer.email.length === 0 || message.author_email === viewer.email) return false;
+  return canReplyToMessage(viewer, message);
+}
+
+/**
+ * Who a message asks to acknowledge it: everyone it reaches
+ * (resolveAudience) but its author. The tally on the thread and the list
+ * counts against this.
+ */
+export function ackRoster(
+  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead' | 'pages'>[],
+  message: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails' | 'author_email'>
+): string[] {
+  const author = normalizeEmail(message.author_email);
+  return resolveAudience(rows, message).filter((email) => email !== author);
+}
+
+/** Of the roster, who has acknowledged and who still hasn't. */
+export function ackStatus(
+  roster: string[],
+  acked: Iterable<string>
+): { done: string[]; pending: string[] } {
+  const have = new Set(acked);
+  return {
+    done: roster.filter((email) => have.has(email)),
+    pending: roster.filter((email) => !have.has(email)),
+  };
+}
