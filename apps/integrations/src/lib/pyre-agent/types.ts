@@ -91,3 +91,23 @@ export function proposalIdOf(output: string | undefined): string | null {
     return null;
   }
 }
+
+/**
+ * The tools whose results carry an SOP or message suggestion — filed in the
+ * shift-note suggestion pipeline rather than as a proposal, and decided
+ * through /api/admin/suggestions.
+ */
+export function isSuggestTool(tool: string): boolean {
+  return tool.startsWith('suggest_');
+}
+
+/** The suggestion id in a suggest tool's output (JSON with { suggestion: { id } }). */
+export function suggestionIdOf(output: string | undefined): string | null {
+  if (!output) return null;
+  try {
+    const parsed = JSON.parse(output) as { suggestion?: { id?: unknown } };
+    return typeof parsed.suggestion?.id === 'string' ? parsed.suggestion.id : null;
+  } catch {
+    return null;
+  }
+}

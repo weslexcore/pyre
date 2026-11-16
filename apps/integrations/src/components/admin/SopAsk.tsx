@@ -54,8 +54,16 @@ import {
   type StoredConversation,
   writeStored,
 } from '@/lib/pyre-agent/conversation';
-import { type ActionView, isProposeTool, proposalIdOf } from '@/lib/pyre-agent/types';
+import {
+  type ActionView,
+  isProposeTool,
+  isSuggestTool,
+  proposalIdOf,
+  suggestionIdOf,
+} from '@/lib/pyre-agent/types';
+import type { SuggestionResultLink, SuggestionView } from '@/lib/suggestions/types';
 import { AgentActions } from './AgentActions';
+import { AgentSuggestions, type ConversationSuggestions, NO_SUGGESTIONS } from './AgentSuggestions';
 import { AskHistory } from './AskHistory';
 import { AskTrail, liveActivityLabel } from './AskTrail';
 import { SopMarkdown } from './SopMarkdown';
@@ -182,6 +190,43 @@ export function proposalIdsOf(trail: TrailStep[]): string[] {
   return ids;
 }
 
+/** The suggestion ids a turn's trail filed, in order. Exported for tests. */
+export function suggestionIdsOf(trail: TrailStep[]): string[] {
+  const ids: string[] = [];
+  for (const step of trail) {
+    if (step.kind !== 'tool' || !isSuggestTool(step.tool) || step.status !== 'completed') continue;
+    const id = suggestionIdOf(step.output);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Each item under the turn whose trail made it; any the trails do not
+ * account for (a trail cut short) go under the last finished answer.
+ * Exported for tests.
+ */
+export function placeByTurn<T extends { id: string }>(
+  turns: Pick<Turn, 'id' | 'trail' | 'status'>[],
+  items: T[],
+  idsOf: (trail: TrailStep[]) => string[]
+): Map<string, T[]> {
+  const byTurn = new Map<string, T[]>();
+  const placed = new Set<string>();
+  for (const turn of turns) {
+    const ids = idsOf(turn.trail);
+    const mine = items.filter((item) => ids.includes(item.id));
+    for (const item of mine) placed.add(item.id);
+    byTurn.set(turn.id, mine);
+  }
+  const last = turns[turns.length - 1];
+  if (last && last.status !== 'pending' && last.status !== 'streaming') {
+    const unplaced = items.filter((item) => !placed.has(item.id));
+    if (unplaced.length > 0) byTurn.set(last.id, [...(byTurn.get(last.id) ?? []), ...unplaced]);
+  }
+  return byTurn;
+}
+
 const EXAMPLES = [
   'What are the benefits of cold plunging?',
   'How do I break down the fire and water side at close?',
@@ -252,6 +297,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
   const [actions, setActions] = useState<ActionView[]>([]);
+  const [suggestions, setSuggestions] = useState<ConversationSuggestions>(NO_SUGGESTIONS);
   const [workingActionId, setWorkingActionId] = useState<string | null>(null);
   /** The routine that opened the conversation on screen, if one did. */
   const [routine, setRoutine] = useState<RoutineRunOrigin | null>(null);
@@ -285,8 +331,14 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     try {
       const res = await fetch(`${ACTIONS_URL}?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) return;
-      const body = (await res.json()) as { actions: ActionView[] };
-      if (actionsFor.current === sessionId) setActions(body.actions);
+      const body = (await res.json()) as {
+        actions: ActionView[];
+        suggestions?: ConversationSuggestions;
+      };
+      if (actionsFor.current === sessionId) {
+        setActions(body.actions);
+        setSuggestions(body.suggestions ?? NO_SUGGESTIONS);
+      }
     } catch {
       // The cards catch up on the next refresh.
     }
@@ -320,6 +372,15 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     } finally {
       setWorkingActionId(null);
     }
+  }, []);
+
+  // A suggestion card saved, decided, or refreshed after a conflict.
+  const updateSuggestion = useCallback((next: SuggestionView, result?: SuggestionResultLink) => {
+    setSuggestions((prev) => ({
+      ...prev,
+      items: prev.items.map((s) => (s.id === next.id ? next : s)),
+      results: result ? { ...prev.results, [next.id]: result } : prev.results,
+    }));
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll whenever the transcript changes
@@ -411,8 +472,8 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                 break;
               case 'result':
                 patchTurn(turnId, (t) => ({ trail: trailWithResult(t.trail, event) }));
-                // A proposal just landed: draw its card now, not after the answer.
-                if (proposalIdOf(event.output)) {
+                // A proposal or suggestion just landed: draw its card now, not after the answer.
+                if (proposalIdOf(event.output) || suggestionIdOf(event.output)) {
                   void refreshActions(conversationRef.current ?? current.id);
                 }
                 break;
@@ -527,6 +588,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         if (!sameConversation) {
           actionsFor.current = conversationId;
           setActions([]);
+          setSuggestions(NO_SUGGESTIONS);
           setRoutine(null);
         }
         if (prior && body.fresh) {
@@ -594,6 +656,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     setActiveSessionId(null);
     actionsFor.current = null;
     setActions([]);
+    setSuggestions(NO_SUGGESTIONS);
     setRoutine(null);
     setNotice(null);
     setQuestion('');
@@ -719,6 +782,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         setActiveSessionId(conversationId);
         actionsFor.current = conversationId;
         setActions([]);
+        setSuggestions(NO_SUGGESTIONS);
         void refreshActions(conversationId);
         if (token) {
           const pending = reattach ? opts.stored?.pending : undefined;
@@ -807,23 +871,9 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
 
   const canSend = !busy && !openingSessionId && question.trim().length > 0;
 
-  // Each proposal sits under the answer whose trail made it; any the trails
-  // do not account for (a trail cut short) go under the last answer.
-  const actionsByTurn = new Map<string, ActionView[]>();
-  const placed = new Set<string>();
-  for (const turn of turns) {
-    const ids = proposalIdsOf(turn.trail);
-    const mine = actions.filter((a) => ids.includes(a.id));
-    for (const a of mine) placed.add(a.id);
-    actionsByTurn.set(turn.id, mine);
-  }
-  const lastTurn = turns[turns.length - 1];
-  if (lastTurn && lastTurn.status !== 'pending' && lastTurn.status !== 'streaming') {
-    const unplaced = actions.filter((a) => !placed.has(a.id));
-    if (unplaced.length > 0) {
-      actionsByTurn.set(lastTurn.id, [...(actionsByTurn.get(lastTurn.id) ?? []), ...unplaced]);
-    }
-  }
+  // Each proposal and suggestion sits under the answer whose trail made it.
+  const actionsByTurn = placeByTurn(turns, actions, proposalIdsOf);
+  const suggestionsByTurn = placeByTurn(turns, suggestions.items, suggestionIdsOf);
   const examples = hasBoards ? [...BOARD_EXAMPLES, ...EXAMPLES.slice(0, 2)] : EXAMPLES;
 
   return (
@@ -1012,6 +1062,11 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                           workingId={workingActionId}
                           onApply={(id) => void decideAction(id, 'apply')}
                           onDismiss={(id) => void decideAction(id, 'dismiss')}
+                        />
+                        <AgentSuggestions
+                          suggestions={suggestionsByTurn.get(turn.id) ?? []}
+                          context={suggestions}
+                          onChange={updateSuggestion}
                         />
                       </div>
                     </div>

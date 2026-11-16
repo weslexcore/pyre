@@ -20,10 +20,23 @@ export type ProposalKind =
   | 'inventory.update'
   | 'inventory.create';
 
-export type PyreOp = 'goals' | 'board' | 'cards' | 'inventory' | 'propose';
+export type PyreOp =
+  | 'goals'
+  | 'board'
+  | 'cards'
+  | 'inventory'
+  | 'propose'
+  | 'messages'
+  | 'message'
+  | 'suggest';
 
-/** Which page an op or proposal needs the person to hold. */
-export function areaOf(op: PyreOp, kind?: ProposalKind): 'boards' | 'inventory' {
+/**
+ * Which page an op or proposal needs the person to hold. Messages and
+ * suggestions need none beyond Pyre Agent itself: everyone reads the
+ * messages addressed to them, and anyone may suggest (someone else decides).
+ */
+export function areaOf(op: PyreOp, kind?: ProposalKind): 'boards' | 'inventory' | 'any' {
+  if (op === 'messages' || op === 'message' || op === 'suggest') return 'any';
   if (op === 'inventory') return 'inventory';
   if (op === 'propose' && kind?.startsWith('inventory.')) return 'inventory';
   return 'boards';

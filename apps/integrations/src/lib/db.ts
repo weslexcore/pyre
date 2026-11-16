@@ -505,14 +505,16 @@ export type AgentSuggestionKind =
   | 'board_card.comment'
   | 'sop.edit'
   | 'shift_assignment.update'
-  | 'inventory.count';
+  | 'inventory.count'
+  | 'message.create'
+  | 'message.edit';
 export type AgentSuggestionStatus =
   | 'pending'
   | 'applying'
   | 'approved'
   | 'dismissed'
   | 'superseded';
-export type AgentSuggestionSourceType = 'shift_note';
+export type AgentSuggestionSourceType = 'shift_note' | 'pyre_agent';
 export type AgentSuggestionRunStatus = 'queued' | 'running' | 'done' | 'failed';
 
 /** One pass of an agent over a source record. */
@@ -580,7 +582,13 @@ export interface AgentSuggestionRow {
   edited_at: string | null;
   rationale: string;
   confidence: number | null;
-  target_type: 'board_card' | 'sop' | 'shift_assignment' | 'inventory_item' | null;
+  target_type:
+    | 'board_card'
+    | 'sop'
+    | 'shift_assignment'
+    | 'inventory_item'
+    | 'admin_message'
+    | null;
   target_id: string | null;
   result_type:
     | 'board_card'
@@ -588,6 +596,7 @@ export interface AgentSuggestionRow {
     | 'sop_version'
     | 'shift_assignment'
     | 'inventory_item'
+    | 'admin_message'
     | null;
   result_id: string | null;
   applied_payload: Record<string, unknown> | null;

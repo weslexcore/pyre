@@ -302,6 +302,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       if (!isSuggestionSourceType(sourceType) || !isUuid(sourceId)) {
         return json({ error: 'sourceType and sourceId are required' }, 400);
       }
+      // A Pyre Agent conversation files its own suggestions as it goes.
+      if (sourceType === 'pyre_agent') {
+        return json({ error: 'Ask Pyre Agent in the conversation instead' }, 400);
+      }
       if (!suggesterConfigured()) {
         return json(
           { error: 'The agents app is not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' },

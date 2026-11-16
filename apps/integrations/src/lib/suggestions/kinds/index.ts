@@ -6,6 +6,8 @@ import { boardCardComment } from './board-card-comment';
 import { boardCardCreate } from './board-card-create';
 import type { KindHandler } from './handler';
 import { inventoryCount } from './inventory-count';
+import { messageCreate } from './message-create';
+import { messageEdit } from './message-edit';
 import { shiftAssignmentUpdate } from './shift-assignment-update';
 import { sopEdit } from './sop-edit';
 
@@ -15,6 +17,8 @@ export const SUGGESTION_KIND_HANDLERS: { [K in SuggestionKind]: KindHandler<K> }
   'sop.edit': sopEdit,
   'shift_assignment.update': shiftAssignmentUpdate,
   'inventory.count': inventoryCount,
+  'message.create': messageCreate,
+  'message.edit': messageEdit,
 };
 
 export type { Applied, ApplyContext, KindHandler, Validation } from './handler';

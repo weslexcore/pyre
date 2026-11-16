@@ -2,7 +2,8 @@
 // and payload checked the same way an admin's approval will check them, so a
 // suggestion that could never be approved is refused while the agent can
 // still fix it. SOP edits arrive as find-and-replace hunks and leave here as
-// the whole proposed document. New cards leave with the board's default
+// the whole proposed document. Message edits arrive as the new title and/or
+// body and leave with the message as it stood, to diff and to guard against. New cards leave with the board's default
 // assignees and a due date from their severity and importance. Inventory
 // counts leave credited to the source's author at the source's time.
 // Server-only.
@@ -94,6 +95,41 @@ async function expandSopEdit(
 }
 
 /**
+ * The agent names a message by id and gives its new title, body, or both;
+ * the stored payload carries both in full, plus the message as it stands
+ * (for the diff, and the updated_at approving checks against).
+ */
+async function expandMessageEdit(
+  db: SupabaseClient,
+  raw: Record<string, unknown>
+): Promise<
+  { ok: true; payload: Record<string, unknown> } | { ok: false; status: 422; error: string }
+> {
+  const id = typeof raw.messageId === 'string' ? raw.messageId.trim() : '';
+  const { data } = id
+    ? await db
+        .from('admin_messages')
+        .select('id, title, body_md, updated_at, archived_at')
+        .eq('id', id)
+        .maybeSingle()
+    : { data: null };
+  const message = data as {
+    id: string;
+    title: string;
+    body_md: string;
+    updated_at: string;
+  } | null;
+  if (!message)
+    return { ok: false, status: 422, error: 'messageId must name a message from get_messages' };
+  const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title : message.title;
+  const bodyMd = typeof raw.bodyMd === 'string' && raw.bodyMd.trim() ? raw.bodyMd : message.body_md;
+  return {
+    ok: true,
+    payload: { messageId: message.id, title, bodyMd, baseUpdatedAt: message.updated_at },
+  };
+}
+
+/**
  * A new card as the admin first sees it: on the board's default assignees
  * (the agent never names anyone), and due when its severity and importance
  * say, unless the note gave a date of its own.
@@ -166,6 +202,11 @@ export async function intakeSuggestions(
 
     if (kind === 'sop.edit') {
       const expanded = await expandSopEdit(db, payload);
+      if (!expanded.ok) return { ...expanded, index };
+      payload = expanded.payload;
+    }
+    if (kind === 'message.edit') {
+      const expanded = await expandMessageEdit(db, payload);
       if (!expanded.ok) return { ...expanded, index };
       payload = expanded.payload;
     }

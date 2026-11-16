@@ -2,7 +2,9 @@
 // scheduler sessions get the drafting tools, knowledge sessions (Pyre Agent)
 // get the read-only knowledge-base tools plus the goals-and-boards and
 // inventory reads and propose_* tools — which only store a proposal the
-// person applies from the chat (lib/knowledge/boards.ts) — suggester
+// person applies from the chat (lib/knowledge/boards.ts) — and the
+// suggest_* tools, which file an SOP or message change in the shift-note
+// suggestion pipeline for an admin to approve (lib/knowledge/suggest.ts) — suggester
 // sessions get their record's context plus save_suggestions, and none sees
 // another's. Keeping every set
 // dynamic (rather than authoring the scheduler's statically) is what keeps
@@ -38,6 +40,7 @@ import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs'
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
 import { readSop, sopTableOfContents } from '../lib/knowledge/sops';
+import { getMessages, readMessage, suggest } from '../lib/knowledge/suggest';
 import { type KnowledgeScope, resolveRole, suggestTargetOf } from '../lib/role';
 import { getWeekContextTool } from '../lib/scheduler/get-week-context';
 import { saveProposalTool } from '../lib/scheduler/save-proposal';
@@ -443,6 +446,87 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return propose(scopeOf(ctx), ctx.session?.id ?? null, 'goal_kpi.measure', input);
+          },
+        }),
+        get_messages: defineTool({
+          description:
+            'Admin messages (/admin/messages) the person can open — team updates and announcements, pinned first then newest — each with its id, title, whether it is a draft, when it was sent, its audience, whether it asks for acknowledgment, a preview, and its url. Words narrow it to messages containing all of them. Use it to answer "what did the last update say", or to find a message before suggesting an edit to it. canWriteMessages says whether the person is an admin.',
+          inputSchema: z.object({
+            query: z.string().max(200).optional().describe('Words that must all appear in the title or body.'),
+            limit: z.number().int().min(1).max(60).optional().describe('Max messages (default 20).'),
+            includeArchived: z.boolean().optional().describe('Include archived messages (admins only see them).'),
+          }),
+          execute(input, ctx) {
+            return getMessages(scopeOf(ctx), input);
+          },
+        }),
+        read_message: defineTool({
+          description:
+            "One admin message in full: its title, its body markdown exactly as stored, its audience, and its url. Read before quoting a message or suggesting new wording for it.",
+          inputSchema: z.object({
+            id: z.string().uuid().describe('The message id from get_messages.'),
+          }),
+          execute(input, ctx) {
+            return readMessage(scopeOf(ctx), input.id);
+          },
+        }),
+        suggest_sop_edit: defineTool({
+          description:
+            'Suggest a change to an SOP: exact find-and-replace edits against the document as read_sop returned it. It is filed for review the same way shift-note suggestions are — shown in the chat as an editable diff, approved by an admin (or the person, if they decide suggestions) — and saved as a new version only when approved. Read the whole document with read_sop first; copy each find text from it character for character, long enough to match exactly one place, and pass its version as baseVersion.',
+          inputSchema: z.object({
+            slug: z.string().min(1).max(120).describe('The document slug.'),
+            baseVersion: z.number().int().min(1).describe('The version read_sop returned.'),
+            edits: z
+              .array(
+                z.object({
+                  find: z.string().min(1).describe('Exact text from the document, matching one place.'),
+                  replace: z.string().describe('What it becomes; empty to delete it.'),
+                })
+              )
+              .min(1)
+              .max(20),
+            title: z.string().min(1).max(200).optional().describe('A new title, only if it should change.'),
+            changeNote: z.string().min(1).max(300).describe('The change, in plain words, for the version history.'),
+            rationale: z.string().min(1).max(600).describe('One or two sentences on why, for the person deciding.'),
+          }),
+          execute(input, ctx) {
+            return suggest(scopeOf(ctx), ctx.session?.id ?? null, 'sop.edit', input);
+          },
+        }),
+        suggest_message: defineTool({
+          description:
+            'Suggest a new admin message to the team (an update, an announcement, a reminder). Filed for review like a shift-note suggestion; approving saves it as the approving admin\'s draft, and nobody is told until they send it from Messages. Address it by role (staff, shift_lead, admin) and/or named people by email.',
+          inputSchema: z.object({
+            title: z.string().min(1).max(200),
+            bodyMd: z.string().min(1).max(20000).describe('The message, in markdown.'),
+            audienceRoles: z
+              .array(z.enum(['staff', 'shift_lead', 'admin']))
+              .max(3)
+              .describe('Who it is for, by role; staff reaches the whole team.'),
+            audienceEmails: z
+              .array(z.string().email())
+              .max(100)
+              .optional()
+              .describe('People it is also for, by email; only when the person named them.'),
+            requiresAck: z.boolean().optional().describe('Ask the audience to confirm they have read it.'),
+            pinned: z.boolean().optional().describe('Pin it to the top of Messages.'),
+            rationale: z.string().min(1).max(600),
+          }),
+          execute(input, ctx) {
+            return suggest(scopeOf(ctx), ctx.session?.id ?? null, 'message.create', input);
+          },
+        }),
+        suggest_message_edit: defineTool({
+          description:
+            'Suggest new wording for an existing admin message: a new title, a new body, or both (give the whole new body, not a fragment). Filed for review like a shift-note suggestion and shown as a diff; saved on the message only when approved. Read it with read_message first.',
+          inputSchema: z.object({
+            messageId: z.string().uuid().describe('The message id from get_messages.'),
+            title: z.string().min(1).max(200).optional(),
+            bodyMd: z.string().min(1).max(20000).optional().describe('The whole new body, in markdown.'),
+            rationale: z.string().min(1).max(600),
+          }),
+          execute(input, ctx) {
+            return suggest(scopeOf(ctx), ctx.session?.id ?? null, 'message.edit', input);
           },
         }),
         get_inventory: defineTool({

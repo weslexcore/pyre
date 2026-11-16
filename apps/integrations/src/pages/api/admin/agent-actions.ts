@@ -10,19 +10,29 @@
 // a click. A refused or failed change puts the row back to pending with the
 // route's error, so the card can say why and be tried again.
 //
-//   GET  ?sessionId=…               → { actions } — every session of the
-//                                     conversation that session is in
+//   GET  ?sessionId=…               → { actions, suggestions } — every session
+//                                     of the conversation that session is in.
+//                                     `suggestions` are the SOP and message
+//                                     suggestions it filed (lib/pyre-agent/
+//                                     suggestions): { items, results, targets,
+//                                     people, canDecide }. They are decided
+//                                     through /api/admin/suggestions, like a
+//                                     shift note's, by whoever may.
 //   POST { id, action: 'apply' }   → { action }   (409 when it is no longer pending)
 //   POST { id, action: 'dismiss' } → { action }
 
 import type { APIContext, APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { getDb, type PyreAgentActionRow } from '@/lib/db';
+import { type AgentSuggestionRow, getDb, type PyreAgentActionRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, json } from '@/lib/http/route';
 import { conversationOf, sessionsOf } from '@/lib/knowledge/conversation';
 import { actionView, replayAction, type StepResponse } from '@/lib/pyre-agent/actions';
+import { canDecideSuggestions } from '@/lib/pyre-agent/suggestions';
 import { type ApplyStep, PYRE_AGENT_HREF } from '@/lib/pyre-agent/types';
+import { getPeopleNames } from '@/lib/sops/people';
+import { resolveLinks } from '@/lib/suggestions/store';
+import type { SuggestionView } from '@/lib/suggestions/types';
 import * as boardCards from './board-cards';
 import * as boardEvents from './board-events';
 import * as boards from './boards';
@@ -55,7 +65,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!sessionId) return json({ error: 'sessionId is required' }, 400);
 
   const email = normalizeEmail(gate.user.email);
-  const sessions = await sessionsOf(db, email, await conversationOf(db, email, sessionId));
+  const conversationId = await conversationOf(db, email, sessionId);
+  const sessions = await sessionsOf(db, email, conversationId);
   const { data, error } = await db
     .from('pyre_agent_actions')
     .select('*')
@@ -64,7 +75,45 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .order('created_at', { ascending: true })
     .limit(MAX_ACTIONS);
   if (error) return dbError(error);
-  return json({ actions: ((data ?? []) as PyreAgentActionRow[]).map(actionView) });
+
+  // The conversation's suggestions: only runs this person filed, so another
+  // person's conversation id reads as empty.
+  const { data: runs, error: runError } = await db
+    .from('agent_suggestion_runs')
+    .select('id')
+    .eq('source_type', 'pyre_agent')
+    .eq('source_id', conversationId)
+    .eq('requested_by', email)
+    .limit(MAX_ACTIONS);
+  if (runError) return dbError(runError);
+  const runIds = ((runs ?? []) as { id: string }[]).map((r) => r.id);
+  let rows: AgentSuggestionRow[] = [];
+  if (runIds.length > 0) {
+    const { data: found, error: suggestionError } = await db
+      .from('agent_suggestions')
+      .select('*')
+      .in('run_id', runIds)
+      .neq('status', 'superseded')
+      .order('created_at', { ascending: true });
+    if (suggestionError) return dbError(suggestionError);
+    rows = (found ?? []) as AgentSuggestionRow[];
+  }
+  const links = await resolveLinks(db, rows);
+  const people = await getPeopleNames(
+    rows.flatMap((r) => [r.decided_by, r.edited_by]).filter((e): e is string => !!e)
+  );
+  const items: SuggestionView[] = rows.map((row) => ({ ...row, sourceChanged: false }));
+
+  return json({
+    actions: ((data ?? []) as PyreAgentActionRow[]).map(actionView),
+    suggestions: {
+      items,
+      results: links.results,
+      targets: links.targets,
+      people,
+      canDecide: canDecideSuggestions(gate.access),
+    },
+  });
 };
 
 /** One stored call, run through its route as the person making this request. */

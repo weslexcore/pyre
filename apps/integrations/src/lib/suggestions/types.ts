@@ -22,6 +22,8 @@ import type {
 } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
 import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
+import { BODY_MAX, parseAudience, TITLE_MAX } from '@/lib/messages/validate';
+import type { SopRole } from '@/lib/sops/levels';
 import { type Importance, isImportance, isSeverity, type Severity } from './priority';
 
 export type SuggestionKind = AgentSuggestionKind;
@@ -34,9 +36,14 @@ export const SUGGESTION_KINDS: readonly SuggestionKind[] = [
   'sop.edit',
   'shift_assignment.update',
   'inventory.count',
+  'message.create',
+  'message.edit',
 ];
 
-export const SUGGESTION_SOURCE_TYPES: readonly SuggestionSourceType[] = ['shift_note'];
+export const SUGGESTION_SOURCE_TYPES: readonly SuggestionSourceType[] = [
+  'shift_note',
+  'pyre_agent',
+];
 
 export function isSuggestionKind(value: unknown): value is SuggestionKind {
   return typeof value === 'string' && (SUGGESTION_KINDS as readonly string[]).includes(value);
@@ -54,10 +61,13 @@ export const KIND_LABELS: Record<SuggestionKind, string> = {
   'sop.edit': 'SOP edit',
   'shift_assignment.update': 'Hours change',
   'inventory.count': 'Inventory count',
+  'message.create': 'New message',
+  'message.edit': 'Message edit',
 };
 
 export const SOURCE_LABELS: Record<SuggestionSourceType, string> = {
   shift_note: 'Shift note',
+  pyre_agent: 'Pyre Agent',
 };
 
 /** At most this many suggestions from one run. */
@@ -75,6 +85,8 @@ export const SUGGESTION_LIMITS = {
   sopContent: 100_000,
   changeNote: 300,
   hunks: 20,
+  messageTitle: TITLE_MAX,
+  messageBody: BODY_MAX,
 } as const;
 
 /** A new card on a board. */
@@ -173,12 +185,46 @@ export interface InventoryCountPayload {
   countedAt: string | null;
 }
 
+/**
+ * A new admin message. Approving saves it as a draft by the approving admin,
+ * who sends it from the composer (where the audience is told and emailed),
+ * so approving never reaches the team on its own.
+ */
+export interface MessageCreatePayload {
+  title: string;
+  bodyMd: string;
+  audienceRoles: SopRole[];
+  audienceEmails: string[];
+  requiresAck: boolean;
+  pinned: boolean;
+}
+
+/**
+ * New wording for an existing admin message: its title and body. The
+ * message as it stood when this was checked rides along, so the editor can
+ * show the change and approving can refuse one that someone has since
+ * re-saved (baseUpdatedAt).
+ */
+export interface MessageEditPayload {
+  messageId: string;
+  title: string;
+  bodyMd: string;
+  /** The message's updated_at when the edit was made: approving on a newer save is a conflict. */
+  baseUpdatedAt: string;
+  previousTitle: string;
+  previousBodyMd: string;
+  /** Whether it has gone out (false: a draft). */
+  sent: boolean;
+}
+
 export interface PayloadByKind {
   'board_card.create': CardCreatePayload;
   'board_card.comment': CardCommentPayload;
   'sop.edit': SopEditPayload;
   'shift_assignment.update': ShiftTimesPayload;
   'inventory.count': InventoryCountPayload;
+  'message.create': MessageCreatePayload;
+  'message.edit': MessageEditPayload;
 }
 
 export type SuggestionPayload = PayloadByKind[SuggestionKind];
@@ -385,6 +431,60 @@ function parseInventoryCountPayload(raw: unknown): ParseResult<InventoryCountPay
   };
 }
 
+function messageText(
+  o: Record<string, unknown>
+): { ok: true; title: string; bodyMd: string } | { ok: false; error: string } {
+  const title = str(o.title);
+  if (!title || title.length > TITLE_MAX) {
+    return { ok: false, error: `title must be 1–${TITLE_MAX} characters` };
+  }
+  const bodyMd = typeof o.bodyMd === 'string' ? o.bodyMd.trim() : '';
+  if (!bodyMd || bodyMd.length > BODY_MAX) {
+    return { ok: false, error: `bodyMd must be 1–${BODY_MAX} characters` };
+  }
+  return { ok: true, title, bodyMd };
+}
+
+function parseMessageCreatePayload(raw: unknown): ParseResult<MessageCreatePayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  const text = messageText(o);
+  if (!text.ok) return fail(text.error);
+  const audience = parseAudience(o.audienceRoles ?? [], o.audienceEmails ?? []);
+  if (!audience.ok) return fail(audience.error);
+  return {
+    ok: true,
+    value: {
+      title: text.title,
+      bodyMd: text.bodyMd,
+      audienceRoles: audience.audience.roles,
+      audienceEmails: audience.audience.emails,
+      requiresAck: o.requiresAck === true,
+      pinned: o.pinned === true,
+    },
+  };
+}
+
+function parseMessageEditPayload(raw: unknown): ParseResult<MessageEditPayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  if (!isUuid(o.messageId)) return fail('messageId must be the id of a message from get_messages');
+  const text = messageText(o);
+  if (!text.ok) return fail(text.error);
+  return {
+    ok: true,
+    value: {
+      messageId: o.messageId,
+      title: text.title,
+      bodyMd: text.bodyMd,
+      baseUpdatedAt: str(o.baseUpdatedAt),
+      previousTitle: typeof o.previousTitle === 'string' ? o.previousTitle : '',
+      previousBodyMd: typeof o.previousBodyMd === 'string' ? o.previousBodyMd : '',
+      sent: o.sent !== false,
+    },
+  };
+}
+
 /** Shape checks per kind; the live-data checks are each kind's validate() in ./kinds. */
 export const PAYLOAD_PARSERS: {
   [K in SuggestionKind]: (raw: unknown) => ParseResult<PayloadByKind[K]>;
@@ -394,6 +494,8 @@ export const PAYLOAD_PARSERS: {
   'sop.edit': parseSopEditPayload,
   'shift_assignment.update': parseShiftTimesPayload,
   'inventory.count': parseInventoryCountPayload,
+  'message.create': parseMessageCreatePayload,
+  'message.edit': parseMessageEditPayload,
 };
 
 export function parsePayload<K extends SuggestionKind>(
@@ -429,6 +531,10 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
       const count = parseQuantity(o.inStock);
       return `Inventory count: ${str(o.itemName) || 'an item'}, ${count === null ? '?' : formatQuantity(count)} in stock`;
     }
+    case 'message.create':
+      return `New message: ${str(o.title) || 'untitled'}`;
+    case 'message.edit':
+      return `Edit message: ${str(o.previousTitle) || str(o.title) || 'untitled'}`;
   }
 }
 
@@ -437,7 +543,14 @@ export function sourceHref(type: SuggestionSourceType, id: string): string {
   switch (type) {
     case 'shift_note':
       return `/admin/shift-notes#note-${id}`;
+    case 'pyre_agent':
+      return `/admin/ask?c=${encodeURIComponent(id)}`;
   }
+}
+
+/** A message's thread (or, for a draft, its composer). */
+export function messageHref(id: string): string {
+  return `/admin/messages/${id}`;
 }
 
 /** A card's own link: its board, opened on the card. */

@@ -10,8 +10,10 @@ import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardCardRow } from '@/
 import { inventoryItemHref } from '@/lib/inventory/types';
 import { scheduleHref } from '@/lib/notifications/types';
 import { markDone } from './runs';
+import { SUGGESTION_SOURCES } from './sources';
 import {
   cardHref,
+  messageHref,
   type SuggestionKind,
   type SuggestionLinks,
   type SuggestionResultLink,
@@ -29,10 +31,11 @@ export interface NewSuggestion {
 }
 
 /**
- * Store a run's suggestions and close the run. The source's older pending
- * suggestions that nobody has edited are superseded — the new run read the
- * same record again, more recently — while ones an admin has started editing
- * stay, so nobody's work vanishes under them.
+ * Store a run's suggestions and close the run. For a source a rerun re-reads
+ * whole (a shift note), its older pending suggestions that nobody has edited
+ * are superseded — the new run read the same record again, more recently —
+ * while ones an admin has started editing stay, so nobody's work vanishes
+ * under them.
  */
 export async function insertSuggestions(
   db: SupabaseClient,
@@ -40,16 +43,18 @@ export async function insertSuggestions(
   items: readonly NewSuggestion[],
   agentSessionId: string | null
 ): Promise<{ rows: AgentSuggestionRow[] } | { error: string }> {
-  const { error: supersedeError } = await db
-    .from('agent_suggestions')
-    .update({ status: 'superseded' })
-    .eq('source_type', run.source_type)
-    .eq('source_id', run.source_id)
-    .eq('status', 'pending')
-    .is('edited_payload', null)
-    .neq('run_id', run.id);
-  if (supersedeError) {
-    console.error('[suggestions] supersede failed:', supersedeError.message);
+  if (SUGGESTION_SOURCES[run.source_type].rerunSupersedes) {
+    const { error: supersedeError } = await db
+      .from('agent_suggestions')
+      .update({ status: 'superseded' })
+      .eq('source_type', run.source_type)
+      .eq('source_id', run.source_id)
+      .eq('status', 'pending')
+      .is('edited_payload', null)
+      .neq('run_id', run.id);
+    if (supersedeError) {
+      console.error('[suggestions] supersede failed:', supersedeError.message);
+    }
   }
 
   let rows: AgentSuggestionRow[] = [];
@@ -290,7 +295,10 @@ export async function resolveLinks(
   const sopIds = new Set<string>();
   const assignmentIds = new Set<string>();
   const itemIds = new Set<string>();
+  const messageIds = new Set<string>();
   for (const row of rows) {
+    if (row.target_type === 'admin_message' && row.target_id) messageIds.add(row.target_id);
+    if (row.result_type === 'admin_message' && row.result_id) messageIds.add(row.result_id);
     if (row.target_type === 'shift_assignment' && row.target_id) assignmentIds.add(row.target_id);
     if (row.target_type === 'board_card' && row.target_id) cardIds.add(row.target_id);
     if (row.target_type === 'sop' && row.target_id) sopIds.add(row.target_id);
@@ -385,6 +393,27 @@ export async function resolveLinks(
       : { label: 'Inventory item (deleted)', href: null };
   };
 
+  // A message links to its thread (a draft, to its composer).
+  const messages = new Map<string, { title: string; draft: boolean }>();
+  if (messageIds.size > 0) {
+    const { data } = await db
+      .from('admin_messages')
+      .select('id, title, sent_at')
+      .in('id', [...messageIds]);
+    for (const m of (data ?? []) as { id: string; title: string; sent_at: string | null }[]) {
+      messages.set(m.id, { title: m.title, draft: m.sent_at === null });
+    }
+  }
+  const messageLink = (id: string | null): SuggestionResultLink => {
+    const message = id ? messages.get(id) : undefined;
+    return id && message
+      ? {
+          label: `${message.title || 'Untitled message'}${message.draft ? ' (draft)' : ''}`,
+          href: messageHref(id),
+        }
+      : { label: 'Message (deleted)', href: null };
+  };
+
   const cardLink = (id: string | null): SuggestionResultLink => {
     const card = id ? cards.get(id) : undefined;
     const slug = card ? boardSlugs.get(card.board_id) : undefined;
@@ -404,6 +433,7 @@ export async function resolveLinks(
     if (row.target_type === 'sop') targets[row.id] = sopLink(row.target_id);
     if (row.target_type === 'shift_assignment') targets[row.id] = assignmentLink(row.target_id);
     if (row.target_type === 'inventory_item') targets[row.id] = itemLink(row.target_id);
+    if (row.target_type === 'admin_message') targets[row.id] = messageLink(row.target_id);
     if (row.status !== 'approved' || !row.result_id) continue;
     if (row.result_type === 'board_card') results[row.id] = cardLink(row.result_id);
     else if (row.result_type === 'board_event') results[row.id] = cardLink(row.target_id);
@@ -411,6 +441,7 @@ export async function resolveLinks(
     else if (row.result_type === 'shift_assignment')
       results[row.id] = assignmentLink(row.result_id);
     else if (row.result_type === 'inventory_item') results[row.id] = itemLink(row.result_id);
+    else if (row.result_type === 'admin_message') results[row.id] = messageLink(row.result_id);
   }
   return { results, targets };
 }

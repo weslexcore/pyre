@@ -33,6 +33,9 @@ const KIND_TONES: Record<SuggestionKind, string> = {
   'shift_assignment.update':
     'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 text-[var(--pyre-blue)]',
   'inventory.count': 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300',
+  'message.create': 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
+  'message.edit':
+    'border-[var(--pyre-creme)]/40 bg-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]',
 };
 
 export function KindBadge({ kind }: { kind: SuggestionKind }) {

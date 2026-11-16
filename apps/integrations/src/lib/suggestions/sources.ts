@@ -42,6 +42,13 @@ export interface SuggestionSource {
    * AI button ignores this.
    */
   autoEligible(record: SourceRecord, signals: unknown, autoSignals: readonly string[]): boolean;
+  /**
+   * Whether a new run over the record replaces its older pending suggestions
+   * nobody has edited. True for a shift note, which the suggester re-reads
+   * whole. False for a Pyre Agent conversation, where each suggestion is one
+   * more thing the person asked for, not a fresh look at the same text.
+   */
+  rerunSupersedes: boolean;
 }
 
 /**
@@ -100,6 +107,52 @@ async function staffNames(db: SupabaseClient, emails: string[]): Promise<Map<str
 
 const NOTE_COLUMNS = 'id, body, note_date, author_email, status, created_at';
 
+interface ConversationStart {
+  session_id: string;
+  question: string;
+  asked_by: string;
+  asked_at: string;
+}
+
+/**
+ * A Pyre Agent conversation, by its first session's id: the question that
+ * opened it, who asked it, and when. The asker is the author, so the inbox
+ * says whose conversation a suggestion came from.
+ */
+function conversationRecord(start: ConversationStart, names: Map<string, string>): SourceRecord {
+  const email = start.asked_by.trim().toLowerCase();
+  const who = names.get(email);
+  return {
+    type: 'pyre_agent',
+    id: start.session_id,
+    text: start.question,
+    hash: contentHash(start.question),
+    label: `${who ? `${who}'s Pyre Agent chat` : 'Pyre Agent chat'} (${formatMonthDay(start.asked_at.slice(0, 10))})`,
+    href: sourceHref('pyre_agent', start.session_id),
+    closed: false,
+    author: email || null,
+    recordedAt: start.asked_at,
+  };
+}
+
+async function conversationStarts(
+  db: SupabaseClient,
+  ids: readonly string[]
+): Promise<ConversationStart[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from('knowledge_queries')
+    .select('session_id, question, asked_by, asked_at')
+    .in('session_id', [...ids])
+    .order('asked_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  const first = new Map<string, ConversationStart>();
+  for (const row of (data ?? []) as ConversationStart[]) {
+    if (!first.has(row.session_id)) first.set(row.session_id, row);
+  }
+  return [...first.values()];
+}
+
 export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> = {
   shift_note: {
     async load(db, id) {
@@ -127,5 +180,28 @@ export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> 
     autoEligible(record, signals, autoSignals) {
       return !record.closed && hasAutoSuggestSignal(signals, autoSignals);
     },
+    rerunSupersedes: true,
+  },
+  pyre_agent: {
+    async load(db, id) {
+      const [start] = await conversationStarts(db, [id]);
+      if (!start) return null;
+      return conversationRecord(start, await staffNames(db, [start.asked_by]));
+    },
+    async loadMany(db, ids) {
+      const out = new Map<string, SourceRecord>();
+      const starts = await conversationStarts(db, ids);
+      const names = await staffNames(
+        db,
+        starts.map((s) => s.asked_by)
+      );
+      for (const start of starts) out.set(start.session_id, conversationRecord(start, names));
+      return out;
+    },
+    // Pyre Agent suggests only when asked, inside the conversation.
+    autoEligible() {
+      return false;
+    },
+    rerunSupersedes: false,
   },
 };

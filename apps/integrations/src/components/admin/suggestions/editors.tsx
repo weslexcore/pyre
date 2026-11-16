@@ -14,6 +14,7 @@ import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
 import { etStamp } from '@/lib/client/format';
 import type { BoardFieldValue } from '@/lib/db';
 import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
+import { ROLE_LABELS, SOP_ROLES } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   describeDueDays,
@@ -28,6 +29,8 @@ import {
 import type {
   CardCommentPayload,
   CardCreatePayload,
+  MessageCreatePayload,
+  MessageEditPayload,
   PayloadByKind,
   ShiftTimesPayload,
   SopEditPayload,
@@ -596,6 +599,163 @@ function InventoryCountEditor({
   );
 }
 
+/** A new admin message: its words, who it is for, and whether they must acknowledge it. */
+function MessageCreateEditor({
+  value,
+  onChange,
+  disabled,
+  idPrefix,
+  names,
+}: EditorProps<'message.create'>) {
+  const set = (patch: Partial<MessageCreatePayload>) => onChange({ ...value, ...patch });
+  const toggleRole = (role: (typeof SOP_ROLES)[number]) =>
+    set({
+      audienceRoles: value.audienceRoles.includes(role)
+        ? value.audienceRoles.filter((r) => r !== role)
+        : [...value.audienceRoles, role],
+    });
+  return (
+    <div className="space-y-3">
+      <div>
+        <label htmlFor={`${idPrefix}-title`} className={labelClass}>
+          Title
+        </label>
+        <input
+          id={`${idPrefix}-title`}
+          className={`${compactInputClass} w-full`}
+          value={value.title}
+          maxLength={SUGGESTION_LIMITS.messageTitle}
+          disabled={disabled}
+          onChange={(e) => set({ title: e.target.value })}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-body`} className={labelClass}>
+          Message
+        </label>
+        <LinkTextarea
+          id={`${idPrefix}-body`}
+          className={`${textareaClass} min-h-40`}
+          value={value.bodyMd}
+          maxLength={SUGGESTION_LIMITS.messageBody}
+          disabled={disabled}
+          onChange={(next) => set({ bodyMd: next })}
+        />
+      </div>
+      <fieldset>
+        <legend className={labelClass}>For</legend>
+        <div className="flex flex-wrap gap-3">
+          {SOP_ROLES.map((role) => (
+            <label key={role} className="flex items-center gap-1.5 text-xs text-white/70">
+              <input
+                type="checkbox"
+                checked={value.audienceRoles.includes(role)}
+                disabled={disabled}
+                onChange={() => toggleRole(role)}
+              />
+              {ROLE_LABELS[role]}
+            </label>
+          ))}
+        </div>
+        {value.audienceEmails.length > 0 && (
+          <span className={hintClass}>
+            And {value.audienceEmails.map((email) => personName(email, names ?? {})).join(', ')}
+          </span>
+        )}
+      </fieldset>
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-1.5 text-xs text-white/70">
+          <input
+            type="checkbox"
+            checked={value.requiresAck}
+            disabled={disabled}
+            onChange={(e) => set({ requiresAck: e.target.checked })}
+          />
+          Ask them to acknowledge it
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-white/70">
+          <input
+            type="checkbox"
+            checked={value.pinned}
+            disabled={disabled}
+            onChange={(e) => set({ pinned: e.target.checked })}
+          />
+          Pin it
+        </label>
+      </div>
+      <span className={hintClass}>
+        Approving saves it as your draft. Nobody is told until you send it from Messages.
+      </span>
+    </div>
+  );
+}
+
+/** New wording for an existing message, shown as a diff against how it reads now. */
+function MessageEditEditor({
+  value,
+  onChange,
+  target,
+  disabled,
+  idPrefix,
+}: EditorProps<'message.edit'>) {
+  const [showText, setShowText] = useState(false);
+  const set = (patch: Partial<MessageEditPayload>) => onChange({ ...value, ...patch });
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-white/60">
+        {target?.href ? (
+          <a href={target.href} className="text-[var(--pyre-gold)] underline hover:text-white">
+            {target.label}
+          </a>
+        ) : (
+          <span>{value.previousTitle || value.title}</span>
+        )}{' '}
+        <span className="font-mono text-[10px] text-white/40">
+          · {value.sent ? 'sent' : 'draft'}
+        </span>
+      </p>
+      <div>
+        <label htmlFor={`${idPrefix}-title`} className={labelClass}>
+          Title
+        </label>
+        <input
+          id={`${idPrefix}-title`}
+          className={`${compactInputClass} w-full`}
+          value={value.title}
+          maxLength={SUGGESTION_LIMITS.messageTitle}
+          disabled={disabled}
+          onChange={(e) => set({ title: e.target.value })}
+        />
+        {value.previousTitle && value.previousTitle !== value.title && (
+          <span className={hintClass}>Was: {value.previousTitle}</span>
+        )}
+      </div>
+      <SopDiff before={value.previousBodyMd} after={value.bodyMd} context={3} />
+      <button
+        type="button"
+        className="font-mono text-[10px] uppercase tracking-wide text-white/50 underline hover:text-white"
+        onClick={() => setShowText((on) => !on)}
+      >
+        {showText ? 'Hide the full text' : 'Edit the wording'}
+      </button>
+      {showText && (
+        <LinkTextarea
+          className={`${textareaClass} min-h-48`}
+          value={value.bodyMd}
+          maxLength={SUGGESTION_LIMITS.messageBody}
+          disabled={disabled}
+          onChange={(next) => set({ bodyMd: next })}
+        />
+      )}
+      {value.sent && (
+        <span className={hintClass}>
+          Approving saves the new wording on the sent message. Anyone it newly @-mentions is told.
+        </span>
+      )}
+    </div>
+  );
+}
+
 export const SUGGESTION_EDITORS: {
   [K in SuggestionKind]: (props: EditorProps<K>) => React.JSX.Element;
 } = {
@@ -604,4 +764,6 @@ export const SUGGESTION_EDITORS: {
   'sop.edit': SopEditEditor,
   'shift_assignment.update': ShiftTimesEditor,
   'inventory.count': InventoryCountEditor,
+  'message.create': MessageCreateEditor,
+  'message.edit': MessageEditEditor,
 };

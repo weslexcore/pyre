@@ -14,6 +14,14 @@
 //     op 'cards'     → { query?, board?, assignee?, state?, dueBy?, overdue?, limit? }
 //     op 'inventory' → { query?, filter?, category?, limit? } the inventory list
 //     op 'propose'   → { kind, ...the change, rationale } → { proposal } | 422 { error }
+//     op 'messages'  → { query?, limit?, includeArchived? } the admin messages they can open
+//     op 'message'   → { id } one message in full
+//     op 'suggest'   → { kind: sop.edit | message.create | message.edit, payload, rationale }
+//                      → { suggestion, reviewer } | 4xx { error }
+//
+// A suggestion is not a proposal: it goes through the shift-note suggestion
+// pipeline (lib/pyre-agent/suggestions) and is decided by whoever decides
+// suggestions — the asker in the chat when they can, the admins otherwise.
 //
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). The email
 // comes from the session's scope on the agent side — stamped there by
@@ -30,6 +38,12 @@ import { json } from '@/lib/http/route';
 import { INVENTORY_HREF } from '@/lib/inventory/types';
 import { proposeAction } from '@/lib/pyre-agent/actions';
 import { inventoryForAgent } from '@/lib/pyre-agent/inventory';
+import { messageForAgent, messagesForAgent } from '@/lib/pyre-agent/messages';
+import {
+  isPyreAgentSuggestionKind,
+  PYRE_AGENT_SUGGESTION_KINDS,
+  suggestFromConversation,
+} from '@/lib/pyre-agent/suggestions';
 import {
   ACTION_KINDS,
   type ActionKind,
@@ -37,6 +51,9 @@ import {
   PYRE_AGENT_HREF,
 } from '@/lib/pyre-agent/types';
 import { boardForAgent, findCardsForAgent, goalsForAgent } from '@/lib/pyre-agent/workspace';
+import type { SopViewer } from '@/lib/sops/levels';
+import { getSopRole } from '@/lib/sops/role';
+import { isUuid } from '@/lib/suggestions/types';
 
 const NO_BOARDS = 'This person has no boards; there are no goals or tasks to show them';
 const NO_INVENTORY = 'This person does not hold the Inventory page; the list is not theirs to see';
@@ -144,8 +161,53 @@ export const POST: APIRoute = async ({ request }) => {
         if (!result.ok) return json({ error: result.error }, 422);
         return json({ proposal: result.action });
       }
+      case 'messages': {
+        const viewer: SopViewer = { role: await getSopRole(email, access), email };
+        return json(
+          await messagesForAgent(db, viewer, {
+            query: typeof input.query === 'string' ? input.query : undefined,
+            limit: typeof input.limit === 'number' ? input.limit : undefined,
+            includeArchived: input.includeArchived === true,
+          })
+        );
+      }
+      case 'message': {
+        if (!isUuid(input.id))
+          return json({ error: 'id must be a message id from get_messages' }, 400);
+        const viewer: SopViewer = { role: await getSopRole(email, access), email };
+        const result = await messageForAgent(db, viewer, input.id);
+        return json(result, 'error' in result ? 404 : 200);
+      }
+      case 'suggest': {
+        if (!sessionId) return json({ error: 'sessionId is required to suggest' }, 400);
+        if (!isPyreAgentSuggestionKind(input.kind)) {
+          return json(
+            { error: `kind must be one of ${PYRE_AGENT_SUGGESTION_KINDS.join(', ')}` },
+            400
+          );
+        }
+        const viewer: SopViewer = { role: await getSopRole(email, access), email };
+        const result = await suggestFromConversation(
+          db,
+          access,
+          { email, viewer, sessionId },
+          input.kind,
+          {
+            payload: isRecord(input.payload) ? input.payload : {},
+            rationale: typeof input.rationale === 'string' ? input.rationale : '',
+          }
+        );
+        if (!result.ok) return json({ error: result.error }, result.status);
+        return json({ suggestion: result.suggestion, reviewer: result.reviewer });
+      }
       default:
-        return json({ error: 'op must be goals, board, cards, inventory, or propose' }, 400);
+        return json(
+          {
+            error:
+              'op must be goals, board, cards, inventory, propose, messages, message, or suggest',
+          },
+          400
+        );
     }
   } catch (error) {
     console.error('[pyre-agent] op failed:', error);
