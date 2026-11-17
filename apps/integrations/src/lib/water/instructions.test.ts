@@ -6,8 +6,8 @@ const steps = (gallons?: number) =>
 
 describe('instructionsFor', () => {
   it('sizes the fresh-fill salt for the plunge', () => {
-    expect(steps().some((step) => step.includes('~920 g Dead Sea Salt'))).toBe(true);
-    expect(steps(60).some((step) => step.includes('~460 g Dead Sea Salt'))).toBe(true);
+    expect(steps().some((step) => step.includes('~1400 g Dead Sea Salt'))).toBe(true);
+    expect(steps(60).some((step) => step.includes('~700 g Dead Sea Salt'))).toBe(true);
   });
 
   it('has no procedure for a routine test', () => {
