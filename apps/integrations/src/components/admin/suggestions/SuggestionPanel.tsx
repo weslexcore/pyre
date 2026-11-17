@@ -7,6 +7,8 @@ import { useState } from 'react';
 import type { PeopleNames } from '@/lib/sops/names';
 import type { RunView, SuggestionResultLink, SuggestionView } from '@/lib/suggestions/types';
 import { SparkleIcon } from '../Signals';
+import { groupForReview } from './grouping';
+import { InventoryBatch } from './InventoryBatch';
 import { SuggestionCard } from './SuggestionCard';
 
 function RunLine({ run, onRetry }: { run: RunView; onRetry: () => void }) {
@@ -61,17 +63,27 @@ export function SuggestionPanel({
   return (
     <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
       {run && <RunLine run={run} onRetry={onRetry} />}
-      {pending.map((suggestion) => (
-        <SuggestionCard
-          key={suggestion.id}
-          suggestion={suggestion}
-          target={targets[suggestion.id]}
-          names={names}
-          onChange={onChange}
-          onDecided={onDecided}
-          collapsible
-        />
-      ))}
+      {groupForReview(pending).map((entry) =>
+        entry.type === 'inventory' ? (
+          <InventoryBatch
+            key={entry.key}
+            suggestions={entry.suggestions}
+            names={names}
+            onChange={onChange}
+            onDecided={onDecided}
+          />
+        ) : (
+          <SuggestionCard
+            key={entry.suggestion.id}
+            suggestion={entry.suggestion}
+            target={targets[entry.suggestion.id]}
+            names={names}
+            onChange={onChange}
+            onDecided={onDecided}
+            collapsible
+          />
+        )
+      )}
       {decided.length > 0 && (
         <div>
           <button

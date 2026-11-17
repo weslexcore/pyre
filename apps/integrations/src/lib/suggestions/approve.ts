@@ -161,6 +161,35 @@ export async function approveSuggestion(
   };
 }
 
+/** At most this many suggestions decided in one batch. */
+export const MAX_BATCH = 20;
+
+export type BatchDecision = { id: string } & DecisionResult;
+
+/**
+ * Approve a batch of suggestions (an inventory update read out of one note:
+ * several counts and new items), each with the payload the admin settled on.
+ * Each is approved on its own, in order, exactly as a single approval is —
+ * there are no transactions to make the batch all-or-nothing — so one that
+ * fails (an item deleted since, a name taken) stays pending with its error
+ * and the rest still go through. The answer has one decision per item.
+ */
+export async function approveSuggestions(
+  db: SupabaseClient,
+  items: readonly { id: string; payload?: unknown }[],
+  by: string
+): Promise<BatchDecision[]> {
+  const out: BatchDecision[] = [];
+  for (const item of items) {
+    const decided = await approveSuggestion(db, item.id, {
+      ...(item.payload !== undefined ? { payload: item.payload } : {}),
+      by,
+    });
+    out.push({ id: item.id, ...decided });
+  }
+  return out;
+}
+
 export async function dismissSuggestion(
   db: SupabaseClient,
   id: string,

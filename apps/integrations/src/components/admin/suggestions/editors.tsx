@@ -3,7 +3,9 @@
 // date and custom fields, plus the severity and importance its due date
 // follows; a comment's words; an SOP's text, shown as a diff against
 // the document as it is now; an assignment's hours, next to what was
-// scheduled; an inventory count, next to the stock on record). The Record
+// scheduled; an inventory count, next to the stock on record, on an item
+// that can be swapped for another; a new inventory item's name, place and
+// starting count). The Record
 // type makes a new kind in lib/suggestions/types a type error here until it
 // has an editor.
 
@@ -14,6 +16,7 @@ import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
 import { etStamp } from '@/lib/client/format';
 import type { BoardFieldValue } from '@/lib/db';
 import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
+import { inventoryItemHref } from '@/lib/inventory/types';
 import { ROLE_LABELS, SOP_ROLES } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
@@ -29,6 +32,9 @@ import {
 import type {
   CardCommentPayload,
   CardCreatePayload,
+  InventoryCountPayload,
+  InventoryCreatePayload,
+  InventoryOption,
   MessageCreatePayload,
   MessageEditPayload,
   PayloadByKind,
@@ -37,12 +43,18 @@ import type {
   SuggestionKind,
   SuggestionResultLink,
 } from '@/lib/suggestions/types';
-import { SUGGESTION_LIMITS } from '@/lib/suggestions/types';
+import { INVENTORY_ITEM_LIMITS, SUGGESTION_LIMITS } from '@/lib/suggestions/types';
 import { AssigneePicker } from '../boards/CardMeta';
 import { FieldRow } from '../guestUi';
 import { textareaClass } from '../ShiftNoteComposer';
 import { SopDiff } from '../SopDiff';
-import { type CardContext, type CurrentSop, loadBoardOptions, loadCurrentSop } from './client';
+import {
+  type CardContext,
+  type CurrentSop,
+  loadBoardOptions,
+  loadCurrentSop,
+  loadInventoryOptions,
+} from './client';
 
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-white/50';
 const hintClass = 'mt-1 block font-mono text-[10px] text-white/40';
@@ -503,28 +515,114 @@ function ShiftTimesEditor({
   );
 }
 
+/** The active inventory items, loaded once per page; null until they arrive. */
+export function useInventoryOptions(): { items: InventoryOption[] | null; error: string | null } {
+  const [items, setItems] = useState<InventoryOption[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadInventoryOptions()
+      .then((loaded) => {
+        if (!cancelled) setItems(loaded);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load the inventory');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return { items, error };
+}
+
 /**
- * A count read out of a note: the number, next to what the list says now
- * and who last counted it. The count is recorded as the note author's, at
- * the note's time, so the admin sees whose look at the shelf they are
- * approving — and whether someone has counted it since the note.
+ * A count moved onto another item: the item's own name, stock on record and
+ * last count come with it, so the editor (and the delta) read against the
+ * item it now counts.
+ */
+export function recountOn(
+  value: InventoryCountPayload,
+  item: InventoryOption
+): InventoryCountPayload {
+  return {
+    ...value,
+    itemId: item.id,
+    itemName: item.name,
+    previousInStock: item.in_stock,
+    reorderAt: item.reorder_at,
+    lastCountedAt: item.last_counted_at,
+    lastCountedBy: item.last_counted_by,
+  };
+}
+
+/** Which item a count is on: the agent's pick, changeable to any active item. */
+export function InventoryItemPicker({
+  value,
+  items,
+  onPick,
+  disabled,
+  id,
+  className = '',
+}: {
+  value: Pick<InventoryCountPayload, 'itemId' | 'itemName'>;
+  items: InventoryOption[] | null;
+  onPick: (item: InventoryOption) => void;
+  disabled?: boolean;
+  id: string;
+  className?: string;
+}) {
+  const listed = items?.some((item) => item.id === value.itemId) ?? false;
+  return (
+    <select
+      id={id}
+      className={`${compactSelectClass} ${className}`}
+      value={value.itemId}
+      disabled={disabled || !items}
+      onChange={(e) => {
+        const next = items?.find((item) => item.id === e.target.value);
+        if (next) onPick(next);
+      }}
+    >
+      {!listed && <option value={value.itemId}>{value.itemName || 'This item'}</option>}
+      {(items ?? []).map((item) => (
+        <option key={item.id} value={item.id}>
+          {item.name}
+          {item.category ? ` · ${item.category}` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** '+3' / '−2' between what is on record and the count, or null when there is none. */
+export function stockDelta(previous: number | null, next: number | null): string | null {
+  if (previous === null || next === null || previous === next) return null;
+  const delta = next - previous;
+  return delta > 0 ? `+${formatQuantity(delta)}` : `−${formatQuantity(-delta)}`;
+}
+
+/**
+ * A count read out of a note: the number, on an item the admin can swap for
+ * another, next to what the list says now and who last counted it. The count
+ * is recorded as the note author's, at the note's time, so the admin sees
+ * whose look at the shelf they are approving — and whether someone has
+ * counted it since the note.
  */
 function InventoryCountEditor({
   value,
   onChange,
-  target,
   disabled,
   idPrefix,
   names,
 }: EditorProps<'inventory.count'>) {
+  const { items, error: loadError } = useInventoryOptions();
   // The box keeps what the admin types; the payload takes it once it parses.
   const [text, setText] = useState(formatQuantity(value.inStock));
   useEffect(() => {
     setText(formatQuantity(value.inStock));
   }, [value.inStock]);
   const parsed = parseQuantity(text);
-  const delta =
-    parsed !== null && value.previousInStock !== null ? parsed - value.previousInStock : null;
+  const delta = stockDelta(value.previousInStock, parsed);
   const countedSince =
     value.countedAt !== null &&
     value.lastCountedAt !== null &&
@@ -532,23 +630,20 @@ function InventoryCountEditor({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-white/60">
-        {target?.href ? (
-          <a href={target.href} className="text-[var(--pyre-gold)] underline hover:text-white">
-            {target.label}
-          </a>
-        ) : (
-          <span>{target?.label ?? value.itemName}</span>
-        )}
-        {value.previousInStock !== null && (
-          <span className="font-mono text-[10px] text-white/40">
-            {' '}
-            · {formatQuantity(value.previousInStock)} on record
-            {value.reorderAt !== null && `, re-order at ${formatQuantity(value.reorderAt)}`}
-          </span>
-        )}
-      </p>
       <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <label htmlFor={`${idPrefix}-item`} className={labelClass}>
+            Item
+          </label>
+          <InventoryItemPicker
+            id={`${idPrefix}-item`}
+            className="w-full"
+            value={value}
+            items={items}
+            disabled={disabled}
+            onPick={(item) => onChange(recountOn(value, item))}
+          />
+        </div>
         <div>
           <label htmlFor={`${idPrefix}-count`} className={labelClass}>
             In stock
@@ -567,12 +662,28 @@ function InventoryCountEditor({
             }}
           />
         </div>
-        {delta !== null && delta !== 0 && (
-          <span className="pb-1.5 font-mono text-xs text-white/60">
-            {delta > 0 ? `+${formatQuantity(delta)}` : `−${formatQuantity(-delta)}`}
-          </span>
-        )}
+        {delta && <span className="pb-1.5 font-mono text-xs text-white/60">{delta}</span>}
       </div>
+      <p className="font-mono text-[10px] text-white/40">
+        <a
+          href={inventoryItemHref(value.itemId)}
+          className="text-[var(--pyre-gold)] underline hover:text-white"
+        >
+          {value.itemName || 'Open the item'}
+        </a>
+        {value.previousInStock !== null && (
+          <>
+            {' '}
+            · {formatQuantity(value.previousInStock)} on record
+            {value.reorderAt !== null && `, re-order at ${formatQuantity(value.reorderAt)}`}
+          </>
+        )}
+      </p>
+      {loadError && (
+        <p className="font-mono text-[10px] text-[var(--pyre-red)]">
+          Couldn’t load the other items to switch to ({loadError}).
+        </p>
+      )}
       {parsed === null && (
         <p className="font-mono text-[10px] text-[var(--pyre-red)]">
           In stock must be a number from 0 to 100000.
@@ -582,7 +693,7 @@ function InventoryCountEditor({
         {value.countedBy
           ? `Recorded as counted by ${personName(value.countedBy, names)}${
               value.countedAt ? ` on ${etStamp(value.countedAt)}` : ''
-            }, with a link back to the shift note.`
+            }, with a link back to where it was read.`
           : 'Recorded as a count read from the shift note, with a link back to it.'}
         {value.lastCountedAt &&
           ` Last counted ${etStamp(value.lastCountedAt)}${
@@ -595,6 +706,145 @@ function InventoryCountEditor({
           the note's.
         </p>
       )}
+    </div>
+  );
+}
+
+/** An optional quantity box: keeps the text as typed, hands up the number (or null when empty). */
+export function QuantityInput({
+  id,
+  value,
+  onChange,
+  disabled,
+  className = 'w-24',
+  placeholder,
+  label,
+  onValidity,
+}: {
+  id: string;
+  value: number | null;
+  onChange: (next: number | null) => void;
+  /** Hears whether the text as typed is a quantity (or empty). */
+  onValidity?: (valid: boolean) => void;
+  disabled?: boolean;
+  className?: string;
+  placeholder?: string;
+  /** For a box without a visible label (a table cell). */
+  label?: string;
+}) {
+  const shown = value === null ? '' : formatQuantity(value);
+  const [text, setText] = useState(shown);
+  useEffect(() => {
+    setText((current) => {
+      const typed = current.trim() === '' ? null : parseQuantity(current);
+      return typed === value ? current : shown;
+    });
+  }, [value, shown]);
+  const invalid = text.trim() !== '' && parseQuantity(text) === null;
+  return (
+    <input
+      id={id}
+      inputMode="decimal"
+      aria-label={label}
+      className={`${compactInputClass} ${className} text-right tabular-nums`}
+      value={text}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => {
+        setText(e.target.value);
+        if (e.target.value.trim() === '') {
+          onValidity?.(true);
+          onChange(null);
+        } else {
+          const next = parseQuantity(e.target.value);
+          onValidity?.(next !== null);
+          if (next !== null) onChange(next);
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * A supply the inventory doesn't track yet: its name, where it is kept and
+ * how many there are, as the note gave them — each editable, and the rest
+ * (cost, how to order) filled in on the list afterwards.
+ */
+function InventoryCreateEditor({
+  value,
+  onChange,
+  disabled,
+  idPrefix,
+  names,
+}: EditorProps<'inventory.create'>) {
+  const set = (patch: Partial<InventoryCreatePayload>) => onChange({ ...value, ...patch });
+  const textField = (
+    key: 'name' | 'category' | 'location' | 'vendor',
+    label: string,
+    placeholder?: string
+  ) => (
+    <div>
+      <label htmlFor={`${idPrefix}-${key}`} className={labelClass}>
+        {label}
+      </label>
+      <input
+        id={`${idPrefix}-${key}`}
+        className={`${compactInputClass} w-full`}
+        value={value[key] ?? ''}
+        placeholder={placeholder}
+        maxLength={INVENTORY_ITEM_LIMITS[key]}
+        disabled={disabled}
+        onChange={(e) => set({ [key]: e.target.value })}
+      />
+    </div>
+  );
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {textField('name', 'Name')}
+        {textField('category', 'Category', 'e.g. Cleaning')}
+        {textField('location', 'Kept at', 'e.g. Front desk')}
+        {textField('vendor', 'Vendor')}
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}-count`} className={labelClass}>
+            In stock
+          </label>
+          <QuantityInput
+            id={`${idPrefix}-count`}
+            value={value.inStock}
+            placeholder="not counted"
+            className="w-28"
+            disabled={disabled}
+            onChange={(inStock) => set({ inStock })}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-reorder`} className={labelClass}>
+            Re-order at
+          </label>
+          <QuantityInput
+            id={`${idPrefix}-reorder`}
+            value={value.reorderAt}
+            placeholder="never"
+            className="w-28"
+            disabled={disabled}
+            onChange={(reorderAt) => set({ reorderAt })}
+          />
+        </div>
+      </div>
+      <span className={hintClass}>
+        Approving adds it to the inventory as yours.
+        {value.inStock !== null &&
+          (value.countedBy
+            ? ` Its first count is recorded as ${personName(value.countedBy, names)}'s${
+                value.countedAt ? `, on ${etStamp(value.countedAt)}` : ''
+              }, with a link back to where it was read.`
+            : ' Its first count links back to the shift note.')}{' '}
+        Cost and how to order are set on the inventory list.
+      </span>
     </div>
   );
 }
@@ -764,6 +1014,7 @@ export const SUGGESTION_EDITORS: {
   'sop.edit': SopEditEditor,
   'shift_assignment.update': ShiftTimesEditor,
   'inventory.count': InventoryCountEditor,
+  'inventory.create': InventoryCreateEditor,
   'message.create': MessageCreateEditor,
   'message.edit': MessageEditEditor,
 };

@@ -103,11 +103,28 @@ export function isSuggestTool(tool: string): boolean {
 
 /** The suggestion id in a suggest tool's output (JSON with { suggestion: { id } }). */
 export function suggestionIdOf(output: string | undefined): string | null {
-  if (!output) return null;
+  return suggestionIdsIn(output)[0] ?? null;
+}
+
+/**
+ * Every suggestion id in a suggest tool's output: { suggestion: { id } } for
+ * one, { suggestions: [{ id }] } for a batch (inventory changes).
+ */
+export function suggestionIdsIn(output: string | undefined): string[] {
+  if (!output) return [];
   try {
-    const parsed = JSON.parse(output) as { suggestion?: { id?: unknown } };
-    return typeof parsed.suggestion?.id === 'string' ? parsed.suggestion.id : null;
+    const parsed = JSON.parse(output) as {
+      suggestion?: { id?: unknown };
+      suggestions?: { id?: unknown }[];
+    };
+    if (typeof parsed.suggestion?.id === 'string') return [parsed.suggestion.id];
+    if (Array.isArray(parsed.suggestions)) {
+      return parsed.suggestions
+        .map((s) => s?.id)
+        .filter((id): id is string => typeof id === 'string');
+    }
+    return [];
   } catch {
-    return null;
+    return [];
   }
 }

@@ -136,6 +136,38 @@ export const saveSuggestionsInput = z.object({
               ),
           }),
         }),
+        z.object({
+          kind: z.literal('inventory.create'),
+          ...common,
+          payload: z.object({
+            name: z
+              .string()
+              .min(1)
+              .max(120)
+              .describe(
+                'What the supply is called, plainly and the way the list names things ("Earplugs", "Peppermint oil").'
+              ),
+            category: z
+              .string()
+              .max(60)
+              .optional()
+              .describe('A category find_inventory_items showed on similar items, when one fits.'),
+            location: z.string().max(120).optional().describe('Where it is kept, if the note says.'),
+            vendor: z.string().max(120).optional().describe('Who it comes from, if the note says.'),
+            inStock: z
+              .number()
+              .min(0)
+              .max(100000)
+              .optional()
+              .describe('How many are on hand, if the note gives a number; omit otherwise.'),
+            reorderAt: z
+              .number()
+              .min(0)
+              .max(100000)
+              .optional()
+              .describe('Only when the note says when to re-order.'),
+          }),
+        }),
       ])
     )
     .max(8)

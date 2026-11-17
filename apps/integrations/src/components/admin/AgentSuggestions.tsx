@@ -1,8 +1,9 @@
-// The SOP and message suggestions Pyre Agent filed in one answer, drawn
+// The SOP, message and inventory suggestions Pyre Agent filed in one answer, drawn
 // under it. They are the same suggestions the shift-note agent files: someone
 // who decides suggestions (an admin, or the Suggestions page) gets the same
 // card as under a shift note — the editor with the agent's change, Approve
-// and Dismiss — and anyone else sees that it went to the admins and, later,
+// and Dismiss, with a batch of inventory changes as one table to approve
+// together — and anyone else sees that it went to the admins and, later,
 // what they decided.
 
 import type { PeopleNames } from '@/lib/sops/names';
@@ -13,6 +14,8 @@ import {
   type SuggestionResultLink,
   type SuggestionView,
 } from '@/lib/suggestions/types';
+import { groupForReview } from './suggestions/grouping';
+import { InventoryBatch } from './suggestions/InventoryBatch';
 import { KindBadge, SuggestionCard } from './suggestions/SuggestionCard';
 
 /** The conversation's suggestions as /api/admin/agent-actions returns them. */
@@ -102,25 +105,34 @@ export function AgentSuggestions({ suggestions, context, onChange }: Props) {
             : 'Suggestions'
           : 'Suggested — sent to the admins for review'}
       </h3>
-      {suggestions.map((suggestion) =>
-        context.canDecide ? (
-          <SuggestionCard
-            key={suggestion.id}
-            suggestion={suggestion}
-            result={context.results[suggestion.id]}
-            target={context.targets[suggestion.id]}
-            names={context.people}
-            onChange={onChange}
-          />
-        ) : (
-          <WaitingCard
-            key={suggestion.id}
-            suggestion={suggestion}
-            result={context.results[suggestion.id]}
-            names={context.people}
-          />
-        )
-      )}
+      {context.canDecide
+        ? groupForReview(suggestions).map((entry) =>
+            entry.type === 'inventory' ? (
+              <InventoryBatch
+                key={entry.key}
+                suggestions={entry.suggestions}
+                names={context.people}
+                onChange={onChange}
+              />
+            ) : (
+              <SuggestionCard
+                key={entry.suggestion.id}
+                suggestion={entry.suggestion}
+                result={context.results[entry.suggestion.id]}
+                target={context.targets[entry.suggestion.id]}
+                names={context.people}
+                onChange={onChange}
+              />
+            )
+          )
+        : suggestions.map((suggestion) => (
+            <WaitingCard
+              key={suggestion.id}
+              suggestion={suggestion}
+              result={context.results[suggestion.id]}
+              names={context.people}
+            />
+          ))}
     </section>
   );
 }

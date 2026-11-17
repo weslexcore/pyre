@@ -166,6 +166,66 @@ describe('parsePayload inventory.count', () => {
   });
 });
 
+describe('parsePayload inventory.create', () => {
+  it('reads a name and whatever the note gave, leaving the rest empty', () => {
+    expect(
+      parsePayload('inventory.create', { name: ' Earplugs ', location: 'Front desk' })
+    ).toEqual({
+      ok: true,
+      value: {
+        name: 'Earplugs',
+        category: null,
+        location: 'Front desk',
+        vendor: null,
+        inStock: null,
+        reorderAt: null,
+        countEveryDays: null,
+        countedBy: null,
+        countedAt: null,
+      },
+    });
+  });
+
+  it('reads typed numbers and keeps who counted it', () => {
+    const parsed = parsePayload('inventory.create', {
+      name: 'Earplugs',
+      inStock: '40',
+      reorderAt: 10,
+      category: '',
+      countedBy: 'Maya@PyreSauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+    expect(parsed.ok && parsed.value).toMatchObject({
+      inStock: 40,
+      reorderAt: 10,
+      category: null,
+      countedBy: 'maya@pyresauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+  });
+
+  it('refuses no name, a bad number, a long field and a bad schedule', () => {
+    expect(parsePayload('inventory.create', { name: '  ' }).ok).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', inStock: -1 }).ok).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', inStock: 'lots' }).ok).toBe(false);
+    expect(
+      parsePayload('inventory.create', { name: 'Earplugs', category: 'x'.repeat(61) }).ok
+    ).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', countEveryDays: 0 }).ok).toBe(
+      false
+    );
+  });
+
+  it('describes the item, with its count when it has one', () => {
+    expect(describeSuggestion('inventory.create', { name: 'Earplugs', inStock: 40 })).toBe(
+      'New inventory item: Earplugs, 40 in stock'
+    );
+    expect(describeSuggestion('inventory.create', { name: 'Earplugs', inStock: null })).toBe(
+      'New inventory item: Earplugs'
+    );
+  });
+});
+
 describe('parsePayload shift_assignment.update', () => {
   it('reads an end time alone, leaving the start to be filled from the assignment', () => {
     const parsed = parsePayload('shift_assignment.update', { assignmentId: UUID, endsAt: '20:30' });

@@ -37,6 +37,11 @@ export interface InventoryRow {
    * inventory-count); null for a count made by hand.
    */
   last_count_suggestion_id: string | null;
+  /**
+   * The approved agent suggestion that added this item (lib/suggestions/
+   * kinds/inventory-create); null for an item added by hand.
+   */
+  created_suggestion_id?: string | null;
   in_stock: number;
   /** Flag for re-order at or below this; null = never. */
   reorder_at: number | null;

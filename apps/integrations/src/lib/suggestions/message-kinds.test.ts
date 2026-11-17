@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSuggestTool, suggestionIdOf } from '@/lib/pyre-agent/types';
+import { isSuggestTool, suggestionIdOf, suggestionIdsIn } from '@/lib/pyre-agent/types';
 import { describeSuggestion, parsePayload, sourceHref } from './types';
 
 const UUID = '0b6c1f8e-2f9a-4c1e-9a55-6a1d2b3c4d5e';
@@ -95,5 +95,12 @@ describe('Pyre Agent as a source', () => {
     expect(suggestionIdOf(JSON.stringify({ suggestion: { id: UUID } }))).toBe(UUID);
     expect(suggestionIdOf(JSON.stringify({ proposal: { id: UUID } }))).toBeNull();
     expect(suggestionIdOf('not json')).toBeNull();
+    // A batch (inventory changes) carries every id, in order.
+    const OTHER = '9d1e2f3a-4b5c-4d6e-8f70-112233445566';
+    expect(suggestionIdsIn(JSON.stringify({ suggestions: [{ id: UUID }, { id: OTHER }] }))).toEqual(
+      [UUID, OTHER]
+    );
+    expect(suggestionIdsIn(JSON.stringify({ suggestion: { id: UUID } }))).toEqual([UUID]);
+    expect(suggestionIdsIn(undefined)).toEqual([]);
   });
 });

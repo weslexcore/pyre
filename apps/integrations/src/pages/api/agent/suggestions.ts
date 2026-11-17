@@ -1,6 +1,7 @@
 // Agent-facing suggestion writer: the pyre-agents suggester posts what it
 // thinks should happen next for one source record (a shift note) — new
 // cards, comments on existing cards, SOP edits, new hours, inventory counts
+// and new inventory items
 // — and this route checks each
 // against the live data with the same code an admin's approval runs
 // (lib/suggestions), stores them as pending for review, closes the run, and

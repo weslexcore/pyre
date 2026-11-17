@@ -60,6 +60,7 @@ import {
   isSuggestTool,
   proposalIdOf,
   suggestionIdOf,
+  suggestionIdsIn,
 } from '@/lib/pyre-agent/types';
 import type { SuggestionResultLink, SuggestionView } from '@/lib/suggestions/types';
 import { AgentActions } from './AgentActions';
@@ -195,8 +196,7 @@ export function suggestionIdsOf(trail: TrailStep[]): string[] {
   const ids: string[] = [];
   for (const step of trail) {
     if (step.kind !== 'tool' || !isSuggestTool(step.tool) || step.status !== 'completed') continue;
-    const id = suggestionIdOf(step.output);
-    if (id) ids.push(id);
+    ids.push(...suggestionIdsIn(step.output));
   }
   return ids;
 }

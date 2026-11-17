@@ -5,7 +5,9 @@
 // the whole proposed document. Message edits arrive as the new title and/or
 // body and leave with the message as it stood, to diff and to guard against. New cards leave with the board's default
 // assignees and a due date from their severity and importance. Inventory
-// counts leave credited to the source's author at the source's time.
+// counts and new items leave credited to the source's author at the
+// source's time — or, for one Pyre Agent read out of a particular shift
+// note, to that note's author at its time.
 // Server-only.
 
 import { todayEastern } from '@pyre/schedule-core';
@@ -161,7 +163,7 @@ async function fillCardDefaults(
  */
 function fillCountCredit(
   raw: Record<string, unknown>,
-  source: SourceRecord | undefined
+  source: Pick<SourceRecord, 'author' | 'recordedAt'> | undefined
 ): Record<string, unknown> {
   return {
     ...raw,
@@ -170,14 +172,20 @@ function fillCountCredit(
   };
 }
 
+/** Who an inventory suggestion's count is credited to, and when. */
+export type CountCredit = Pick<SourceRecord, 'author' | 'recordedAt'>;
+
 /**
  * Check the agent's list and shape it for storage. `source` is the record the
- * run is about, when there is one (a dry run has none).
+ * run is about, when there is one (a dry run has none). `credits` overrides,
+ * by index, who an inventory count is credited to (a shift note Pyre Agent
+ * read it from, rather than the conversation).
  */
 export async function intakeSuggestions(
   db: SupabaseClient,
   raw: unknown,
-  source?: SourceRecord
+  source?: SourceRecord,
+  credits?: ReadonlyArray<CountCredit | undefined>
 ): Promise<IntakeResult> {
   if (!Array.isArray(raw))
     return { ok: false, status: 400, error: 'suggestions must be a list (it may be empty)' };
@@ -190,6 +198,7 @@ export async function intakeSuggestions(
   }
 
   const out: NewSuggestion[] = [];
+  const newItemNames = new Set<string>();
   for (const [index, entry] of raw.entries()) {
     const item = asObject(entry);
     if (!item) return { ok: false, status: 400, error: 'each suggestion must be an object', index };
@@ -211,7 +220,22 @@ export async function intakeSuggestions(
       payload = expanded.payload;
     }
     if (kind === 'board_card.create') payload = await fillCardDefaults(db, payload);
-    if (kind === 'inventory.count') payload = fillCountCredit(payload, source);
+    if (kind === 'inventory.count' || kind === 'inventory.create') {
+      payload = fillCountCredit(payload, credits?.[index] ?? source);
+    }
+
+    if (kind === 'inventory.create') {
+      const name = typeof payload.name === 'string' ? payload.name.trim().toLowerCase() : '';
+      if (name && newItemNames.has(name)) {
+        return {
+          ok: false,
+          status: 422,
+          error: `${String(payload.name).trim()} is suggested as a new item twice; keep one`,
+          index,
+        };
+      }
+      newItemNames.add(name);
+    }
 
     const checked = await checkPayload(db, kind, payload);
     if (!checked.ok) {

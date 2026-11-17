@@ -49,7 +49,9 @@ function priorSummary(row: {
           ? `hours for ${String(payload.staffName ?? '')} on ${String(payload.shiftLabel ?? '')} ${String(payload.shiftDate ?? '')} (assignment ${String(payload.assignmentId ?? '')}): ${String(payload.startsAt ?? '')}–${String(payload.endsAt ?? '')}`
           : row.kind === 'inventory.count'
             ? `inventory count for ${String(payload.itemName ?? '')} (item ${String(payload.itemId ?? '')}): ${String(payload.inStock ?? '')} in stock`
-            : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
+            : row.kind === 'inventory.create'
+              ? `new inventory item "${String(payload.name ?? '')}"${payload.inStock == null ? '' : `, ${String(payload.inStock)} in stock`}`
+              : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
   return {
     kind: row.kind,
     status: row.status,

@@ -506,6 +506,7 @@ export type AgentSuggestionKind =
   | 'sop.edit'
   | 'shift_assignment.update'
   | 'inventory.count'
+  | 'inventory.create'
   | 'message.create'
   | 'message.edit';
 export type AgentSuggestionStatus =
