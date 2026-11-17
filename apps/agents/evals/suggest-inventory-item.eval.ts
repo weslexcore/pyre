@@ -1,5 +1,5 @@
 // Suggester: a note about a supply the inventory doesn't track yet becomes an
-// inventory.create for it — after find_inventory_items finds nothing — and
+// inventory.create for it — nothing like it on the inventory list — and
 // never a count on some other item, nor a task.
 
 import { defineEval } from 'eve/evals';
@@ -25,7 +25,7 @@ export default defineEval({
         );
         const turn = await t.target.watchTurn(sessionId as string).result();
 
-        turn.calledTool('find_inventory_items');
+        turn.calledTool('get_suggestion_context');
         turn.expectOk();
         t.maxToolCalls(12);
 

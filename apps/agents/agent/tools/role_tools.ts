@@ -88,7 +88,7 @@ export default defineDynamic({
         return {
           get_suggestion_context: defineTool({
             description:
-              'The record you are suggesting follow-up work for (a shift note: its text, date, author and status), what the classifier found in it, the suggestions already made for it and what the admins did with each, the default board, and every board you can file work on with its open columns and fields. Call this first.',
+              'The record you are suggesting follow-up work for (a shift note: its text, date, author and status), what the classifier found in it, the suggestions already made for it and what the admins did with each, the default board, every board you can file work on with its open columns and fields, and the inventory: every active item with its itemId, category, location and stock on record (unless the list is too long, when it says to use find_inventory_items). Call this first.',
             inputSchema: z.object({}),
             execute(_input, ctx) {
               return getSuggestionContext(suggestTargetOf(ctx).source);
@@ -146,7 +146,7 @@ export default defineDynamic({
           }),
           find_inventory_items: defineTool({
             description:
-              'Inventory items whose name, category, location or vendor match the key words, best matches first, each with its itemId, stock on record, re-order level and last count. Use it when a note says how much of a supply is left ("three rolls of trash bags left", "out of eucalyptus", "ten more boxes came in"), to find the item to count. Propose a count only for an item it returns.',
+              'Inventory items whose name, category, location or vendor match the key words, best matches first, each with its itemId, stock on record, re-order level and last count. Only needed when get_suggestion_context says the inventory is too long to list in full; otherwise match against the list there.',
             inputSchema: z.object({
               query: z
                 .string()

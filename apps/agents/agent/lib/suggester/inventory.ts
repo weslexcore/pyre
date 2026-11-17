@@ -39,6 +39,50 @@ export function scoreItem(
   );
 }
 
+/** Up to this many active items, the whole list rides along in the opening context. */
+export const CONTEXT_INVENTORY_LIMIT = 200;
+
+/**
+ * The whole active inventory for the opening context, so a note that counts
+ * a shelf full of supplies is matched against the list in one read instead
+ * of a search per line. Compact: what matching and counting need. Past
+ * CONTEXT_INVENTORY_LIMIT items it says so, and find_inventory_items is the
+ * way in.
+ */
+export async function inventoryForContext() {
+  const db = getDb();
+  const { data, error } = await db
+    .from('inventory')
+    .select('id, name, category, location, in_stock, reorder_at, last_counted_at')
+    .eq('active', true)
+    .order('category', { nullsFirst: false })
+    .order('name')
+    .limit(CONTEXT_INVENTORY_LIMIT + 1);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Pick<
+    ItemRow,
+    'id' | 'name' | 'category' | 'location' | 'in_stock' | 'reorder_at' | 'last_counted_at'
+  >[];
+  if (rows.length > CONTEXT_INVENTORY_LIMIT) {
+    return {
+      complete: false as const,
+      note: `The inventory has more than ${CONTEXT_INVENTORY_LIMIT} active items; find them with find_inventory_items.`,
+    };
+  }
+  return {
+    complete: true as const,
+    items: rows.map((item) => ({
+      itemId: item.id,
+      name: item.name,
+      ...(item.category ? { category: item.category } : {}),
+      ...(item.location ? { location: item.location } : {}),
+      inStock: Number(item.in_stock),
+      ...(item.reorder_at == null ? {} : { reorderAt: Number(item.reorder_at) }),
+      ...(item.last_counted_at ? { lastCounted: item.last_counted_at.slice(0, 10) } : {}),
+    })),
+  };
+}
+
 export async function findInventoryItems(input: { query: string; limit?: number }) {
   const terms = searchTerms(input.query);
   if (terms.length === 0) return { items: [], note: 'Search with a few key words (3+ letters).' };
