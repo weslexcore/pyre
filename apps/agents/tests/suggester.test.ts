@@ -144,6 +144,34 @@ describe('save_suggestions input', () => {
   });
 });
 
+describe('save_suggestions inventory.create', () => {
+  it('takes a new item by name, with whatever the note gives', () => {
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          {
+            kind: 'inventory.create',
+            rationale: 'The note says the desk now keeps earplugs.',
+            payload: { name: 'Earplugs', location: 'Front desk', inStock: 40 },
+          },
+        ],
+      }).success
+    ).toBe(true);
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [{ kind: 'inventory.create', rationale: 'x', payload: { name: '' } }],
+      }).success
+    ).toBe(false);
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          { kind: 'inventory.create', rationale: 'x', payload: { name: 'Earplugs', inStock: -2 } },
+        ],
+      }).success
+    ).toBe(false);
+  });
+});
+
 describe('suggester instructions', () => {
   it('carry today and the rules that keep it a proposer', () => {
     const text = suggesterInstructionsFor('2026-09-25');
@@ -157,6 +185,12 @@ describe('suggester instructions', () => {
     const text = suggesterInstructionsFor('2026-09-25');
     expect(text).toContain('find_inventory_items');
     expect(text).toContain('inventory.count');
-    expect(text).toMatch(/never\s+invent an item or a number/);
+    expect(text).toMatch(/Never invent a number/);
+  });
+
+  it('propose a new item only for a supply the list does not track', () => {
+    const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('inventory.create');
+    expect(text).toMatch(/never a new item/);
   });
 });

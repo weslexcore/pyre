@@ -1,6 +1,7 @@
 // Every agent suggestion in one list (/admin/suggestions): pending ones as
 // editors to decide, newest first, each under the record it came from with a
-// link back to it; and, one filter away, what was decided and by whom.
+// link back to it — the inventory changes one run read out of a note
+// gathered into one batch to approve together; and, one filter away, what was decided and by whom.
 
 import { useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
@@ -15,6 +16,8 @@ import {
   type SuggestionResultLink,
   type SuggestionView,
 } from '@/lib/suggestions/types';
+import { groupForReview } from './grouping';
+import { InventoryBatch } from './InventoryBatch';
 import { SuggestionCard } from './SuggestionCard';
 
 type StatusFilter = 'pending' | 'decided';
@@ -103,11 +106,12 @@ export function SuggestionsInbox() {
         </p>
       )}
 
-      {rows.map((suggestion) => {
-        const source = data?.sources[`${suggestion.source_type}:${suggestion.source_id}`];
+      {groupForReview(rows).map((entry) => {
+        const first = entry.type === 'inventory' ? entry.suggestions[0] : entry.suggestion;
+        const source = data?.sources[`${first.source_type}:${first.source_id}`];
         return (
           <article
-            key={suggestion.id}
+            key={entry.type === 'inventory' ? entry.key : first.id}
             className="space-y-2 rounded border border-white/10 bg-white/5 p-3"
           >
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -123,7 +127,7 @@ export function SuggestionsInbox() {
               )}
               <span className="font-mono text-[10px] text-white/40">
                 suggested{' '}
-                {new Date(suggestion.created_at).toLocaleDateString('en-US', {
+                {new Date(first.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
                   timeZone: 'America/New_York',
@@ -135,13 +139,21 @@ export function SuggestionsInbox() {
                 {source.excerpt}
               </p>
             )}
-            <SuggestionCard
-              suggestion={suggestion}
-              result={data?.results[suggestion.id]}
-              target={data?.targets[suggestion.id]}
-              names={data?.people ?? {}}
-              onChange={replace}
-            />
+            {entry.type === 'inventory' ? (
+              <InventoryBatch
+                suggestions={entry.suggestions}
+                names={data?.people ?? {}}
+                onChange={replace}
+              />
+            ) : (
+              <SuggestionCard
+                suggestion={first}
+                result={data?.results[first.id]}
+                target={data?.targets[first.id]}
+                names={data?.people ?? {}}
+                onChange={replace}
+              />
+            )}
           </article>
         );
       })}

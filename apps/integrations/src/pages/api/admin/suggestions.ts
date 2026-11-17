@@ -11,8 +11,12 @@
 //   GET ?count=1                     → { pending }
 //   GET ?context=boards              → { boards, owners, dueDays } (the card editor's pickers)
 //   GET ?context=sop&id=<uuid>       → { sop } (current text, for the diff)
+//   GET ?context=inventory           → { items } (active items, for the count editor's item picker)
 //   PATCH { id, payload }            → { suggestion }  (save a working copy)
 //   POST { action: 'approve', id, payload?, note? } → { suggestion, result }
+//   POST { action: 'approve_many', items: [{ id, payload? }] }
+//                                    → { decisions: [{ id, ok, suggestion?, result?, error? }] }
+//                                      (each approved on its own; one failing leaves the rest)
 //   POST { action: 'dismiss', id, note? }           → { suggestion }
 //   POST { action: 'rebase', id }                   → { suggestion } | 409 { detail }
 //   POST { action: 'suggest', sourceType, sourceId } → 202 { run }
@@ -31,9 +35,11 @@ import { getSetting } from '@/lib/settings/store';
 import { getPeopleNames } from '@/lib/sops/people';
 import {
   approveSuggestion,
+  approveSuggestions,
   type DecisionResult,
   dismissSuggestion,
   editSuggestion,
+  MAX_BATCH,
   rebaseSuggestion,
 } from '@/lib/suggestions/approve';
 import { dispatchSuggestion } from '@/lib/suggestions/dispatch';
@@ -48,6 +54,7 @@ import {
   resolveLinks,
 } from '@/lib/suggestions/store';
 import {
+  type InventoryOption,
   isSuggestionKind,
   isSuggestionSourceType,
   isUuid,
@@ -101,7 +108,7 @@ function noteOf(value: unknown): string | null {
 
 /** The people an inventory count credits (the note's author, the last counter), for the name directory. */
 function countedByOf(row: AgentSuggestionRow): string[] {
-  if (row.kind !== 'inventory.count') return [];
+  if (row.kind !== 'inventory.count' && row.kind !== 'inventory.create') return [];
   const payload = row.edited_payload ?? row.payload;
   return [payload.countedBy, payload.lastCountedBy].filter(
     (e): e is string => typeof e === 'string' && e.includes('@')
@@ -166,6 +173,24 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (error) return dbError(error);
     if (!data) return json({ error: 'SOP not found' }, 404);
     return json({ sop: data });
+  }
+
+  if (context === 'inventory') {
+    const { data, error } = await db
+      .from('inventory')
+      .select(
+        'id, name, category, location, in_stock, reorder_at, last_counted_at, last_counted_by'
+      )
+      .eq('active', true)
+      .order('name');
+    if (error) return dbError(error);
+    return json({
+      items: ((data ?? []) as InventoryOption[]).map((item) => ({
+        ...item,
+        in_stock: Number(item.in_stock),
+        reorder_at: item.reorder_at == null ? null : Number(item.reorder_at),
+      })),
+    });
   }
 
   const sourceType = params.get('source');
@@ -291,6 +316,42 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           by,
         })
       );
+    case 'approve_many': {
+      const raw = Array.isArray(body.items) ? body.items : null;
+      if (!raw || raw.length === 0) return json({ error: 'items must list suggestions' }, 400);
+      if (raw.length > MAX_BATCH) return json({ error: `At most ${MAX_BATCH} at once` }, 400);
+      const items: { id: string; payload?: unknown }[] = [];
+      for (const entry of raw) {
+        const item = entry as Record<string, unknown> | null;
+        if (!item || !isUuid(item.id)) return json({ error: 'each item needs a UUID id' }, 400);
+        items.push({
+          id: item.id,
+          ...(item.payload !== undefined ? { payload: item.payload } : {}),
+        });
+      }
+      if (new Set(items.map((i) => i.id)).size !== items.length) {
+        return json({ error: 'each suggestion may appear once' }, 400);
+      }
+      const decisions = await approveSuggestions(db, items, by);
+      return json({
+        decisions: decisions.map((d) =>
+          d.ok
+            ? {
+                id: d.id,
+                ok: true,
+                suggestion: d.suggestion,
+                ...(d.result ? { result: d.result } : {}),
+              }
+            : {
+                id: d.id,
+                ok: false,
+                status: d.status,
+                error: d.error,
+                ...(d.suggestion ? { suggestion: d.suggestion } : {}),
+              }
+        ),
+      });
+    }
     case 'dismiss':
       if (!isUuid(body.id)) return json({ error: 'id must be a UUID' }, 400);
       return decision(await dismissSuggestion(db, body.id, { note: noteOf(body.note), by }));
@@ -330,6 +391,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       return json({ run: toRunView(run) }, 202);
     }
     default:
-      return json({ error: 'action must be approve, dismiss, rebase, or suggest' }, 400);
+      return json(
+        { error: 'action must be approve, approve_many, dismiss, rebase, or suggest' },
+        400
+      );
   }
 };

@@ -1,5 +1,6 @@
 // Which inventory items a note might be talking about, so "three rolls of
-// trash bags left" can become an inventory.count on the right item. A term
+// trash bags left" can become an inventory.count on the right item (and a
+// supply the list doesn't track can become an inventory.create). A term
 // match over name, category, location and vendor, best matches first, with
 // each item's stock on record and last count — the list is small enough to
 // rank in memory. Active items only: a set-aside item cannot be counted
@@ -82,7 +83,9 @@ export async function findInventoryItems(input: { query: string; limit?: number 
       url: siteUrl(`/admin/inventory?item=${item.id}`),
     })),
     ...(ranked.length === 0
-      ? { note: 'No active inventory item matches; the note may be about something not on the list. Do not invent an item.' }
+      ? {
+          note: 'No active inventory item matches. Search once more with another name for it; if the list still has nothing like it and the note gives something worth tracking (a supply the studio keeps and re-orders), propose an inventory.create for it. Never invent a number.',
+        }
       : {}),
   };
 }
