@@ -82,8 +82,26 @@ export const SOURCE_LABELS: Record<SuggestionSourceType, string> = {
   pyre_agent: 'Pyre Agent',
 };
 
-/** At most this many suggestions from one run. */
+/** At most this many suggestions from one run, besides inventory changes. */
 export const MAX_SUGGESTIONS_PER_RUN = 8;
+/**
+ * At most this many inventory changes from one run. Kept apart from the cap
+ * above: an inventory-count note lists every supply on the shelf, often
+ * twenty or more, and each is one row of a single batch to approve.
+ */
+export const MAX_INVENTORY_PER_RUN = 50;
+
+/** Whether a list stays within both caps; the error names the one it breaks. */
+export function checkRunSize(kinds: readonly unknown[]): string | null {
+  const inventory = kinds.filter(isInventorySuggestionKind).length;
+  if (inventory > MAX_INVENTORY_PER_RUN) {
+    return `At most ${MAX_INVENTORY_PER_RUN} inventory changes per run`;
+  }
+  if (kinds.length - inventory > MAX_SUGGESTIONS_PER_RUN) {
+    return `At most ${MAX_SUGGESTIONS_PER_RUN} suggestions per run besides inventory changes`;
+  }
+  return null;
+}
 export const MAX_RATIONALE = 2000;
 export const MAX_DECISION_NOTE = 1000;
 

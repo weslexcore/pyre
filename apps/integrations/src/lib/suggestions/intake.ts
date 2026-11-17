@@ -18,12 +18,7 @@ import { checkPayload } from './approve';
 import { dueDateFor, isImportance, isSeverity } from './priority';
 import type { SourceRecord } from './sources';
 import type { NewSuggestion } from './store';
-import {
-  isSuggestionKind,
-  MAX_RATIONALE,
-  MAX_SUGGESTIONS_PER_RUN,
-  type SuggestionKind,
-} from './types';
+import { checkRunSize, isSuggestionKind, MAX_RATIONALE, type SuggestionKind } from './types';
 
 export type IntakeResult =
   | { ok: true; suggestions: NewSuggestion[] }
@@ -189,13 +184,12 @@ export async function intakeSuggestions(
 ): Promise<IntakeResult> {
   if (!Array.isArray(raw))
     return { ok: false, status: 400, error: 'suggestions must be a list (it may be empty)' };
-  if (raw.length > MAX_SUGGESTIONS_PER_RUN) {
-    return {
-      ok: false,
-      status: 400,
-      error: `At most ${MAX_SUGGESTIONS_PER_RUN} suggestions per run`,
-    };
-  }
+  const tooMany = checkRunSize(
+    raw.map((entry) =>
+      entry && typeof entry === 'object' ? (entry as { kind?: unknown }).kind : null
+    )
+  );
+  if (tooMany) return { ok: false, status: 400, error: tooMany };
 
   const out: NewSuggestion[] = [];
   const newItemNames = new Set<string>();

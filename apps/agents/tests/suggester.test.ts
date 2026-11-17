@@ -117,6 +117,34 @@ describe('inventory item search', () => {
   });
 });
 
+describe('scoreItem codes', () => {
+  const reagent = { name: 'Reagents — R-0630', category: 'Plunge Care', location: null, vendor: null };
+  it('finds a coded item however the note writes the code', () => {
+    expect(scoreItem(reagent, searchTerms('R0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('reagent 0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('R-0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('R0600'))).toBe(0);
+  });
+});
+
+describe('save_suggestions run size', () => {
+  const count = (i: number) => ({
+    kind: 'inventory.count' as const,
+    rationale: 'x',
+    payload: { itemId: NOTE, inStock: i },
+  });
+  it('takes a whole inventory-count note, beyond the cap on other kinds', () => {
+    expect(
+      saveSuggestionsInput.safeParse({ suggestions: Array.from({ length: 18 }, (_, i) => count(i)) })
+        .success
+    ).toBe(true);
+    expect(
+      saveSuggestionsInput.safeParse({ suggestions: Array.from({ length: 51 }, (_, i) => count(i)) })
+        .success
+    ).toBe(false);
+  });
+});
+
 describe('save_suggestions input', () => {
   it('takes an inventory count as an item and a number on hand', () => {
     const parsed = saveSuggestionsInput.safeParse({

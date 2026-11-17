@@ -22,6 +22,7 @@ import { SUGGESTION_SOURCES } from './sources';
 import { claim, dismissPending, finishApproved, loadSuggestion, release, saveEdit } from './store';
 import {
   currentPayload,
+  MAX_INVENTORY_PER_RUN,
   type ParseResult,
   parsePayload,
   type SopEditPayload,
@@ -161,8 +162,8 @@ export async function approveSuggestion(
   };
 }
 
-/** At most this many suggestions decided in one batch. */
-export const MAX_BATCH = 20;
+/** At most this many suggestions decided in one batch: a run's whole inventory update. */
+export const MAX_BATCH = MAX_INVENTORY_PER_RUN;
 
 export type BatchDecision = { id: string } & DecisionResult;
 

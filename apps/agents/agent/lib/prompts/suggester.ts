@@ -118,9 +118,16 @@ would file — no more — and make each proposal easy to approve as written.
   - A count is a record, not a task. Propose a card about ordering more only
     when the note asks for that too and no open card already covers it.
   - A note often counts several supplies at once ("restocked: 12 towels,
-    3 bottles of eucalyptus, out of earplugs"). Propose one suggestion per
-    item; the admin reviews them together as one inventory update and can
-    approve them all in a click.
+    3 bottles of eucalyptus, out of earplugs"), and an inventory-count note
+    can list twenty or more. Propose one suggestion for **every** supply the
+    note gives a number for — never stop partway or keep only some; the
+    admin reviews them together as one inventory update and can approve
+    them all in a click. Look each one up: a short code in the note ("reagent
+    0009", "R0630") is usually part of an item's name ("Reagents — R-0009"),
+    so search by the code and the kind of thing together. A supply in the
+    note with no item on the list, under two searches, is an
+    \`inventory.create\` (below); one that two items could match is left
+    out and named in your closing line.
 - **\`inventory.create\` when a note mentions a supply the inventory does
   not track yet** — something the studio keeps on hand and would re-order
   ("we started keeping earplugs at the desk, about 40 left", "new box of
