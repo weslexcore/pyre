@@ -126,13 +126,13 @@ export const saveSuggestionsInput = z.object({
           kind: z.literal('inventory.count'),
           ...common,
           payload: z.object({
-            itemId: z.string().uuid().describe("The item's itemId from find_inventory_items."),
+            itemId: z.string().uuid().describe("The item's itemId from the inventory list in get_suggestion_context."),
             inStock: z
               .number()
               .min(0)
               .max(100000)
               .describe(
-                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock find_inventory_items returned.'
+                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock on the inventory list.'
               ),
           }),
         }),
@@ -151,7 +151,7 @@ export const saveSuggestionsInput = z.object({
               .string()
               .max(60)
               .optional()
-              .describe('A category find_inventory_items showed on similar items, when one fits.'),
+              .describe('A category the inventory list already uses, when one fits.'),
             location: z.string().max(120).optional().describe('Where it is kept, if the note says.'),
             vendor: z.string().max(120).optional().describe('Who it comes from, if the note says.'),
             inStock: z

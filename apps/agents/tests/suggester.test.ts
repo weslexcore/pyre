@@ -211,6 +211,7 @@ describe('suggester instructions', () => {
 
   it('send inventory numbers through find_inventory_items, credited to the author', () => {
     const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('inventory.items');
     expect(text).toContain('find_inventory_items');
     expect(text).toContain('inventory.count');
     expect(text).toMatch(/Never invent a number/);
