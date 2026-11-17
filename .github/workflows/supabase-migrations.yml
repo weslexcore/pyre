@@ -75,10 +75,11 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --workdir apps
 
-      # --linked: newer CLIs default db push to the local stack (127.0.0.1)
-      # unless told to use the project linked above.
+      # --remote: newer CLIs default db push to the local stack (127.0.0.1)
+      # unless told to use the project linked above. --yes: they also ask
+      # before applying, which a CI run can't answer.
       - name: Push migrations
-        run: supabase db push --linked --workdir apps
+        run: supabase db push --remote --yes --workdir apps
 
       # Interactively this prints the diff against the project and asks;
       # --yes answers it. Review the first push of a new section by hand
