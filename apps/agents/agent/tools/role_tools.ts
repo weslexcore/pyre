@@ -636,7 +636,8 @@ export default defineDynamic({
                 ])
               )
               .min(1)
-              .max(8),
+              .max(50)
+              .describe('Every change, all in this one call: one per supply the notes count.'),
           }),
           execute(input, ctx) {
             return suggestInventory(scopeOf(ctx), ctx.session?.id ?? null, input.changes);

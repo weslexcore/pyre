@@ -26,7 +26,7 @@ import {
   type InventorySuggestionKind,
   isInventorySuggestionKind,
   isUuid,
-  MAX_SUGGESTIONS_PER_RUN,
+  MAX_INVENTORY_PER_RUN,
   type SuggestionKind,
   sourceHref,
 } from '@/lib/suggestions/types';
@@ -199,8 +199,8 @@ export function parseInventoryChanges(
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, error: 'changes must list at least one inventory change' };
   }
-  if (raw.length > MAX_SUGGESTIONS_PER_RUN) {
-    return { ok: false, error: `At most ${MAX_SUGGESTIONS_PER_RUN} changes at once` };
+  if (raw.length > MAX_INVENTORY_PER_RUN) {
+    return { ok: false, error: `At most ${MAX_INVENTORY_PER_RUN} changes at once` };
   }
   const changes: InventoryChangeInput[] = [];
   for (const [index, entry] of raw.entries()) {

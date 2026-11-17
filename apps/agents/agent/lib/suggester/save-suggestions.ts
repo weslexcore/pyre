@@ -170,8 +170,16 @@ export const saveSuggestionsInput = z.object({
         }),
       ])
     )
-    .max(8)
-    .describe('Everything you propose for this record; empty when it needs nothing.'),
+    .max(58)
+    .refine((list) => list.filter((s) => s.kind.startsWith('inventory.')).length <= 50, {
+      message: 'At most 50 inventory changes.',
+    })
+    .refine((list) => list.filter((s) => !s.kind.startsWith('inventory.')).length <= 8, {
+      message: 'At most 8 suggestions besides inventory changes.',
+    })
+    .describe(
+      'Everything you propose for this record; empty when it needs nothing. Up to 8 tasks, comments, SOP edits and hours changes, plus one inventory suggestion for every supply the note counts (up to 50).'
+    ),
 });
 
 export type SaveSuggestionsInput = z.infer<typeof saveSuggestionsInput>;

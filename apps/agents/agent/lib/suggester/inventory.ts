@@ -23,13 +23,17 @@ interface ItemRow {
   last_counted_by: string | null;
 }
 
-/** Name matches count double: an item's name is what it is. */
+/**
+ * Name matches count double: an item's name is what it is. The name is also
+ * matched with its punctuation squeezed out, so a code written either way
+ * finds it: "R0630" and "0630" both find "Reagents — R-0630".
+ */
 export function scoreItem(
   item: Pick<ItemRow, 'name' | 'category' | 'location' | 'vendor'>,
   terms: string[]
 ): number {
   return scoreTerms(
-    item.name,
+    `${item.name} ${item.name.replace(/[^a-z0-9]+/gi, '')}`,
     [item.category, item.location, item.vendor].filter(Boolean).join(' '),
     terms
   );

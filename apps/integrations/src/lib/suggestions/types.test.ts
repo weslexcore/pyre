@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { currentPayload, describeSuggestion, parsePayload, sourceHref } from './types';
+import {
+  checkRunSize,
+  currentPayload,
+  describeSuggestion,
+  parsePayload,
+  sourceHref,
+} from './types';
 
 const UUID = '0b6c1f8e-2f9a-4c1e-9a55-6a1d2b3c4d5e';
 
@@ -163,6 +169,17 @@ describe('parsePayload inventory.count', () => {
     expect(describeSuggestion('inventory.count', { itemName: 'Trash bags', inStock: 3 })).toBe(
       'Inventory count: Trash bags, 3 in stock'
     );
+  });
+});
+
+describe('checkRunSize', () => {
+  it('lets a run count every supply on a long note, but caps the other kinds at 8', () => {
+    expect(checkRunSize(Array(18).fill('inventory.count'))).toBeNull();
+    expect(
+      checkRunSize([...Array(8).fill('board_card.create'), ...Array(30).fill('inventory.count')])
+    ).toBeNull();
+    expect(checkRunSize(Array(9).fill('board_card.create'))).toMatch(/besides inventory/);
+    expect(checkRunSize(Array(51).fill('inventory.create'))).toMatch(/50 inventory/);
   });
 });
 
