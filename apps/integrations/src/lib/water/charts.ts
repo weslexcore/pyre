@@ -168,8 +168,24 @@ export const SALT_GRAMS_PER_STEP = 24;
 export const SALT_PPM_PER_STEP = 50;
 export const SALT_DOSE_TO_PPM = 2350;
 
-// Salt for a fresh fill of CHART_GALLONS.
-export const FRESH_FILL_SALT_GRAMS = 920;
+// Salt for a fresh fill of CHART_GALLONS, from 0 ppm to SALT_DOSE_TO_PPM.
+//
+// Sized from Pyre's own water log, not the chart step. The chart's 24 g per
+// 50 ppm (~2.1 ppm per gram) holds for the 150–450 g top-ups: they read
+// 2200–2400 ppm the next day. A whole fill's worth lands short: 1,128 g into
+// a refilled tub read 1800 ppm two days later (Nov 3), and 605 g raised
+// 1000 ppm tubs only to 2000–2200 (Aug 4) — about 1.6–1.8 ppm per gram, likely
+// because Dead Sea Salt is far from pure NaCl and the TF-Pro reads
+// conductivity. The old 920 g was only ~1900 ppm even at the chart rate, below
+// the 2200 floor, so every refill needed a second dose. 1,400 g is 2350 ppm at
+// ~1.68 ppm per gram.
+export const FRESH_FILL_SALT_GRAMS = 1400;
+
+// A salt reading below this is fresh water: the tub was just refilled and its
+// salt hasn't gone in yet, so the water page sizes the dose from
+// FRESH_FILL_SALT_GRAMS instead of the chart step. A tub in service never
+// reads this low (the lowest in the log is 1000 ppm).
+export const SALT_FRESH_FILL_BELOW_PPM = 500;
 
 // Weekly shock treatment: oxidizer only (potassium peroxymonosulfate), tub
 // closed, cover off 20+ min. The manual pairs it with 10 g of sanitizer, but
