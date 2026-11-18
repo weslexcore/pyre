@@ -425,12 +425,17 @@ export default function EventDetailModal({
               className="pointer-events-none absolute inset-x-0 -top-2 h-5 rounded-[2rem] bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-sage)] opacity-30 blur-2xl"
             />
 
-            {/* Title */}
+            {/* Title — links to the event's own page */}
             <h2
               id="event-detail-title"
               className="font-mono-bold text-xl sm:text-2xl uppercase tracking-wide text-[var(--pyre-creme)] pr-8"
             >
-              {event.title}
+              <a
+                href={eventPath(event)}
+                className="underline decoration-[var(--pyre-gold)]/40 underline-offset-4 hover:decoration-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50 rounded-sm"
+              >
+                {event.title}
+              </a>
             </h2>
 
             {/* Details grid */}

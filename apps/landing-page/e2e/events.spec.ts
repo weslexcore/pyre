@@ -104,6 +104,16 @@ test.describe('schedule', () => {
     await expect(dialog).toBeHidden();
   });
 
+  test('the session title in the details links to its event page', async ({ page }) => {
+    await page.goto('/events');
+    await row(page, E.guided.title).click();
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('link', { name: E.guided.title, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/events/${E.guided.id}-e2e-guided-sauna$`));
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(E.guided.title);
+  });
+
   test('?event= deep-links straight into a session', async ({ page }) => {
     await page.goto(`/events?event=${E.yoga.id}`);
     await expect(page.getByRole('dialog').locator('#event-detail-title')).toHaveText(E.yoga.title);
