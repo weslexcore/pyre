@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     // toc-utils.test.ts predates the test runner and mocks browser globals;
     // it needs a DOM environment (jsdom/happy-dom) that isn't installed.
-    exclude: ['**/node_modules/**', '**/dist/**', 'src/lib/toc-utils.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/lib/toc-utils.test.ts', 'e2e/**'],
   },
   resolve: {
     // Mirror the "@/*" path alias from tsconfig.json.

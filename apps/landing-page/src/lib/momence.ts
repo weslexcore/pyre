@@ -1,11 +1,10 @@
 // Momence Events API client
 // Fetches events at build time and transforms them to EventItem format
 
+import { MOMENCE_API_BASE } from './momence-api';
 import type { MomenceEvent, MomenceTeacher } from './momence-types';
 import { toPractitioner } from './practitioners';
 import type { EventItem, EventsContent, Practitioner } from './types';
-
-const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 /**
  * Momence sits in front of the first byte of every server-rendered events page,

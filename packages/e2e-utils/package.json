@@ -1,0 +1,24 @@
+{
+  "name": "@pyre/e2e-utils",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Shared Playwright helpers for the per-app E2E suites: config defaults, a test fixture with storage seeding and a browser-error guard, a mock upstream HTTP server, and browser-layer stubs for third parties.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "type-check": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@playwright/test": "*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.20.1",
+    "typescript": "^6.0.3"
+  }
+}

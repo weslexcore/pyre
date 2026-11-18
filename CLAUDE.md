@@ -256,6 +256,14 @@ Landing page uses:
 - **Landing Page**: Biome for linting and formatting
 - Run quality checks: `yarn lint` and `yarn format`
 
+### End-to-End Tests (Playwright)
+- Each app owns its suite in `apps/<app>/e2e/`. Shared config, fixtures, stubs and the mock-server helper live in `packages/e2e-utils` (`@pyre/e2e-utils`; see its README for adding a suite)
+- Landing page: `yarn test:e2e:landing` (or `yarn workspace @pyre/landing-page test:e2e`, `test:e2e:ui` for the UI mode). First run: `yarn workspace @pyre/landing-page playwright install chromium`
+- The suite starts `astro dev --ignore-lock` on port 4329 and a mock upstream server on 4330 (`e2e/mock-server/`). Momence v1 (`MOMENCE_API_BASE`) and the integrations service point at the mock; all other credentials are blanked in `e2e/env.ts`, so tests never reach real services
+- Specs import `test`/`expect` from `e2e/test.ts`. Any browser `console.error` or page error fails a test; allow expected ones with `test.use({ consoleAllowlist: allowConsole(...) })`
+- Selectors: roles and accessible names first, then existing `data-*` hooks and ids; add `data-testid` only when neither exists
+- CI: `.github/workflows/e2e.yml` runs a suite on PRs that touch its app (Chromium only, report uploaded on failure)
+
 ### Type Checking
 - Run TypeScript checks: `yarn type-check`
 - Generate database types: `yarn workspace @pyre/supabase gen:types`

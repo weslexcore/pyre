@@ -108,3 +108,8 @@ bower_components
 .nuxt
 out
 storybook-static
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/

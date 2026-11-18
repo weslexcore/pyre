@@ -1,0 +1,169 @@
+// The schedule, end to end: /api/events and the server-rendered event pages
+// run their real code against the mock Momence calendar
+// (mock-server/momence-fixtures.ts).
+
+import { allowConsole, stubJson } from '@pyre/e2e-utils';
+import { FIXTURE_EVENTS as E } from './mock-server/momence-fixtures';
+import { expect, test } from './test';
+
+const row = (page: import('@playwright/test').Page, title: string) =>
+  page.getByRole('button').filter({ hasText: title });
+
+test.describe('schedule', () => {
+  test('lists the upcoming public sessions and nothing else', async ({ page }) => {
+    await page.goto('/events');
+
+    for (const shown of [E.guided, E.yoga, E.social, E.full]) {
+      await expect(row(page, shown.title)).toBeVisible();
+    }
+    for (const hidden of [E.volunteer, E.cancelled, E.past]) {
+      await expect(page.getByText(hidden.title)).toHaveCount(0);
+    }
+  });
+
+  test('Book links go straight to the Momence checkout', async ({ page }) => {
+    await page.goto('/events');
+
+    const book = page
+      .getByRole('link', { name: `Book ${E.guided.title}` })
+      .filter({ visible: true });
+    await expect(book).toHaveAttribute(
+      'href',
+      `https://momence.com/s/${E.guided.id}?skipPreview=true`
+    );
+    await expect(book).toHaveAttribute('target', '_blank');
+
+    // A full session offers the waitlist instead.
+    await expect(
+      page
+        .getByRole('link', { name: `Join waitlist for ${E.full.title}` })
+        .filter({ visible: true })
+    ).toBeVisible();
+  });
+
+  test('the session-type filter narrows the list and is reflected in the URL', async ({ page }) => {
+    await page.goto('/events');
+
+    const filters = page.getByRole('group', { name: 'Session type filters' });
+    await expect(filters.getByRole('button')).toHaveText([
+      'All',
+      'Guided',
+      'Social',
+      'Yoga',
+      'Breathwork',
+    ]);
+
+    await filters.getByRole('button', { name: 'Yoga' }).click();
+    await expect(filters.getByRole('button', { name: 'Yoga' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(row(page, E.yoga.title)).toBeVisible();
+    await expect(row(page, E.guided.title)).toHaveCount(0);
+    await expect(page).toHaveURL(/[?&]type=Yoga/);
+
+    await filters.getByRole('button', { name: 'All' }).click();
+    await expect(row(page, E.guided.title)).toBeVisible();
+    await expect(page).not.toHaveURL(/type=/);
+  });
+
+  test('?type= deep-links a filter', async ({ page }) => {
+    await page.goto('/events?type=Guided');
+    await expect(row(page, E.guided.title)).toBeVisible();
+    await expect(row(page, E.yoga.title)).toHaveCount(0);
+  });
+
+  test('a row opens the session details, which close again', async ({ page }) => {
+    await page.goto('/events');
+    await row(page, E.guided.title).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('#event-detail-title')).toHaveText(E.guided.title);
+    await expect(
+      dialog.getByRole('link', { name: `Book ${E.guided.title}` }).first()
+    ).toHaveAttribute('href', new RegExp(`momence\\.com/s/${E.guided.id}`));
+
+    await dialog.getByRole('button', { name: 'Close details' }).click();
+    await expect(dialog).toBeHidden();
+  });
+
+  test('?event= deep-links straight into a session', async ({ page }) => {
+    await page.goto(`/events?event=${E.yoga.id}`);
+    await expect(page.getByRole('dialog').locator('#event-detail-title')).toHaveText(E.yoga.title);
+    // The param is consumed so a refresh doesn't reopen it.
+    await expect(page).not.toHaveURL(/event=/);
+  });
+
+  test.describe('when the calendar is unavailable', () => {
+    test.use({ consoleAllowlist: allowConsole(/status of 503/, /\[useEvents\]|events/i) });
+
+    test('says so and recovers on retry', async ({ page }) => {
+      let failing = true;
+      await page.route('**/api/events', (route) =>
+        failing
+          ? route.fulfill({
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ events: [], error: 'Events are temporarily unavailable' }),
+            })
+          : route.fallback()
+      );
+
+      await page.goto('/events');
+      await expect(page.getByText("We couldn't load upcoming sessions.")).toBeVisible();
+
+      failing = false;
+      await page.getByRole('button', { name: 'Retry loading upcoming sessions' }).click();
+      await expect(row(page, E.guided.title)).toBeVisible();
+    });
+  });
+
+  test('an empty calendar is not shown as an error', async ({ page }) => {
+    await stubJson(page, '**/api/events', {
+      events: [],
+      cached: false,
+      timestamp: new Date().toISOString(),
+      hasMore: false,
+      totalUpcoming: 0,
+    });
+    await page.goto('/events');
+    await expect(page.getByText("We couldn't load upcoming sessions.")).toHaveCount(0);
+    await expect(row(page, E.guided.title)).toHaveCount(0);
+  });
+});
+
+test.describe('event page', () => {
+  test('a bare id redirects to the canonical slugged URL', async ({ request }) => {
+    const response = await request.get(`/events/${E.guided.id}?utm_source=e2e`, {
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(302);
+    expect(response.headers().location).toBe(
+      `/events/${E.guided.id}-e2e-guided-sauna?utm_source=e2e`
+    );
+  });
+
+  test('renders the session server-side with a booking link and structured data', async ({
+    page,
+  }) => {
+    await page.goto(`/events/${E.guided.id}-e2e-guided-sauna`);
+
+    await expect(page.locator('h1')).toHaveText(E.guided.title);
+    await expect(page).toHaveTitle(`${E.guided.title} — Pyre`);
+    await expect(
+      page.getByRole('link', { name: `Book ${E.guided.title}` }).first()
+    ).toHaveAttribute('href', new RegExp(`momence\\.com/s/${E.guided.id}`));
+
+    const schema = await page.locator('script[type="application/ld+json"]').allTextContents();
+    expect(schema.some((json) => json.includes('"@type":"Event"'))).toBe(true);
+  });
+
+  test('a session that has ended says so and sends the visitor to the schedule', async ({
+    page,
+  }) => {
+    await page.goto(`/events/${E.past.id}`);
+    await expect(page).toHaveTitle('Event has ended — Pyre');
+    await page.waitForURL(/\/events$/, { timeout: 10_000 });
+  });
+});

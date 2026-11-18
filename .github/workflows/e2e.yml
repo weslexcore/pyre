@@ -1,0 +1,113 @@
+# End-to-end tests (Playwright) for each app that has a suite, run on PRs
+# that touch it. Each app's suite starts its own dev server against a mock
+# upstream (see apps/<app>/e2e/ and packages/e2e-utils), so no secrets are
+# needed and nothing reaches a real service.
+#
+# Adding an app: give it a `test:e2e` script (see packages/e2e-utils/README.md),
+# then add a filter below named after its directory under apps/, and add the
+# name to ALL_APPS. The filter name is the matrix value, and the workspace is
+# @pyre/<name>.
+
+name: E2E
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # What a manual run (Actions tab -> Run workflow) tests.
+  ALL_APPS: '["landing-page"]'
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      apps: ${{ github.event_name == 'workflow_dispatch' && env.ALL_APPS || steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            landing-page:
+              - 'apps/landing-page/**'
+              - 'packages/webhook-core/**'
+              - 'packages/e2e-utils/**'
+              - 'yarn.lock'
+              - '.github/workflows/e2e.yml'
+
+  e2e:
+    needs: changes
+    if: ${{ needs.changes.outputs.apps != '[]' && needs.changes.outputs.apps != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
+    name: e2e (${{ matrix.app }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Get Yarn cache directory
+        id: yarn-cache
+        run: echo "dir=$(yarn config get cacheFolder)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache.outputs.dir }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Get Playwright version
+        id: playwright
+        run: echo "version=$(yarn workspace @pyre/${{ matrix.app }} playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: yarn workspace @pyre/${{ matrix.app }} playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: yarn workspace @pyre/${{ matrix.app }} playwright install-deps chromium
+
+      - name: Run E2E tests
+        run: yarn workspace @pyre/${{ matrix.app }} test:e2e
+
+      - name: Upload report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.app }}
+          path: |
+            apps/${{ matrix.app }}/playwright-report/
+            apps/${{ matrix.app }}/test-results/
+          retention-days: 14
