@@ -117,6 +117,34 @@ describe('inventory item search', () => {
   });
 });
 
+describe('scoreItem codes', () => {
+  const reagent = { name: 'Reagents — R-0630', category: 'Plunge Care', location: null, vendor: null };
+  it('finds a coded item however the note writes the code', () => {
+    expect(scoreItem(reagent, searchTerms('R0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('reagent 0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('R-0630'))).toBeGreaterThan(0);
+    expect(scoreItem(reagent, searchTerms('R0600'))).toBe(0);
+  });
+});
+
+describe('save_suggestions run size', () => {
+  const count = (i: number) => ({
+    kind: 'inventory.count' as const,
+    rationale: 'x',
+    payload: { itemId: NOTE, inStock: i },
+  });
+  it('takes a whole inventory-count note, beyond the cap on other kinds', () => {
+    expect(
+      saveSuggestionsInput.safeParse({ suggestions: Array.from({ length: 18 }, (_, i) => count(i)) })
+        .success
+    ).toBe(true);
+    expect(
+      saveSuggestionsInput.safeParse({ suggestions: Array.from({ length: 51 }, (_, i) => count(i)) })
+        .success
+    ).toBe(false);
+  });
+});
+
 describe('save_suggestions input', () => {
   it('takes an inventory count as an item and a number on hand', () => {
     const parsed = saveSuggestionsInput.safeParse({
@@ -144,6 +172,34 @@ describe('save_suggestions input', () => {
   });
 });
 
+describe('save_suggestions inventory.create', () => {
+  it('takes a new item by name, with whatever the note gives', () => {
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          {
+            kind: 'inventory.create',
+            rationale: 'The note says the desk now keeps earplugs.',
+            payload: { name: 'Earplugs', location: 'Front desk', inStock: 40 },
+          },
+        ],
+      }).success
+    ).toBe(true);
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [{ kind: 'inventory.create', rationale: 'x', payload: { name: '' } }],
+      }).success
+    ).toBe(false);
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          { kind: 'inventory.create', rationale: 'x', payload: { name: 'Earplugs', inStock: -2 } },
+        ],
+      }).success
+    ).toBe(false);
+  });
+});
+
 describe('suggester instructions', () => {
   it('carry today and the rules that keep it a proposer', () => {
     const text = suggesterInstructionsFor('2026-09-25');
@@ -155,8 +211,15 @@ describe('suggester instructions', () => {
 
   it('send inventory numbers through find_inventory_items, credited to the author', () => {
     const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('inventory.items');
     expect(text).toContain('find_inventory_items');
     expect(text).toContain('inventory.count');
-    expect(text).toMatch(/never\s+invent an item or a number/);
+    expect(text).toMatch(/Never invent a number/);
+  });
+
+  it('propose a new item only for a supply the list does not track', () => {
+    const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('inventory.create');
+    expect(text).toMatch(/never a new item/);
   });
 });

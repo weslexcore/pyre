@@ -3,7 +3,13 @@
 // boundary gets pinned down here.
 
 import { describe, expect, it } from 'vitest';
-import { PRODUCTS, sanitizerPpmPerGram, scaleGrams, shockDoses } from './charts';
+import {
+  FRESH_FILL_SALT_GRAMS,
+  PRODUCTS,
+  sanitizerPpmPerGram,
+  scaleGrams,
+  shockDoses,
+} from './charts';
 import { classifyReading, getGuestSafety, getRecommendations } from './recommendations';
 
 const only = (
@@ -194,6 +200,28 @@ describe('getRecommendations', () => {
       expect(only({ salt: 2100 }).grams).toBe(120); // floor(250/50) = 5 steps
       expect(only({ salt: 2199 }).grams).toBe(72); // floor(151/50) = 3 steps
       expect(only({ salt: 2100 }).chemical).toBe(PRODUCTS.salt);
+    });
+
+    it('keeps chart steps for a tub in service, however low', () => {
+      expect(only({ salt: 1800 }).grams).toBe(264); // floor(550/50) = 11 steps
+      expect(only({ salt: 1000 }).grams).toBe(648); // floor(1350/50) = 27 steps
+      expect(only({ salt: 500 }).grams).toBe(888); // floor(1850/50) = 37 steps
+    });
+
+    it('doses the refill amount for fresh-fill water, pro-rated for the reading', () => {
+      const rec = only({ salt: 0 });
+      expect(rec).toMatchObject({
+        parameter: 'salt',
+        severity: 'action',
+        grams: FRESH_FILL_SALT_GRAMS,
+      });
+      expect(rec.grams).toBe(1400);
+      expect(rec.reason).toContain('fresh-fill');
+      expect(only({ salt: 200 }).grams).toBe(1280); // floor(1400 × 2150 / 2350)
+    });
+
+    it('sizes the fresh-fill dose for the plunge', () => {
+      expect(only({ salt: 0 }, { gallons: 60 }).grams).toBe(700);
     });
 
     it('is info-only between target max and the hard limit', () => {

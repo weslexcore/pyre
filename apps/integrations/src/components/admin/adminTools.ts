@@ -109,7 +109,7 @@ export const SUGGESTIONS_TOOL: AdminTool = {
   title: 'Suggestions',
   navLabel: 'Suggestions',
   description:
-    'Tasks, task comments, SOP edits, hours corrections, and inventory counts the agent proposes from shift notes — edit and approve or dismiss each one.',
+    'Tasks, task comments, SOP edits, hours corrections, inventory counts and new inventory items the agent proposes from shift notes — edit and approve or dismiss each one, or a whole inventory update at once.',
   section: 'operations',
   keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox', 'inventory'],
 };

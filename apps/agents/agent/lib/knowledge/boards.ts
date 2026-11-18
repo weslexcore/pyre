@@ -28,7 +28,8 @@ export type PyreOp =
   | 'propose'
   | 'messages'
   | 'message'
-  | 'suggest';
+  | 'suggest'
+  | 'suggest_inventory';
 
 /**
  * Which page an op or proposal needs the person to hold. Messages and
@@ -37,7 +38,7 @@ export type PyreOp =
  */
 export function areaOf(op: PyreOp, kind?: ProposalKind): 'boards' | 'inventory' | 'any' {
   if (op === 'messages' || op === 'message' || op === 'suggest') return 'any';
-  if (op === 'inventory') return 'inventory';
+  if (op === 'inventory' || op === 'suggest_inventory') return 'inventory';
   if (op === 'propose' && kind?.startsWith('inventory.')) return 'inventory';
   return 'boards';
 }

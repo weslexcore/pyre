@@ -1,4 +1,4 @@
-// SOP and message changes Pyre Agent suggests in a conversation. Unlike its
+// SOP, message and inventory changes Pyre Agent suggests in a conversation. Unlike its
 // board and inventory proposals (./actions), which the asker applies as
 // themselves, these go through the same suggestion pipeline as the shift-note
 // suggester (lib/suggestions): checked by the same intake, stored in
@@ -16,12 +16,20 @@ import { conversationOf } from '@/lib/knowledge/conversation';
 import { canViewMessage } from '@/lib/messages/access';
 import { getSetting } from '@/lib/settings/store';
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
-import { intakeSuggestions } from '@/lib/suggestions/intake';
+import { type CountCredit, intakeSuggestions } from '@/lib/suggestions/intake';
 import { notifySuggestionsReady } from '@/lib/suggestions/notify';
 import { createManualRun } from '@/lib/suggestions/runs';
 import { type SourceRecord, SUGGESTION_SOURCES } from '@/lib/suggestions/sources';
 import { insertSuggestions } from '@/lib/suggestions/store';
-import { describeSuggestion, type SuggestionKind, sourceHref } from '@/lib/suggestions/types';
+import {
+  describeSuggestion,
+  type InventorySuggestionKind,
+  isInventorySuggestionKind,
+  isUuid,
+  MAX_INVENTORY_PER_RUN,
+  type SuggestionKind,
+  sourceHref,
+} from '@/lib/suggestions/types';
 
 /** The suggestion kinds Pyre Agent files; the rest are the shift-note suggester's. */
 export const PYRE_AGENT_SUGGESTION_KINDS = ['sop.edit', 'message.create', 'message.edit'] as const;
@@ -163,6 +171,169 @@ export async function suggestFromConversation(
       summary: describeSuggestion(row.kind, row.payload),
       status: row.status,
     },
+    reviewer,
+  };
+}
+
+/** One inventory change Pyre Agent read out of a shift note. */
+export interface InventoryChangeInput {
+  kind: InventorySuggestionKind;
+  payload: Record<string, unknown>;
+  rationale: string;
+  /** The shift note it was read from: the count is credited to its author, at its time. */
+  shiftNoteId: string | null;
+}
+
+export type SuggestManyResult =
+  | {
+      ok: true;
+      suggestions: { id: string; kind: SuggestionKind; summary: string; status: string }[];
+      reviewer: 'you' | 'admins';
+    }
+  | { ok: false; status: 400 | 403 | 404 | 409 | 422 | 500; error: string; index?: number };
+
+/** Parse the agent's list of inventory changes; an error names the entry to fix. */
+export function parseInventoryChanges(
+  raw: unknown
+): { ok: true; changes: InventoryChangeInput[] } | { ok: false; error: string; index?: number } {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { ok: false, error: 'changes must list at least one inventory change' };
+  }
+  if (raw.length > MAX_INVENTORY_PER_RUN) {
+    return { ok: false, error: `At most ${MAX_INVENTORY_PER_RUN} changes at once` };
+  }
+  const changes: InventoryChangeInput[] = [];
+  for (const [index, entry] of raw.entries()) {
+    const o =
+      entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>)
+        : null;
+    if (!o || !isInventorySuggestionKind(o.kind)) {
+      return { ok: false, error: 'kind must be inventory.count or inventory.create', index };
+    }
+    const { kind, rationale, shiftNoteId, ...payload } = o;
+    if (shiftNoteId !== undefined && shiftNoteId !== null && !isUuid(shiftNoteId)) {
+      return { ok: false, error: 'shiftNoteId must be a note id from get_shift_notes', index };
+    }
+    changes.push({
+      kind,
+      payload,
+      rationale: typeof rationale === 'string' ? rationale : '',
+      shiftNoteId: (shiftNoteId as string | null | undefined) ?? null,
+    });
+  }
+  return { ok: true, changes };
+}
+
+/**
+ * The shift notes the changes were read from, as count credits: each note's
+ * author and time. Only notes the asker can read themselves count — every
+ * note for an admin, otherwise the team's notes and their own — so nobody
+ * can credit a count to a note they could not open.
+ */
+async function noteCredits(
+  db: SupabaseClient,
+  access: PageAccess,
+  email: string,
+  changes: readonly InventoryChangeInput[]
+): Promise<
+  { ok: true; credits: (CountCredit | undefined)[] } | { ok: false; error: string; index: number }
+> {
+  const ids = [...new Set(changes.map((c) => c.shiftNoteId).filter((id): id is string => !!id))];
+  const readable = new Map<string, CountCredit>();
+  if (ids.length > 0) {
+    const { data, error } = await db
+      .from('shift_notes')
+      .select('id, author_email, admin_only, created_at')
+      .in('id', ids);
+    if (error) throw new Error(error.message);
+    for (const note of (data ?? []) as {
+      id: string;
+      author_email: string;
+      admin_only: boolean;
+      created_at: string;
+    }[]) {
+      const author = note.author_email.trim().toLowerCase();
+      if (access.isAdmin || !note.admin_only || author === email) {
+        readable.set(note.id, { author, recordedAt: note.created_at });
+      }
+    }
+  }
+  const credits: (CountCredit | undefined)[] = [];
+  for (const [index, change] of changes.entries()) {
+    if (!change.shiftNoteId) {
+      credits.push(undefined);
+      continue;
+    }
+    const credit = readable.get(change.shiftNoteId);
+    if (!credit) {
+      return {
+        ok: false,
+        error: 'No shift note with that id; use get_shift_notes for the ids',
+        index,
+      };
+    }
+    credits.push(credit);
+  }
+  return { ok: true, credits };
+}
+
+/**
+ * File a batch of inventory changes — counts on items the list has and new
+ * items for supplies it doesn't — that Pyre Agent read out of shift notes,
+ * as one run, so they are reviewed (and approved) together. Each count is
+ * credited to the note it came from; one with no note, to the asker.
+ */
+export async function suggestInventoryFromConversation(
+  db: SupabaseClient,
+  access: PageAccess,
+  context: { email: string; sessionId: string },
+  changes: readonly InventoryChangeInput[]
+): Promise<SuggestManyResult> {
+  if (!(await getSetting('suggestions.enabled'))) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        'Suggestions are turned off in Settings, so these cannot be filed; offer to propose the counts with propose_inventory_update instead, or ask an admin to turn suggestions on',
+    };
+  }
+  const credited = await noteCredits(db, access, context.email, changes);
+  if (!credited.ok) return { ok: false, status: 422, error: credited.error, index: credited.index };
+
+  const conversationId = await conversationOf(db, context.email, context.sessionId);
+  const source = await conversationSource(db, conversationId, context.email);
+  const intake = await intakeSuggestions(
+    db,
+    changes.map((c) => ({ kind: c.kind, payload: c.payload, rationale: c.rationale })),
+    source,
+    credited.credits
+  );
+  if (!intake.ok) {
+    return {
+      ok: false,
+      status: intake.status,
+      error: intake.error,
+      ...(intake.index !== undefined ? { index: intake.index } : {}),
+    };
+  }
+
+  const run = await createManualRun(db, source, context.email);
+  if (!run.ok) return { ok: false, status: 500, error: run.error };
+  const saved = await insertSuggestions(db, run.run, intake.suggestions, context.sessionId);
+  if ('error' in saved) return { ok: false, status: 500, error: saved.error };
+
+  const reviewer = canDecideSuggestions(access) ? 'you' : 'admins';
+  if (reviewer === 'admins') await notifySuggestionsReady(db, source, saved.rows);
+
+  return {
+    ok: true,
+    suggestions: saved.rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      summary: describeSuggestion(row.kind, row.payload),
+      status: row.status,
+    })),
     reviewer,
   };
 }

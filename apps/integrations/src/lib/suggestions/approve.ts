@@ -22,6 +22,7 @@ import { SUGGESTION_SOURCES } from './sources';
 import { claim, dismissPending, finishApproved, loadSuggestion, release, saveEdit } from './store';
 import {
   currentPayload,
+  MAX_INVENTORY_PER_RUN,
   type ParseResult,
   parsePayload,
   type SopEditPayload,
@@ -159,6 +160,35 @@ export async function approveSuggestion(
     suggestion: finished ?? { ...claimed, status: 'approved' },
     result: { label: applied.label, href: applied.href },
   };
+}
+
+/** At most this many suggestions decided in one batch: a run's whole inventory update. */
+export const MAX_BATCH = MAX_INVENTORY_PER_RUN;
+
+export type BatchDecision = { id: string } & DecisionResult;
+
+/**
+ * Approve a batch of suggestions (an inventory update read out of one note:
+ * several counts and new items), each with the payload the admin settled on.
+ * Each is approved on its own, in order, exactly as a single approval is —
+ * there are no transactions to make the batch all-or-nothing — so one that
+ * fails (an item deleted since, a name taken) stays pending with its error
+ * and the rest still go through. The answer has one decision per item.
+ */
+export async function approveSuggestions(
+  db: SupabaseClient,
+  items: readonly { id: string; payload?: unknown }[],
+  by: string
+): Promise<BatchDecision[]> {
+  const out: BatchDecision[] = [];
+  for (const item of items) {
+    const decided = await approveSuggestion(db, item.id, {
+      ...(item.payload !== undefined ? { payload: item.payload } : {}),
+      by,
+    });
+    out.push({ id: item.id, ...decided });
+  }
+  return out;
 }
 
 export async function dismissSuggestion(

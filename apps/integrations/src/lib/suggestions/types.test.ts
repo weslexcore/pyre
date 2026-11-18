@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { currentPayload, describeSuggestion, parsePayload, sourceHref } from './types';
+import {
+  checkRunSize,
+  currentPayload,
+  describeSuggestion,
+  parsePayload,
+  sourceHref,
+} from './types';
 
 const UUID = '0b6c1f8e-2f9a-4c1e-9a55-6a1d2b3c4d5e';
 
@@ -162,6 +168,77 @@ describe('parsePayload inventory.count', () => {
   it('describes the item and the count', () => {
     expect(describeSuggestion('inventory.count', { itemName: 'Trash bags', inStock: 3 })).toBe(
       'Inventory count: Trash bags, 3 in stock'
+    );
+  });
+});
+
+describe('checkRunSize', () => {
+  it('lets a run count every supply on a long note, but caps the other kinds at 8', () => {
+    expect(checkRunSize(Array(18).fill('inventory.count'))).toBeNull();
+    expect(
+      checkRunSize([...Array(8).fill('board_card.create'), ...Array(30).fill('inventory.count')])
+    ).toBeNull();
+    expect(checkRunSize(Array(9).fill('board_card.create'))).toMatch(/besides inventory/);
+    expect(checkRunSize(Array(51).fill('inventory.create'))).toMatch(/50 inventory/);
+  });
+});
+
+describe('parsePayload inventory.create', () => {
+  it('reads a name and whatever the note gave, leaving the rest empty', () => {
+    expect(
+      parsePayload('inventory.create', { name: ' Earplugs ', location: 'Front desk' })
+    ).toEqual({
+      ok: true,
+      value: {
+        name: 'Earplugs',
+        category: null,
+        location: 'Front desk',
+        vendor: null,
+        inStock: null,
+        reorderAt: null,
+        countEveryDays: null,
+        countedBy: null,
+        countedAt: null,
+      },
+    });
+  });
+
+  it('reads typed numbers and keeps who counted it', () => {
+    const parsed = parsePayload('inventory.create', {
+      name: 'Earplugs',
+      inStock: '40',
+      reorderAt: 10,
+      category: '',
+      countedBy: 'Maya@PyreSauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+    expect(parsed.ok && parsed.value).toMatchObject({
+      inStock: 40,
+      reorderAt: 10,
+      category: null,
+      countedBy: 'maya@pyresauna.com',
+      countedAt: '2026-11-05T21:00:00Z',
+    });
+  });
+
+  it('refuses no name, a bad number, a long field and a bad schedule', () => {
+    expect(parsePayload('inventory.create', { name: '  ' }).ok).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', inStock: -1 }).ok).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', inStock: 'lots' }).ok).toBe(false);
+    expect(
+      parsePayload('inventory.create', { name: 'Earplugs', category: 'x'.repeat(61) }).ok
+    ).toBe(false);
+    expect(parsePayload('inventory.create', { name: 'Earplugs', countEveryDays: 0 }).ok).toBe(
+      false
+    );
+  });
+
+  it('describes the item, with its count when it has one', () => {
+    expect(describeSuggestion('inventory.create', { name: 'Earplugs', inStock: 40 })).toBe(
+      'New inventory item: Earplugs, 40 in stock'
+    );
+    expect(describeSuggestion('inventory.create', { name: 'Earplugs', inStock: null })).toBe(
+      'New inventory item: Earplugs'
     );
   });
 });

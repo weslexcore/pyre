@@ -124,6 +124,11 @@ never gets a shell.
   applies, replayed through `/api/admin/inventory` under their own grants —
   so anyone with the page may count, and only `inventory:manage` may change
   anything else or add an item.
+  `suggest_inventory_changes` is the other path, for counts read out of
+  shift notes rather than given by the person: it files the batch — counts
+  (`inventory.count`) and new items (`inventory.create`) — in the shift-note
+  suggestion pipeline (`op: 'suggest_inventory'`), each credited to the note
+  it came from, as one run an admin reviews and approves together.
 - **Routines.** People save requests on `/admin/ask/routines` to run on a
   cadence (daily, chosen weekdays, or a day of the month, at an Eastern
   hour). The integrations cron tick (`pyre-agent-routines`) opens each due

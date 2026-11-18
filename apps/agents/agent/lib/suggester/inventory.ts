@@ -1,5 +1,6 @@
 // Which inventory items a note might be talking about, so "three rolls of
-// trash bags left" can become an inventory.count on the right item. A term
+// trash bags left" can become an inventory.count on the right item (and a
+// supply the list doesn't track can become an inventory.create). A term
 // match over name, category, location and vendor, best matches first, with
 // each item's stock on record and last count — the list is small enough to
 // rank in memory. Active items only: a set-aside item cannot be counted
@@ -22,16 +23,64 @@ interface ItemRow {
   last_counted_by: string | null;
 }
 
-/** Name matches count double: an item's name is what it is. */
+/**
+ * Name matches count double: an item's name is what it is. The name is also
+ * matched with its punctuation squeezed out, so a code written either way
+ * finds it: "R0630" and "0630" both find "Reagents — R-0630".
+ */
 export function scoreItem(
   item: Pick<ItemRow, 'name' | 'category' | 'location' | 'vendor'>,
   terms: string[]
 ): number {
   return scoreTerms(
-    item.name,
+    `${item.name} ${item.name.replace(/[^a-z0-9]+/gi, '')}`,
     [item.category, item.location, item.vendor].filter(Boolean).join(' '),
     terms
   );
+}
+
+/** Up to this many active items, the whole list rides along in the opening context. */
+export const CONTEXT_INVENTORY_LIMIT = 200;
+
+/**
+ * The whole active inventory for the opening context, so a note that counts
+ * a shelf full of supplies is matched against the list in one read instead
+ * of a search per line. Compact: what matching and counting need. Past
+ * CONTEXT_INVENTORY_LIMIT items it says so, and find_inventory_items is the
+ * way in.
+ */
+export async function inventoryForContext() {
+  const db = getDb();
+  const { data, error } = await db
+    .from('inventory')
+    .select('id, name, category, location, in_stock, reorder_at, last_counted_at')
+    .eq('active', true)
+    .order('category', { nullsFirst: false })
+    .order('name')
+    .limit(CONTEXT_INVENTORY_LIMIT + 1);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Pick<
+    ItemRow,
+    'id' | 'name' | 'category' | 'location' | 'in_stock' | 'reorder_at' | 'last_counted_at'
+  >[];
+  if (rows.length > CONTEXT_INVENTORY_LIMIT) {
+    return {
+      complete: false as const,
+      note: `The inventory has more than ${CONTEXT_INVENTORY_LIMIT} active items; find them with find_inventory_items.`,
+    };
+  }
+  return {
+    complete: true as const,
+    items: rows.map((item) => ({
+      itemId: item.id,
+      name: item.name,
+      ...(item.category ? { category: item.category } : {}),
+      ...(item.location ? { location: item.location } : {}),
+      inStock: Number(item.in_stock),
+      ...(item.reorder_at == null ? {} : { reorderAt: Number(item.reorder_at) }),
+      ...(item.last_counted_at ? { lastCounted: item.last_counted_at.slice(0, 10) } : {}),
+    })),
+  };
 }
 
 export async function findInventoryItems(input: { query: string; limit?: number }) {
@@ -82,7 +131,9 @@ export async function findInventoryItems(input: { query: string; limit?: number 
       url: siteUrl(`/admin/inventory?item=${item.id}`),
     })),
     ...(ranked.length === 0
-      ? { note: 'No active inventory item matches; the note may be about something not on the list. Do not invent an item.' }
+      ? {
+          note: 'No active inventory item matches. Search once more with another name for it; if the list still has nothing like it and the note gives something worth tracking (a supply the studio keeps and re-orders), propose an inventory.create for it. Never invent a number.',
+        }
       : {}),
   };
 }

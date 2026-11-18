@@ -126,20 +126,60 @@ export const saveSuggestionsInput = z.object({
           kind: z.literal('inventory.count'),
           ...common,
           payload: z.object({
-            itemId: z.string().uuid().describe("The item's itemId from find_inventory_items."),
+            itemId: z.string().uuid().describe("The item's itemId from the inventory list in get_suggestion_context."),
             inStock: z
               .number()
               .min(0)
               .max(100000)
               .describe(
-                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock find_inventory_items returned.'
+                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock on the inventory list.'
               ),
+          }),
+        }),
+        z.object({
+          kind: z.literal('inventory.create'),
+          ...common,
+          payload: z.object({
+            name: z
+              .string()
+              .min(1)
+              .max(120)
+              .describe(
+                'What the supply is called, plainly and the way the list names things ("Earplugs", "Peppermint oil").'
+              ),
+            category: z
+              .string()
+              .max(60)
+              .optional()
+              .describe('A category the inventory list already uses, when one fits.'),
+            location: z.string().max(120).optional().describe('Where it is kept, if the note says.'),
+            vendor: z.string().max(120).optional().describe('Who it comes from, if the note says.'),
+            inStock: z
+              .number()
+              .min(0)
+              .max(100000)
+              .optional()
+              .describe('How many are on hand, if the note gives a number; omit otherwise.'),
+            reorderAt: z
+              .number()
+              .min(0)
+              .max(100000)
+              .optional()
+              .describe('Only when the note says when to re-order.'),
           }),
         }),
       ])
     )
-    .max(8)
-    .describe('Everything you propose for this record; empty when it needs nothing.'),
+    .max(58)
+    .refine((list) => list.filter((s) => s.kind.startsWith('inventory.')).length <= 50, {
+      message: 'At most 50 inventory changes.',
+    })
+    .refine((list) => list.filter((s) => !s.kind.startsWith('inventory.')).length <= 8, {
+      message: 'At most 8 suggestions besides inventory changes.',
+    })
+    .describe(
+      'Everything you propose for this record; empty when it needs nothing. Up to 8 tasks, comments, SOP edits and hours changes, plus one inventory suggestion for every supply the note counts (up to 50).'
+    ),
 });
 
 export type SaveSuggestionsInput = z.infer<typeof saveSuggestionsInput>;

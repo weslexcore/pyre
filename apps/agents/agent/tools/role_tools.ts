@@ -40,7 +40,7 @@ import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs'
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
 import { readSop, sopTableOfContents } from '../lib/knowledge/sops';
-import { getMessages, readMessage, suggest } from '../lib/knowledge/suggest';
+import { getMessages, readMessage, suggest, suggestInventory } from '../lib/knowledge/suggest';
 import { type KnowledgeScope, resolveRole, suggestTargetOf } from '../lib/role';
 import { getWeekContextTool } from '../lib/scheduler/get-week-context';
 import { saveProposalTool } from '../lib/scheduler/save-proposal';
@@ -88,7 +88,7 @@ export default defineDynamic({
         return {
           get_suggestion_context: defineTool({
             description:
-              'The record you are suggesting follow-up work for (a shift note: its text, date, author and status), what the classifier found in it, the suggestions already made for it and what the admins did with each, the default board, and every board you can file work on with its open columns and fields. Call this first.',
+              'The record you are suggesting follow-up work for (a shift note: its text, date, author and status), what the classifier found in it, the suggestions already made for it and what the admins did with each, the default board, every board you can file work on with its open columns and fields, and the inventory: every active item with its itemId, category, location and stock on record (unless the list is too long, when it says to use find_inventory_items). Call this first.',
             inputSchema: z.object({}),
             execute(_input, ctx) {
               return getSuggestionContext(suggestTargetOf(ctx).source);
@@ -146,7 +146,7 @@ export default defineDynamic({
           }),
           find_inventory_items: defineTool({
             description:
-              'Inventory items whose name, category, location or vendor match the key words, best matches first, each with its itemId, stock on record, re-order level and last count. Use it when a note says how much of a supply is left ("three rolls of trash bags left", "out of eucalyptus", "ten more boxes came in"), to find the item to count. Propose a count only for an item it returns.',
+              'Inventory items whose name, category, location or vendor match the key words, best matches first, each with its itemId, stock on record, re-order level and last count. Only needed when get_suggestion_context says the inventory is too long to list in full; otherwise match against the list there.',
             inputSchema: z.object({
               query: z
                 .string()
@@ -596,6 +596,51 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return propose(scopeOf(ctx), ctx.session?.id ?? null, 'inventory.update', input);
+          },
+        }),
+        suggest_inventory_changes: defineTool({
+          description:
+            "Suggest the inventory changes the shift notes call for, as one batch an admin reviews and approves together: a count on an item the list has (inventory.count — the number on hand a note gives) and a new item for a supply the list does not track yet (inventory.create). Read the notes with get_shift_notes and the list with get_inventory first. Give each change the shiftNoteId it was read from, so its count is credited to that note's author at the note's time. Filed for review like a shift-note suggestion, not applied: an admin edits the counts or items in place and approves the batch.",
+          inputSchema: z.object({
+            changes: z
+              .array(
+                z.discriminatedUnion('kind', [
+                  z.object({
+                    kind: z.literal('inventory.count'),
+                    itemId: z.string().uuid().describe('The item id from get_inventory.'),
+                    inStock: z
+                      .number()
+                      .min(0)
+                      .max(100000)
+                      .describe(
+                        'Stock on hand as the note gives it ("3 left" is 3; "out of" is 0). Resolve "used two" or "ten more came in" against the stock get_inventory returned.'
+                      ),
+                    shiftNoteId: z.string().uuid().optional().describe('The note id from get_shift_notes.'),
+                    rationale: z.string().min(1).max(600).describe('What the note said, briefly.'),
+                  }),
+                  z.object({
+                    kind: z.literal('inventory.create'),
+                    name: z
+                      .string()
+                      .min(1)
+                      .max(120)
+                      .describe('What the supply is called, the way the list names things ("Earplugs").'),
+                    category: z.string().max(60).optional().describe("One of get_inventory's categories, when one fits."),
+                    location: z.string().max(120).optional().describe('Where it is kept, if the note says.'),
+                    vendor: z.string().max(120).optional(),
+                    inStock: z.number().min(0).max(100000).optional().describe('How many are on hand, if the note says.'),
+                    reorderAt: z.number().min(0).max(100000).optional(),
+                    shiftNoteId: z.string().uuid().optional().describe('The note id from get_shift_notes.'),
+                    rationale: z.string().min(1).max(600).describe('What the note said, briefly.'),
+                  }),
+                ])
+              )
+              .min(1)
+              .max(50)
+              .describe('Every change, all in this one call: one per supply the notes count.'),
+          }),
+          execute(input, ctx) {
+            return suggestInventory(scopeOf(ctx), ctx.session?.id ?? null, input.changes);
           },
         }),
         propose_inventory_item: defineTool({

@@ -36,9 +36,20 @@ export const SUGGESTION_KINDS: readonly SuggestionKind[] = [
   'sop.edit',
   'shift_assignment.update',
   'inventory.count',
+  'inventory.create',
   'message.create',
   'message.edit',
 ];
+
+/** The kinds that change the inventory: an admin can approve a batch of them together. */
+export const INVENTORY_SUGGESTION_KINDS = ['inventory.count', 'inventory.create'] as const;
+export type InventorySuggestionKind = (typeof INVENTORY_SUGGESTION_KINDS)[number];
+
+export function isInventorySuggestionKind(value: unknown): value is InventorySuggestionKind {
+  return (
+    typeof value === 'string' && (INVENTORY_SUGGESTION_KINDS as readonly string[]).includes(value)
+  );
+}
 
 export const SUGGESTION_SOURCE_TYPES: readonly SuggestionSourceType[] = [
   'shift_note',
@@ -61,6 +72,7 @@ export const KIND_LABELS: Record<SuggestionKind, string> = {
   'sop.edit': 'SOP edit',
   'shift_assignment.update': 'Hours change',
   'inventory.count': 'Inventory count',
+  'inventory.create': 'New inventory item',
   'message.create': 'New message',
   'message.edit': 'Message edit',
 };
@@ -70,8 +82,26 @@ export const SOURCE_LABELS: Record<SuggestionSourceType, string> = {
   pyre_agent: 'Pyre Agent',
 };
 
-/** At most this many suggestions from one run. */
+/** At most this many suggestions from one run, besides inventory changes. */
 export const MAX_SUGGESTIONS_PER_RUN = 8;
+/**
+ * At most this many inventory changes from one run. Kept apart from the cap
+ * above: an inventory-count note lists every supply on the shelf, often
+ * twenty or more, and each is one row of a single batch to approve.
+ */
+export const MAX_INVENTORY_PER_RUN = 50;
+
+/** Whether a list stays within both caps; the error names the one it breaks. */
+export function checkRunSize(kinds: readonly unknown[]): string | null {
+  const inventory = kinds.filter(isInventorySuggestionKind).length;
+  if (inventory > MAX_INVENTORY_PER_RUN) {
+    return `At most ${MAX_INVENTORY_PER_RUN} inventory changes per run`;
+  }
+  if (kinds.length - inventory > MAX_SUGGESTIONS_PER_RUN) {
+    return `At most ${MAX_SUGGESTIONS_PER_RUN} suggestions per run besides inventory changes`;
+  }
+  return null;
+}
 export const MAX_RATIONALE = 2000;
 export const MAX_DECISION_NOTE = 1000;
 
@@ -186,6 +216,30 @@ export interface InventoryCountPayload {
 }
 
 /**
+ * A supply the inventory does not track yet, read out of a note ("we keep a
+ * box of earplugs at the desk now, about 40 left"): the item to add, with
+ * whatever the note gives. Like a count, a starting number is credited to
+ * the note's author at the note's time (filled at intake); the item itself
+ * is added by the approving admin.
+ */
+export interface InventoryCreatePayload {
+  name: string;
+  category: string | null;
+  /** Where it is kept. */
+  location: string | null;
+  vendor: string | null;
+  /** Stock on hand, when the note gives it; null leaves it uncounted (0). */
+  inStock: number | null;
+  /** Flag for re-order at or below this; null = never. */
+  reorderAt: number | null;
+  /** Count at least every this many studio days; null = no schedule. */
+  countEveryDays: number | null;
+  /** The note's author (email) and the note's time; null in a dry run. */
+  countedBy: string | null;
+  countedAt: string | null;
+}
+
+/**
  * A new admin message. Approving saves it as a draft by the approving admin,
  * who sends it from the composer (where the audience is told and emailed),
  * so approving never reaches the team on its own.
@@ -223,6 +277,7 @@ export interface PayloadByKind {
   'sop.edit': SopEditPayload;
   'shift_assignment.update': ShiftTimesPayload;
   'inventory.count': InventoryCountPayload;
+  'inventory.create': InventoryCreatePayload;
   'message.create': MessageCreatePayload;
   'message.edit': MessageEditPayload;
 }
@@ -431,6 +486,84 @@ function parseInventoryCountPayload(raw: unknown): ParseResult<InventoryCountPay
   };
 }
 
+/** Limits the inventory list enforces (lib/inventory/rules), for the editors and the agent. */
+export const INVENTORY_ITEM_LIMITS = {
+  name: 120,
+  category: 60,
+  location: 120,
+  vendor: 120,
+} as const;
+
+function optionalQuantity(value: unknown): number | null | undefined {
+  if (value === undefined || value === null || value === '') return null;
+  return parseQuantity(value) ?? undefined;
+}
+
+function optionalStamp(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() && !Number.isNaN(Date.parse(value))
+    ? value.trim()
+    : null;
+}
+
+function optionalEmail(value: unknown): string | null {
+  const s = str(value).toLowerCase();
+  return s.includes('@') ? s : null;
+}
+
+function parseInventoryCreatePayload(raw: unknown): ParseResult<InventoryCreatePayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  const name = str(o.name);
+  if (!name || name.length > INVENTORY_ITEM_LIMITS.name) {
+    return fail(`name must be 1–${INVENTORY_ITEM_LIMITS.name} characters`);
+  }
+  const text = (key: 'category' | 'location' | 'vendor'): string | null | undefined => {
+    const value = o[key];
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'string') return undefined;
+    const s = value.trim();
+    return s.length > INVENTORY_ITEM_LIMITS[key] ? undefined : s || null;
+  };
+  const category = text('category');
+  if (category === undefined) {
+    return fail(`category must be text of at most ${INVENTORY_ITEM_LIMITS.category} characters`);
+  }
+  const location = text('location');
+  if (location === undefined) {
+    return fail(`location must be text of at most ${INVENTORY_ITEM_LIMITS.location} characters`);
+  }
+  const vendor = text('vendor');
+  if (vendor === undefined) {
+    return fail(`vendor must be text of at most ${INVENTORY_ITEM_LIMITS.vendor} characters`);
+  }
+  const inStock = optionalQuantity(o.inStock);
+  if (inStock === undefined) return fail('inStock must be a number from 0 to 100000');
+  const reorderAt = optionalQuantity(o.reorderAt);
+  if (reorderAt === undefined) return fail('reorderAt must be a number from 0 to 100000');
+  let countEveryDays: number | null = null;
+  if (o.countEveryDays !== undefined && o.countEveryDays !== null && o.countEveryDays !== '') {
+    const days = Number(o.countEveryDays);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return fail('countEveryDays must be a whole number of days from 1 to 365');
+    }
+    countEveryDays = days;
+  }
+  return {
+    ok: true,
+    value: {
+      name,
+      category,
+      location,
+      vendor,
+      inStock,
+      reorderAt,
+      countEveryDays,
+      countedBy: optionalEmail(o.countedBy),
+      countedAt: optionalStamp(o.countedAt),
+    },
+  };
+}
+
 function messageText(
   o: Record<string, unknown>
 ): { ok: true; title: string; bodyMd: string } | { ok: false; error: string } {
@@ -494,6 +627,7 @@ export const PAYLOAD_PARSERS: {
   'sop.edit': parseSopEditPayload,
   'shift_assignment.update': parseShiftTimesPayload,
   'inventory.count': parseInventoryCountPayload,
+  'inventory.create': parseInventoryCreatePayload,
   'message.create': parseMessageCreatePayload,
   'message.edit': parseMessageEditPayload,
 };
@@ -531,6 +665,10 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
       const count = parseQuantity(o.inStock);
       return `Inventory count: ${str(o.itemName) || 'an item'}, ${count === null ? '?' : formatQuantity(count)} in stock`;
     }
+    case 'inventory.create': {
+      const count = o.inStock === null || o.inStock === undefined ? null : parseQuantity(o.inStock);
+      return `New inventory item: ${str(o.name) || 'unnamed'}${count === null ? '' : `, ${formatQuantity(count)} in stock`}`;
+    }
     case 'message.create':
       return `New message: ${str(o.title) || 'untitled'}`;
     case 'message.edit':
@@ -562,6 +700,18 @@ export function cardHref(boardSlug: string, cardId: string): string {
 export interface SuggestionResultLink {
   label: string;
   href: string | null;
+}
+
+/** An active inventory item, as the count editor's item picker offers it. */
+export interface InventoryOption {
+  id: string;
+  name: string;
+  category: string | null;
+  location: string | null;
+  in_stock: number;
+  reorder_at: number | null;
+  last_counted_at: string | null;
+  last_counted_by: string | null;
 }
 
 /** A suggestion as the review UI reads it. */

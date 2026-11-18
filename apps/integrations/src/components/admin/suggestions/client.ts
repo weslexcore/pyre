@@ -5,6 +5,7 @@ import type { Assignable } from '@/lib/boards/people';
 import type { BoardFieldRow } from '@/lib/db';
 import type { DueDays } from '@/lib/suggestions/priority';
 import type {
+  InventoryOption,
   SuggestionResultLink,
   SuggestionSourceType,
   SuggestionView,
@@ -53,6 +54,22 @@ export interface Decided {
 
 export function approve(id: string, payload: unknown, note?: string): Promise<Decided> {
   return send('POST', { action: 'approve', id, payload, ...(note ? { note } : {}) });
+}
+
+/** One suggestion's outcome in a batch approval. */
+export type BatchDecision =
+  | { id: string; ok: true; suggestion: SuggestionView; result?: SuggestionResultLink }
+  | { id: string; ok: false; status: number; error: string; suggestion?: SuggestionView };
+
+/** Approve several at once (an inventory update); each succeeds or fails on its own. */
+export async function approveMany(
+  items: { id: string; payload: unknown }[]
+): Promise<BatchDecision[]> {
+  const { decisions } = await send<{ decisions: BatchDecision[] }>('POST', {
+    action: 'approve_many',
+    items,
+  });
+  return decisions;
 }
 
 export function dismiss(id: string, note?: string): Promise<Decided> {
@@ -122,4 +139,25 @@ export async function loadCurrentSop(id: string): Promise<CurrentSop> {
   const res = await fetch(`${ENDPOINT}?context=sop&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return ((await res.json()) as { sop: CurrentSop }).sop;
+}
+
+let inventoryPromise: Promise<InventoryOption[]> | null = null;
+
+/** The active inventory items, fetched once per page, for the count editor's item picker. */
+export function loadInventoryOptions(): Promise<InventoryOption[]> {
+  inventoryPromise ??= fetch(`${ENDPOINT}?context=inventory`)
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return ((await res.json()) as { items: InventoryOption[] }).items;
+    })
+    .catch((error) => {
+      inventoryPromise = null;
+      throw error;
+    });
+  return inventoryPromise;
+}
+
+/** Drop the cached items (after a batch adds some), so the next picker reads them afresh. */
+export function forgetInventoryOptions(): void {
+  inventoryPromise = null;
 }

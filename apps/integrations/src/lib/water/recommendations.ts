@@ -6,12 +6,14 @@
 import {
   CHART_GALLONS,
   type ChartRow,
+  FRESH_FILL_SALT_GRAMS,
   HARD_LIMITS,
   type Parameter,
   PH_LOWER,
   PH_RAISE,
   PRODUCTS,
   SALT_DOSE_TO_PPM,
+  SALT_FRESH_FILL_BELOW_PPM,
   SALT_GRAMS_PER_STEP,
   SALT_PPM_PER_STEP,
   sanitizerGrams,
@@ -284,13 +286,21 @@ export function getRecommendations(
   if (salt != null && salt <= HARD_LIMITS.salt && !inTarget('salt', salt)) {
     const [saltMin] = TARGETS.salt;
     if (salt < saltMin) {
-      const steps = Math.floor((SALT_DOSE_TO_PPM - salt) / SALT_PPM_PER_STEP);
+      // A fresh fill gets the refill amount (pro-rated for whatever the meter
+      // reads); a tub in service gets chart steps. See FRESH_FILL_SALT_GRAMS
+      // for why the two differ.
+      const freshFill = salt < SALT_FRESH_FILL_BELOW_PPM;
+      const chartGrams = freshFill
+        ? Math.floor((FRESH_FILL_SALT_GRAMS * (SALT_DOSE_TO_PPM - salt)) / SALT_DOSE_TO_PPM)
+        : Math.floor((SALT_DOSE_TO_PPM - salt) / SALT_PPM_PER_STEP) * SALT_GRAMS_PER_STEP;
       doses.push({
         parameter: 'salt',
         severity: 'action',
         chemical: PRODUCTS.salt,
-        grams: scale(steps * SALT_GRAMS_PER_STEP),
-        reason: `Salt ${salt} ppm is below the ${range('salt')} ppm target (dosing toward ${SALT_DOSE_TO_PPM} ppm)`,
+        grams: scale(chartGrams),
+        reason: freshFill
+          ? `Salt ${salt} ppm is fresh-fill water — add the refill salt (dosing toward ${SALT_DOSE_TO_PPM} ppm)`
+          : `Salt ${salt} ppm is below the ${range('salt')} ppm target (dosing toward ${SALT_DOSE_TO_PPM} ppm)`,
       });
     } else {
       doses.push({

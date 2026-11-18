@@ -7,6 +7,7 @@ import { utcToEastern } from '@pyre/schedule-core';
 import { getDb } from '../db';
 import { siteUrl } from '../knowledge/urls';
 import type { SuggestTarget } from '../role';
+import { inventoryForContext } from './inventory';
 
 /** The board new work lands on when no other board fits: the Tasks board. */
 export const DEFAULT_BOARD_SLUG = 'goals';
@@ -49,7 +50,9 @@ function priorSummary(row: {
           ? `hours for ${String(payload.staffName ?? '')} on ${String(payload.shiftLabel ?? '')} ${String(payload.shiftDate ?? '')} (assignment ${String(payload.assignmentId ?? '')}): ${String(payload.startsAt ?? '')}–${String(payload.endsAt ?? '')}`
           : row.kind === 'inventory.count'
             ? `inventory count for ${String(payload.itemName ?? '')} (item ${String(payload.itemId ?? '')}): ${String(payload.inStock ?? '')} in stock`
-            : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
+            : row.kind === 'inventory.create'
+              ? `new inventory item "${String(payload.name ?? '')}"${payload.inStock == null ? '' : `, ${String(payload.inStock)} in stock`}`
+              : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
   return {
     kind: row.kind,
     status: row.status,
@@ -72,7 +75,7 @@ export async function getSuggestionContext(source: Source) {
     return { found: false as const, error: 'The shift note no longer exists. Save an empty list.' };
   }
 
-  const [author, classification, prior, boards, columns, fields] = await Promise.all([
+  const [author, classification, prior, boards, columns, fields, inventory] = await Promise.all([
     authorName(note.author_email),
     db
       .from('content_classifications')
@@ -104,6 +107,10 @@ export async function getSuggestionContext(source: Source) {
       .eq('archived', false)
       .neq('kind', 'files')
       .order('sort_order'),
+    inventoryForContext().catch(() => ({
+      complete: false as const,
+      note: 'The inventory could not be read here; find items with find_inventory_items.',
+    })),
   ]);
 
   const boardRows = (boards.data ?? []) as {
@@ -138,6 +145,9 @@ export async function getSuggestionContext(source: Source) {
     priorSuggestions: ((prior.data ?? []) as Parameters<typeof priorSummary>[0][]).map(
       priorSummary
     ),
+    // The whole active inventory (or a note to search it, when it is large):
+    // a count is matched against this list, not guessed.
+    inventory,
     defaultBoard: DEFAULT_BOARD_SLUG,
     boards: boardRows.map((board) => ({
       slug: board.slug,

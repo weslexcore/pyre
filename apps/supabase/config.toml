@@ -89,6 +89,12 @@ additional_redirect_urls = [
   "https://pyre-integrations.vercel.app/api/auth/callback",
   "https://*-wes-projects-f29875e5.vercel.app/api/auth/callback",
   "http://localhost:4321/api/auth/callback",
+  # Vercel deployment URLs, added in the dashboard before the config push
+  # owned this list; kept so a push doesn't drop them.
+  "https://pyre-integrations-wes-projects-f29875e5.vercel.app/",
+  "https://pyre-integrations-wes-projects-f29875e5.vercel.app/**",
+  "https://pyre-*-integrations-wes-projects-f29875e5.vercel.app",
+  "https://pyre-*-integrations-wes-projects-f29875e5.vercel.app/**",
 ]
 
 # Production and staging share this project and both live under rp_id, so a

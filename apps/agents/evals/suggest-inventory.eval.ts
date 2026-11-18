@@ -1,5 +1,6 @@
 // Suggester: "three rolls of trash bags left" becomes a count of 3 on the
-// trash bags item — found through find_inventory_items, never invented — and
+// trash bags item — matched against the inventory list in the context, never
+// invented — and
 // files no task about it, since the note asks for nothing.
 
 import { defineEval } from 'eve/evals';
@@ -33,7 +34,7 @@ export default defineEval({
           );
           const turn = await t.target.watchTurn(sessionId as string).result();
 
-          turn.calledTool('find_inventory_items');
+          turn.calledTool('get_suggestion_context');
           turn.notCalledTool('save_proposal');
           turn.expectOk();
           t.maxToolCalls(10);

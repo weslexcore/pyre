@@ -18,6 +18,10 @@
 //     op 'message'   → { id } one message in full
 //     op 'suggest'   → { kind: sop.edit | message.create | message.edit, payload, rationale }
 //                      → { suggestion, reviewer } | 4xx { error }
+//     op 'suggest_inventory' → { changes: [{ kind: inventory.count | inventory.create,
+//                                ...payload, shiftNoteId?, rationale }] }
+//                      → { suggestions, reviewer } | 4xx { error, index? }
+//                      (one batch, read out of shift notes, approved together)
 //
 // A suggestion is not a proposal: it goes through the shift-note suggestion
 // pipeline (lib/pyre-agent/suggestions) and is decided by whoever decides
@@ -42,7 +46,9 @@ import { messageForAgent, messagesForAgent } from '@/lib/pyre-agent/messages';
 import {
   isPyreAgentSuggestionKind,
   PYRE_AGENT_SUGGESTION_KINDS,
+  parseInventoryChanges,
   suggestFromConversation,
+  suggestInventoryFromConversation,
 } from '@/lib/pyre-agent/suggestions';
 import {
   ACTION_KINDS,
@@ -93,7 +99,9 @@ export const POST: APIRoute = async ({ request }) => {
   const inventory = canViewPage(access, INVENTORY_HREF);
   const boardOps = ['goals', 'board', 'cards'];
   if (boardOps.includes(String(body.op)) && !boards) return json({ error: NO_BOARDS }, 403);
-  if (body.op === 'inventory' && !inventory) return json({ error: NO_INVENTORY }, 403);
+  if ((body.op === 'inventory' || body.op === 'suggest_inventory') && !inventory) {
+    return json({ error: NO_INVENTORY }, 403);
+  }
 
   try {
     switch (body.op) {
@@ -200,11 +208,34 @@ export const POST: APIRoute = async ({ request }) => {
         if (!result.ok) return json({ error: result.error }, result.status);
         return json({ suggestion: result.suggestion, reviewer: result.reviewer });
       }
+      case 'suggest_inventory': {
+        if (!sessionId) return json({ error: 'sessionId is required to suggest' }, 400);
+        const parsed = parseInventoryChanges(input.changes);
+        if (!parsed.ok) {
+          return json(
+            { error: parsed.error, ...(parsed.index !== undefined ? { index: parsed.index } : {}) },
+            400
+          );
+        }
+        const result = await suggestInventoryFromConversation(
+          db,
+          access,
+          { email, sessionId },
+          parsed.changes
+        );
+        if (!result.ok) {
+          return json(
+            { error: result.error, ...(result.index !== undefined ? { index: result.index } : {}) },
+            result.status
+          );
+        }
+        return json({ suggestions: result.suggestions, reviewer: result.reviewer });
+      }
       default:
         return json(
           {
             error:
-              'op must be goals, board, cards, inventory, propose, messages, message, or suggest',
+              'op must be goals, board, cards, inventory, propose, messages, message, suggest, or suggest_inventory',
           },
           400
         );
