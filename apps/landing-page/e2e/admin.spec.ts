@@ -1,6 +1,6 @@
 // The admin dashboard gates on the session, then on /api/admin/check.
 
-import { allowConsole, stubJson } from '@pyre/e2e-utils';
+import { allowConsole, DESKTOP_ONLY_TAG, stubJson } from '@pyre/e2e-utils';
 import { expect, test } from './test';
 
 test('signed out, it asks for a login', async ({ page }) => {
@@ -31,7 +31,9 @@ test.describe('signed in without admin access', () => {
   });
 });
 
-test('the admin API refuses an anonymous caller', async ({ request }) => {
+test('the admin API refuses an anonymous caller', { tag: DESKTOP_ONLY_TAG }, async ({
+  request,
+}) => {
   const response = await request.get('/api/admin/check');
   expect(response.status()).toBe(401);
 });

@@ -31,6 +31,24 @@ test('subscribes a valid email through Mailchimp', async ({ page }) => {
   expect(mailchimp[0].searchParams.get('EMAIL')).toBe('e2e@example.com');
 });
 
+test("shows Mailchimp's own error, without its markup", async ({ page }) => {
+  await stubMailchimpJsonp(page, {
+    result: 'error',
+    msg: 'e2e@example.com is already subscribed. <a href="https://example.com">Update</a>',
+  });
+  const form = await openForm(page);
+
+  await form.locator('[data-signup-email]').fill('e2e@example.com');
+  await waitForFormReady(form);
+  await form.getByRole('button', { name: /join/i }).click();
+
+  await expect(page.locator('#signup [data-signup-error]').filter({ visible: true })).toHaveText(
+    'e2e@example.com is already subscribed. Update'
+  );
+  await expect(page).not.toHaveURL(/subscribed=1/);
+  await expect(form.getByRole('button', { name: /join/i })).toBeEnabled();
+});
+
 test('rejects an invalid email without calling Mailchimp', async ({ page }) => {
   const mailchimp = await stubMailchimpJsonp(page);
   const form = await openForm(page);
