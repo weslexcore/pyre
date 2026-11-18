@@ -142,6 +142,55 @@ const events: EventItem[] = [
     spotsRemaining: MAX * 2 - 15,
     priceUsd: 40,
   }),
+  // Special event (group-only): 1hr + 2hr at 3pm, 1hr at 4pm, a lone special
+  // event at 6pm. Capacity under the cap, so only group-only keeps them out of
+  // the pool.
+  makeEvent({
+    id: 'se-1hr-3pm',
+    tags: ['Special Event'],
+    isoDate: '2026-08-15T19:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: MAX - 2,
+    spotsRemaining: MAX - 3,
+    priceUsd: 25,
+  }),
+  makeEvent({
+    id: 'se-2hr-3pm',
+    tags: ['Special Event'],
+    isoDate: '2026-08-15T19:00:00.000Z',
+    durationMinutes: 120,
+    totalSpots: MAX - 2,
+    spotsRemaining: MAX - 16,
+    priceUsd: 45,
+  }),
+  makeEvent({
+    id: 'se-1hr-4pm',
+    tags: ['Special Event'],
+    isoDate: '2026-08-15T20:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: MAX - 2,
+    spotsRemaining: MAX - 6,
+    priceUsd: 25,
+  }),
+  makeEvent({
+    id: 'se-lone-6pm',
+    tags: ['Special Event'],
+    isoDate: '2026-08-15T22:00:00.000Z',
+    durationMinutes: 90,
+    totalSpots: 12,
+    spotsRemaining: 5,
+    priceUsd: 50,
+  }),
+  // Open Hours at the special event's 4pm hour — must not see its bookings.
+  makeEvent({
+    id: 'oh-1hr-4pm-se-day',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-15T20:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: MAX,
+    spotsRemaining: MAX,
+    priceUsd: 25,
+  }),
   // Non-pooled event — should get no options at all.
   makeEvent({
     id: 'guided-7pm',
@@ -225,6 +274,19 @@ console.log('Bypass + non-pooled events');
 check('high-capacity social not hidden', model.hiddenIds.has('social-bypass'), false);
 check('high-capacity social sells own capacity', opts('social-bypass')?.[0].spotsLeft, MAX * 2 - 15);
 check('guided session gets no options', opts('guided-7pm'), undefined);
+
+console.log('Special events group without joining the pool');
+check('2hr special session is hidden', model.hiddenIds.has('se-2hr-3pm'), true);
+check('3pm special slot offers 1hr + 2hr', opts('se-1hr-3pm')?.map((o) => o.minutes), [60, 120]);
+check('special options sell own Momence spots', opts('se-1hr-3pm')?.map((o) => o.spotsLeft), [
+  MAX - 3,
+  MAX - 16,
+]);
+check('2hr special option credits (from $45)', opts('se-1hr-3pm')?.[1].credits, 2);
+check('unpaired 4pm special slot keeps its ordinary row', opts('se-1hr-4pm'), undefined);
+check('lone special event keeps its ordinary row', opts('se-lone-6pm'), undefined);
+check('lone special event not hidden', model.hiddenIds.has('se-lone-6pm'), false);
+check('Open Hours ignores special-event bookings', opts('oh-1hr-4pm-se-day')?.[0].spotsLeft, MAX);
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

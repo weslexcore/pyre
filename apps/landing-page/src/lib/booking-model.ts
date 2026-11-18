@@ -9,7 +9,10 @@
 // slot's details modal (sorted shortest to longest), so the whole visit stays a
 // single Momence checkout. Standalone full-length sessions (no entry-slot
 // counterpart) still render as their own row. Every option is gated by the
-// shared occupancy pool AND its own Momence capacity.
+// shared occupancy pool AND its own Momence capacity — except for group-only
+// tags (Special Event), which pair sessions the same way but sell their own
+// Momence capacity, never touch the pool, and only become pooled rows when a
+// pairing exists.
 //
 // Pure functions only — no React — so the model can be exercised directly
 // (see scripts/verify-booking-model.ts).
@@ -56,10 +59,14 @@ function durationLabel(minutes: number): string {
   return `${minutes} min`;
 }
 
-function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): number {
+function gatedSpotsLeft(
+  event: EventItem,
+  config: PooledTagConfig,
+  occupancy: Map<string, number>
+): number {
   const max = maxOccupancyForLocation(event.location);
   const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
-  if (bypassesPool(event.totalSpots, max)) {
+  if (config.groupOnly || bypassesPool(event.totalSpots, max)) {
     // High-capacity event: limited only by its own Momence capacity.
     return Math.max(0, sessionRemaining);
   }
@@ -67,9 +74,13 @@ function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): numbe
   return Math.max(0, Math.min(pool, sessionRemaining));
 }
 
-function toBookingOption(event: EventItem, occupancy: Map<string, number>): PooledBookingOption {
+function toBookingOption(
+  event: EventItem,
+  config: PooledTagConfig,
+  occupancy: Map<string, number>
+): PooledBookingOption {
   const minutes = event.durationMinutes ?? 0;
-  const spotsLeft = gatedSpotsLeft(event, occupancy);
+  const spotsLeft = gatedSpotsLeft(event, config, occupancy);
   // Credit cost comes from the Momence drop-in price; fall back to 1 credit per
   // hour only when the price is missing.
   const credits = creditsForPriceUsd(event.priceUsd) ?? Math.max(1, Math.round(minutes / 60));
@@ -104,9 +115,12 @@ export function buildPooledBookingModel(events: EventItem[]): PooledBookingModel
   // the same time correctly count against each other.
   const occupancy = computeHourlyOccupancy(
     pooled
-      // High-capacity events bypass the pool entirely — their attendees don't
-      // count against overlapping regular sessions.
-      .filter(({ event: e }) => !bypassesPool(e.totalSpots, maxOccupancyForLocation(e.location)))
+      // High-capacity and group-only events bypass the pool entirely — their
+      // attendees don't count against overlapping regular sessions.
+      .filter(
+        ({ event: e, config }) =>
+          !config.groupOnly && !bypassesPool(e.totalSpots, maxOccupancyForLocation(e.location))
+      )
       .map(({ event: e }) => ({
         isoDate: e.isoDate,
         durationMinutes: e.durationMinutes,
@@ -140,15 +154,17 @@ export function buildPooledBookingModel(events: EventItem[]): PooledBookingModel
   const optionsById = new Map<string, PooledBookingOption[]>();
   for (const { event: e, config } of pooled) {
     if (hiddenIds.has(e.id)) continue;
+    const partners = isEntrySlot(e) ? (longByStart.get(pooledStartKey(config, e)) ?? []) : [];
+    // Group-only sessions with nothing to pair with keep their ordinary row.
+    if (config.groupOnly && partners.length === 0) continue;
     if (isEntrySlot(e)) {
-      const options = [toBookingOption(e, occupancy)];
-      const partners = longByStart.get(pooledStartKey(config, e)) ?? [];
+      const options = [toBookingOption(e, config, occupancy)];
       if (partners.length > 0) {
         // Offer every longer duration at this start, shortest first.
         const sorted = [...partners].sort(
           (a, b) => (a.durationMinutes ?? 0) - (b.durationMinutes ?? 0)
         );
-        for (const partner of sorted) options.push(toBookingOption(partner, occupancy));
+        for (const partner of sorted) options.push(toBookingOption(partner, config, occupancy));
       } else if (config.missingPartnerFallback) {
         const { minutes, credits } = config.missingPartnerFallback;
         options.push({
@@ -163,7 +179,7 @@ export function buildPooledBookingModel(events: EventItem[]): PooledBookingModel
       optionsById.set(e.id, options);
     } else {
       // Standalone full-length (or odd-duration) pooled session — single option.
-      optionsById.set(e.id, [toBookingOption(e, occupancy)]);
+      optionsById.set(e.id, [toBookingOption(e, config, occupancy)]);
     }
   }
 
