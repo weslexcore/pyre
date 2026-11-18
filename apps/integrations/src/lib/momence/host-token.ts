@@ -6,7 +6,11 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 
 const log = createWebhookLogger('Momence');
 
-export const MOMENCE_API_V2 = 'https://api.momence.com/api/v2';
+// Overridable so the E2E suite can point it at a mock server (e2e/env.ts).
+export const MOMENCE_API_V2 =
+  import.meta.env.MOMENCE_API_V2_BASE ??
+  process.env.MOMENCE_API_V2_BASE ??
+  'https://api.momence.com/api/v2';
 
 let cachedToken: { accessToken: string; refreshToken: string; expiresAt: number } | null = null;
 
