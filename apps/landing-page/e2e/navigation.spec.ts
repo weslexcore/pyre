@@ -1,6 +1,6 @@
 // Site chrome: the booking CTA and the mobile menu.
 
-import { MOBILE_TAG } from '@pyre/e2e-utils';
+import { MOBILE_ONLY_TAG, MOBILE_TAG } from '@pyre/e2e-utils';
 import { expect, test } from './test';
 
 test('the nav Book button goes to the schedule', { tag: MOBILE_TAG }, async ({
@@ -14,8 +14,9 @@ test('the nav Book button goes to the schedule', { tag: MOBILE_TAG }, async ({
   await expect(book).toHaveAttribute('href', /\/events$/);
 });
 
-test('the mobile menu opens and closes', { tag: MOBILE_TAG }, async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'The menu button only exists at mobile widths');
+// The menu button only exists at mobile widths, so this runs in the mobile
+// project alone.
+test('the mobile menu opens and closes', { tag: MOBILE_ONLY_TAG }, async ({ page }) => {
   await page.goto('/');
 
   const button = page.locator('#mobile-menu-button');

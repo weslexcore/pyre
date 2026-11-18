@@ -11,6 +11,12 @@ const CI = Boolean(process.env.CI);
 /** Tag a test with this to also run it in the `mobile` project. */
 export const MOBILE_TAG = '@mobile';
 
+/**
+ * Tag a test with this to run it in the `mobile` project only: behaviour that
+ * doesn't exist at desktop widths, like the hamburger menu.
+ */
+export const MOBILE_ONLY_TAG = '@mobile-only';
+
 type WebServerEntry = Extract<NonNullable<PlaywrightTestConfig['webServer']>, unknown[]>[number];
 
 export interface PyreConfigOptions {
@@ -31,15 +37,24 @@ export interface PyreConfigOptions {
 }
 
 /**
- * Desktop Chromium runs everything. The mobile project (Pixel 7, also
- * Chromium, so CI only installs one browser) runs only tests tagged
- * `@mobile` — the responsive behaviour worth checking, not the whole suite
- * twice.
+ * Desktop Chromium runs everything except `@mobile-only` tests. The mobile
+ * project (Pixel 7, also Chromium, so CI only installs one browser) runs only
+ * tests tagged `@mobile` or `@mobile-only`: the responsive behaviour worth
+ * checking, not the whole suite twice.
  */
 export function defaultProjects(): Project[] {
   return [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, grep: new RegExp(MOBILE_TAG) },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      grepInvert: new RegExp(MOBILE_ONLY_TAG),
+    },
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 7'] },
+      // Matches both tags: `@mobile` is a prefix of `@mobile-only`.
+      grep: new RegExp(MOBILE_TAG),
+    },
   ];
 }
 
