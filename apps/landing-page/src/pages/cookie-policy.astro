@@ -25,7 +25,7 @@ const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.
 		</div>
 	)}
 	
-	<main class="mx-auto max-w-screen-md px-4 py-16">
+	<main class="mx-auto max-w-screen-md px-4 py-16 wrap-break-word">
 		<h1 class="font-primary-semibold text-3xl md:text-4xl">{cookiePolicy.title}</h1>
 		{ cookiePolicy.effectiveDate || cookiePolicy.lastUpdated ? (
 			<p class="mt-2 text-sm text-gray-600">

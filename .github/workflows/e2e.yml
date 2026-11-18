@@ -89,15 +89,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: yarn workspace @pyre/${{ matrix.app }} playwright install --with-deps chromium
+        run: yarn workspace @pyre/${{ matrix.app }} playwright install --with-deps chromium webkit
 
       - name: Install Playwright system dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: yarn workspace @pyre/${{ matrix.app }} playwright install-deps chromium
+        run: yarn workspace @pyre/${{ matrix.app }} playwright install-deps chromium webkit
 
       - name: Run E2E tests
         run: yarn workspace @pyre/${{ matrix.app }} test:e2e

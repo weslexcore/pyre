@@ -26,6 +26,10 @@ export default defineConfig({
     ? `http://${VERCEL_PROJECT_PRODUCTION_URL}`
     : `https://${VERCEL_PROJECT_PRODUCTION_URL}`,
   base: PUBLIC_ASTRO_BASE,
+  // The E2E suite (e2e/env.ts sets E2E=1) runs without the dev toolbar: on a
+  // phone viewport it overlays the page, and its audits log errors when a test
+  // navigates mid-load.
+  devToolbar: { enabled: !process.env.E2E },
   vite: {
     plugins: [tailwindcss()],
   },

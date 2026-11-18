@@ -31,6 +31,14 @@ export interface CreateTestOptions {
 /** Chrome logs this when blockExternal aborts a request; never a real failure. */
 export const BLOCKED_REQUEST_PATTERN = /net::ERR_BLOCKED_BY_CLIENT/;
 
+/**
+ * WebKit reports a same-origin load that a navigation cancelled (an image
+ * still downloading when a test taps a link) as an "access control" error.
+ * Matched only for localhost URLs, so a real cross-origin CORS failure still
+ * fails the test.
+ */
+export const WEBKIT_CANCELLED_LOAD_PATTERN = /localhost:\d+\/\S* due to access control checks/;
+
 const ALWAYS_ALLOWED_HOSTS = ['localhost', '127.0.0.1'];
 
 /**
@@ -58,7 +66,11 @@ interface PyreFixtures {
 
 export function createTest(options: CreateTestOptions = {}) {
   const allowHosts = new Set([...ALWAYS_ALLOWED_HOSTS, ...(options.allowHosts ?? [])]);
-  const suiteAllowlist = [BLOCKED_REQUEST_PATTERN, ...(options.consoleAllowlist ?? [])];
+  const suiteAllowlist = [
+    BLOCKED_REQUEST_PATTERN,
+    WEBKIT_CANCELLED_LOAD_PATTERN,
+    ...(options.consoleAllowlist ?? []),
+  ];
 
   return base.extend<PyreFixtures>({
     consoleAllowlist: [[], { option: true }],

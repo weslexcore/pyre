@@ -28,7 +28,7 @@ const description = privacyPolicy.intro ?? privacyPolicy.sections[0]?.paragraphs
 		</div>
 	)}
 	
-	<main class="mx-auto max-w-screen-md px-4 py-16">
+	<main class="mx-auto max-w-screen-md px-4 py-16 wrap-break-word">
 		<h1 class="font-primary-semibold text-3xl md:text-4xl">{privacyPolicy.title}</h1>
 		{ privacyPolicy.effectiveDate || privacyPolicy.lastUpdated ? (
 			<p class="mt-2 text-sm text-gray-600">
