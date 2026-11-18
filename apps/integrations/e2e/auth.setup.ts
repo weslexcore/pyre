@@ -4,6 +4,7 @@
 // `test.use({ storageState: ADMIN.storageState })`.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { request as playwrightRequest, test as setup } from '@playwright/test';
 import { ensureAuthUser, expect, supabaseAdmin, supabaseSessionCookies } from '@pyre/e2e-utils';
 import { SESSION_COOKIE } from '../src/lib/supabase/server';
@@ -25,6 +26,7 @@ setup('seed the staff roster and sign each role in', async () => {
       is_admin: role.isAdmin,
       pages: role.pages,
       active: true,
+      is_shift_lead: role.isShiftLead ?? false,
       user_id: userId,
     };
     const { data: existing, error: readError } = await db
@@ -39,9 +41,26 @@ setup('seed the staff roster and sign each role in', async () => {
     expect(error, `staff row for ${role.email}`).toBeNull();
   }
 
-  mkdirSync('e2e/.auth', { recursive: true });
+  // Settings the app caches for ~30s, so they are set before any spec runs.
+  // Guest profiles are off by default, which sends most guest pages to
+  // Check Ins; the schedule's request toggles are on by default, kept on here.
+  const settings = await db
+    .from('app_settings')
+    .upsert({ key: 'guests.profiles', value: true, updated_by: 'e2e' }, { onConflict: 'key' });
+  expect(settings.error, 'guests.profiles setting').toBeNull();
+  const toggles = await db.from('schedule_settings').upsert(
+    ['shift_requests', 'sub_requests', 'hours_changes'].map((key) => ({
+      key,
+      enabled: true,
+      updated_by: 'e2e',
+    })),
+    { onConflict: 'key' }
+  );
+  expect(toggles.error, 'schedule request toggles').toBeNull();
+
   for (const role of ROLES) {
     if (!role.storageState) continue;
+    mkdirSync(dirname(role.storageState), { recursive: true });
     const context = await playwrightRequest.newContext({ baseURL: APP_URL });
     if (role.isAdmin || role.pages.length > 0) {
       const response = await context.post('/api/auth/password', {

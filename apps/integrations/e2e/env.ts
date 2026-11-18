@@ -92,7 +92,9 @@ export const APP_ENV: Record<string, string> = {
   // Read by astro.config.mjs: no .env files, no dev toolbar.
   E2E: '1',
   ASTRO_TELEMETRY_DISABLED: '1',
-  PUBLIC_SITE_URL: APP_URL,
+  // The public landing site (booking, referral and short links, its events
+  // and blog feeds) -> mock server.
+  PUBLIC_SITE_URL: `${MOCK_URL}/site`,
   // Email images from this app's own public/email, not the production deployment.
   PUBLIC_EMAIL_ASSET_BASE: `${APP_URL}/email`,
 

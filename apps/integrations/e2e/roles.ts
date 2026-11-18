@@ -4,7 +4,13 @@
 // until the cache expired.
 
 import { defaultProjects } from '@pyre/e2e-utils';
-import { ADMIN_TOOLS } from '../src/components/admin/adminTools';
+import {
+  ADMIN_TOOLS,
+  GUESTS_MANAGE,
+  INVENTORY_MANAGE,
+  SCHEDULE_MANAGE,
+} from '../src/components/admin/adminTools';
+import { APP_PORT } from './ports';
 
 export const PASSWORD = 'e2e-password-1234';
 
@@ -13,11 +19,25 @@ export interface Role {
   displayName: string;
   isAdmin: boolean;
   pages: string[];
+  /** Shift lead on the roster (SOP grants can name the shift_lead role). */
+  isShiftLead?: boolean;
   /** storageState file the setup saves once this role has signed in; null = never signed in by setup. */
   storageState: string | null;
 }
 
-const state = (name: string) => `e2e/.auth/${name}.json`;
+// Per app port, so side-by-side runs (E2E_APP_PORT) don't overwrite each
+// other's sessions.
+const state = (name: string) => `e2e/.auth/${APP_PORT}/${name}.json`;
+
+/** The pages the floor staff use day to day. */
+export const STAFF_PAGES = [
+  '/admin/schedule',
+  '/admin/sops',
+  '/admin/shift-notes',
+  '/admin/water',
+  '/admin/inventory',
+  '/admin/guests',
+];
 
 export const ADMIN: Role = {
   email: 'e2e-admin@e2e.test',
@@ -35,6 +55,43 @@ export const WATER_STAFF: Role = {
   isAdmin: false,
   pages: ['/admin/water'],
   storageState: state('water'),
+};
+
+/** Floor staff: the day-to-day pages, nothing to manage. */
+export const STAFF: Role = {
+  email: 'e2e-staff@e2e.test',
+  displayName: 'Sam Staff',
+  isAdmin: false,
+  pages: STAFF_PAGES,
+  storageState: state('staff'),
+};
+
+/** A second floor staff member: the other side of subs, swaps, mentions and audiences. */
+export const STAFF_2: Role = {
+  email: 'e2e-staff2@e2e.test',
+  displayName: 'Casey Crew',
+  isAdmin: false,
+  pages: STAFF_PAGES,
+  storageState: state('staff2'),
+};
+
+/** A shift lead: staff pages plus the shift_lead SOP role. No extra grants. */
+export const SHIFT_LEAD: Role = {
+  email: 'e2e-lead@e2e.test',
+  displayName: 'Lee Lead',
+  isAdmin: false,
+  isShiftLead: true,
+  pages: STAFF_PAGES,
+  storageState: state('lead'),
+};
+
+/** Not an admin, but manages the schedule, inventory and guest profile fields. */
+export const MANAGER: Role = {
+  email: 'e2e-manager@e2e.test',
+  displayName: 'Morgan Manager',
+  isAdmin: false,
+  pages: [...STAFF_PAGES, SCHEDULE_MANAGE, INVENTORY_MANAGE, GUESTS_MANAGE],
+  storageState: state('manager'),
 };
 
 /** On the roster (scheduled) but with no dashboard access. */
@@ -65,6 +122,10 @@ export function signInRole(projectName: string, purpose: SignInPurpose): Role {
 export const ROLES: Role[] = [
   ADMIN,
   WATER_STAFF,
+  STAFF,
+  STAFF_2,
+  SHIFT_LEAD,
+  MANAGER,
   ROSTER_ONLY,
   ...defaultProjects().flatMap((project) =>
     (['link', 'code'] as const).map((purpose) => signInRole(project.name ?? 'default', purpose))
