@@ -29,11 +29,20 @@ export interface CronJob {
 // registry is only materialized when the cron tick runs.
 export const CRON_JOBS: CronJob[] = [
   {
+    // Sends what is already due first, so a slow sweep can never hold up
+    // emails that are waiting.
+    name: 'journey-advance',
+    run: async (ctx) => (await import('@/lib/email/journeys/engine')).advanceDueJourneys(ctx),
+  },
+  {
     name: 'journey-sweeps',
     run: async (ctx) => (await import('@/lib/email/journeys/engine')).runEnrollmentSweeps(ctx),
   },
   {
-    name: 'journey-advance',
+    // A second pass for the people the sweeps just enrolled, so their first
+    // email goes out this tick rather than the next. Idempotent (send keys),
+    // and a quick no-op when nothing new is due.
+    name: 'journey-advance-new',
     run: async (ctx) => (await import('@/lib/email/journeys/engine')).advanceDueJourneys(ctx),
   },
   {

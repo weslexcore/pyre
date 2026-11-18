@@ -440,7 +440,7 @@ function errorMessage(error: unknown): string {
 
 const SWEEP_CURSOR_PREFIX = 'sweep:journey:';
 const SWEEP_PAGE_SIZE = 100;
-// Leave enough budget for advanceDueJourneys to run after the sweeps.
+// Leave budget for the second journey-advance pass and the jobs after it.
 const SWEEP_MIN_REMAINING_MS = 20_000;
 
 interface SweepAudience {
@@ -674,7 +674,16 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
       scanned += members.length;
 
       let passedWindow = false;
+      let outOfTime = false;
       for (const member of members) {
+        // Checked per member, not just per page: a page of 100 can take longer
+        // than the whole budget when Momence is slow. Stopping mid-page keeps
+        // the cursor on this page, and enrollment is idempotent, so the next
+        // tick rescans it harmlessly.
+        if (ctx.timeRemainingMs() < SWEEP_MIN_REMAINING_MS) {
+          outOfTime = true;
+          break;
+        }
         if (audience.pastWindow(member)) {
           passedWindow = true;
           break;
@@ -696,6 +705,7 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
         }
       }
 
+      if (outOfTime) break;
       if (members.length < SWEEP_PAGE_SIZE || passedWindow) {
         // End of the audience (or past its "seen within" edge — everyone
         // further down was seen even longer ago) — next tick starts over

@@ -29,6 +29,11 @@ export class MomenceApiError extends Error {
 
 const RATE_LIMIT_RETRIES = 2;
 const RATE_LIMIT_MAX_WAIT_MS = 5_000;
+// Momence normally answers in well under a second. When it's struggling it can
+// hold a request open until its gateway gives up with a 502, which once kept
+// the hourly cron tick waiting until Vercel killed it at 60s. Give up sooner,
+// so the caller's per-member error handling and time budget take over.
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export async function momenceRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -48,6 +53,16 @@ export async function momenceRequest<T>(
         ...(options.body != null && { 'Content-Type': 'application/json' }),
       },
       ...(options.body != null && { body: JSON.stringify(options.body) }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        log.error(`${method} ${path} timed out after ${REQUEST_TIMEOUT_MS}ms`);
+        throw new MomenceApiError(
+          `Momence API timed out after ${REQUEST_TIMEOUT_MS}ms for ${method} ${path}`,
+          504
+        );
+      }
+      throw error;
     });
 
   // Rate limited (journey sweeps page the member list hourly): wait as long
