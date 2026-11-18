@@ -125,7 +125,9 @@ async function stampEngagement(
 }
 
 const handler: TracedAPIRoute = async ({ request }, tracer) => {
-  const secret = import.meta.env.RESEND_WEBHOOK_SECRET;
+  // process.env fallback: import.meta.env is inlined at build time, so a secret
+  // added in Vercel after the cached build was compiled only exists at runtime.
+  const secret = import.meta.env.RESEND_WEBHOOK_SECRET ?? process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) {
     log.error('RESEND_WEBHOOK_SECRET not configured');
     return json({ error: 'Not configured' }, 500);
