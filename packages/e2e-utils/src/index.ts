@@ -5,6 +5,7 @@ export {
   MOBILE_ONLY_TAG,
   type PyreConfigOptions,
 } from './config';
+export { REFERRAL, REFERRAL_UNKNOWN, type ReferralLookup } from './contracts/referral';
 export { daysFromNow } from './dates';
 export {
   allowConsole,
@@ -16,6 +17,7 @@ export {
   WEBKIT_CANCELLED_LOAD_PATTERN,
 } from './fixtures';
 export { fillByName, waitForMinFillTime } from './forms';
+export { expectNoSidewaysScroll, waitForHydration } from './layout';
 export {
   createMockServer,
   type MockHandler,
@@ -29,3 +31,23 @@ export {
   runMockServer,
 } from './mock-server';
 export { stubJson, stubMailchimpJsonp, stubTurnstile } from './routes';
+export {
+  type AuthUserInput,
+  emailLinks,
+  ensureAuthUser,
+  findAuthUser,
+  type MailpitMessage,
+  type MailpitMessageDetail,
+  mailpitClient,
+  type SessionCookie,
+  supabaseAdmin,
+  supabaseSessionCookies,
+} from './supabase-admin';
+export {
+  ensureLocalSupabase,
+  type LocalSupabase,
+  type LocalSupabaseOptions,
+  resetLocalSupabase,
+  stopLocalSupabase,
+} from './supabase';
+export { uniqueEmail, uniqueTag } from './users';

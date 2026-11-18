@@ -1,20 +1,29 @@
 # @pyre/e2e-utils
 
 Shared Playwright setup for the per-app E2E suites. Each app owns its specs in
-`apps/<app>/e2e/`; this package holds what they have in common. The landing
-page (`apps/landing-page/e2e/`) is the reference suite.
+`apps/<app>/e2e/`; this package holds what they have in common. Two suites use
+it: the landing page (`apps/landing-page/e2e/`, mock upstreams only) and
+integrations (`apps/integrations/e2e/`, mock upstreams plus a real local
+Supabase stack). Start from whichever is closer to the new app.
 
 ## What's here
 
 | Export | From | Purpose |
 |---|---|---|
-| `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, webServer defaults, the browser in Richmond's timezone (`America/New_York`, `en-US`), and three projects. Every test runs on `chromium` (Desktop Chrome), `mobile-chrome` (Pixel 7) and `mobile-safari` (iPhone 15 on WebKit, the engine behind every iOS browser) |
+| `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, webServer defaults, the browser in Richmond's timezone (`America/New_York`, `en-US`), and three projects. Every test runs on `chromium` (Desktop Chrome), `mobile-chrome` (Pixel 7) and `mobile-safari` (iPhone 15 on WebKit, the engine behind every iOS browser). `setup: { testMatch }` adds a `setup` project the three depend on, e.g. to seed users and save signed-in `storageState` |
 | `MOBILE_ONLY_TAG` | `@pyre/e2e-utils` | Tag a test or `describe` with `{ tag: MOBILE_ONLY_TAG }` to run it on the phone projects only, for behaviour that doesn't exist on desktop (the hamburger menu). Where desktop and phone differ inside one test, branch on the `isMobile` fixture |
 | `DESKTOP_ONLY_TAG` | `@pyre/e2e-utils` | Tag tests that never open a page (they use the `request` fixture for a status, redirect or body) so they run once, on `chromium`, not three times |
 | `createTest` | `@pyre/e2e-utils` | The base `test`. It seeds localStorage before page scripts run, blocks browser requests to third-party hosts, and fails a test on any page error or `console.error`. Known noise is allowed by default: Chrome's blocked-request message, and WebKit's report of same-origin loads cancelled by a navigation |
 | `allowConsole` | `@pyre/e2e-utils` | `test.use({ consoleAllowlist: allowConsole(/status of 404/) })` for expected errors. Use it rather than a bare array, which Playwright reads as a fixture tuple |
 | `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered |
 | `waitForMinFillTime`, `fillByName` | `@pyre/e2e-utils` | The forms' anti-bot `form_timestamp` wait, and filling fields by `name` |
+| `waitForHydration` | `@pyre/e2e-utils` | Wait until every Astro island has mounted. Typing into a React form before then is lost when React takes over the input |
+| `expectNoSidewaysScroll` | `@pyre/e2e-utils` | Fail if the page is wider than the screen (on a phone, it scrolls sideways). Call it once the content under test has rendered |
+| `uniqueEmail`, `uniqueTag` | `@pyre/e2e-utils` | Per-test, per-project names, for suites whose parallel tests share one database |
+| `ensureLocalSupabase`, `resetLocalSupabase`, `stopLocalSupabase` | both | The e2e Supabase stack (below) |
+| `supabaseAdmin`, `ensureAuthUser`, `supabaseSessionCookies` | both | A service-role client for seeding and checking rows; an idempotent confirmed Auth user; a user's session as @supabase/ssr cookies, for someone the app's own sign-in would refuse |
+| `mailpitClient`, `emailLinks` | both | Read the stack's mail catcher: sign-in links and codes |
+| `REFERRAL`, `REFERRAL_UNKNOWN` | both | Shared contracts (`src/contracts/`): what one app's API answers, which another app's suite mocks. The owning app's suite checks its real endpoint against the same value, so the mock can't drift |
 | `createMockServer`, `runMockServer`, `mockServerClient` | `@pyre/e2e-utils/server` | A small HTTP server that plays the app's upstream APIs for its server-side code, plus a control API (`/__override`, `/__reset`, `/__requests`) |
 | `daysFromNow` | `@pyre/e2e-utils/server` | Fixture dates relative to now, so fixtures never go stale |
 
@@ -34,6 +43,33 @@ Playwright.
   real against fixtures. The env passed to the app's webServer must also blank
   every credential (`KV_REST_API_URL: ''`, …), because variables set in the
   process take priority over `.env` files.
+
+## The e2e Supabase stack
+
+`ensureLocalSupabase({ supabaseDir, appOrigin })` gives a suite a real local
+Supabase (Postgres, Auth, PostgREST, Realtime, Storage, Mailpit), separate from
+the developer's own `pyre` stack:
+
+- It builds a CLI workdir at `apps/supabase/.e2e/` (gitignored) from
+  `apps/supabase` on every run: `config.toml` with project id `pyre-e2e`, ports
+  553xx (API on 55321, Mailpit on 55324), the app's origin for Auth redirects,
+  and no Auth rate limits; plus `migrations/` and `templates/`. Nothing is
+  kept in sync by hand.
+- It starts the stack if needed (Docker; studio and other unused services left
+  out), applies new migrations (`supabase migration up`, falling back to a
+  reset when a migration was renamed), and grants the API roles access to the
+  replayed tables, as production has. A first run takes about a minute; after
+  that, a couple of seconds. A changed config restarts the stack.
+- It returns the URLs and keys (the legacy JWT keys, which the local stack
+  wants) and caches them in `process.env.E2E_SUPABASE` for the workers.
+
+Call it from the config, before `definePyreConfig`: the app's webServer needs
+the keys, and Playwright starts webServers before `globalSetup`. Tests share
+one database across workers and projects, so seed under unique names and
+never truncate. The app's own caches (a 30s staff roster, say) mean rows a
+running app must see should be seeded in the setup project. To start clean:
+`resetLocalSupabase(...)` (integrations: `yarn workspace @pyre/integrations
+e2e:supabase:reset`).
 
 ### Mock server overrides are global
 
@@ -58,7 +94,11 @@ not possible, use a distinct fixture id that only the overriding spec asks for.
      ],
    });
    ```
-   Pick ports no other suite uses. The landing page uses 4329 and 4330.
+   Pick ports no other suite uses. The landing page uses 4329 and 4330,
+   integrations 4339 and 4340, and the Supabase stack 553xx.
+   Make the app read no `.env` file under test (Astro: `vite.envDir`, see
+   `apps/integrations/astro.config.mjs`), so a variable the suite forgot can
+   never fall through to a production value.
 3. Write `apps/<app>/e2e/test.ts`, exporting `test = createTest({...})` with
    the app's storage seeding and console allowlist. Specs import `test` and
    `expect` from there.
