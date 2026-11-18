@@ -43,9 +43,8 @@
 import { createRedis } from '@pyre/webhook-core';
 import { waitUntil } from '@vercel/functions';
 import { fetchMomenceTeachers } from '@/lib/momence';
+import { MOMENCE_API_BASE } from '@/lib/momence-api';
 import type { MomenceEvent, MomenceTeacher } from '@/lib/momence-types';
-
-const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 /** A slow Momence must never hold a page open to the platform's limit. */
 const FETCH_TIMEOUT_MS = 6_000;

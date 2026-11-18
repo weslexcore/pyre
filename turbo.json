@@ -72,6 +72,10 @@
     },
     "type-check": {
       "dependsOn": ["^build"]
+    },
+    "test:e2e": {
+      "cache": false,
+      "passThroughEnv": ["CI", "E2E_SERVER_LOGS", "MOCK_LOG", "PLAYWRIGHT_*"]
     }
   }
 }

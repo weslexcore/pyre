@@ -1,6 +1,5 @@
+import { MOMENCE_API_BASE } from './momence-api';
 import type { MomenceProduct, StockInfo, StockMap } from './types';
-
-const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 const SIZE_ORDER: Record<string, number> = {
   XS: 0,
