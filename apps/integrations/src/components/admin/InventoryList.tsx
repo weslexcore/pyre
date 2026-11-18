@@ -508,7 +508,10 @@ export function InventoryList() {
         />
       )}
 
-      <div className="overflow-x-auto rounded border border-white/10">
+      {/* relative: the scroll box must contain the header's absolutely placed
+          bits (resize handles, sr-only labels). Without a positioned ancestor
+          inside it they escape the overflow and widen the page on a phone. */}
+      <div className="relative overflow-x-auto rounded border border-white/10">
         <table
           className="w-full table-fixed border-collapse text-sm text-[var(--pyre-creme)]"
           // Fills the space it's given; past that, the columns' widths win and

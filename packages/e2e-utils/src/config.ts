@@ -38,6 +38,12 @@ export interface PyreConfigOptions {
   testDir?: string;
   /** Replaces the default desktop + phone projects (see defaultProjects). */
   projects?: Project[];
+  /**
+   * A setup project that runs once before every other project, e.g. to seed
+   * users and sign them in, saving `storageState` files the specs reuse.
+   * Files matching `testMatch` run only in setup, never on the devices.
+   */
+  setup?: { testMatch: string | RegExp };
   /** Escape hatch for anything else; merged over the shared defaults. */
   overrides?: PlaywrightTestConfig;
 }
@@ -72,11 +78,23 @@ export function defaultProjects(): Project[] {
   ];
 }
 
+function withSetup(projects: Project[], setup: PyreConfigOptions['setup']): Project[] {
+  if (!setup) return projects;
+  return [
+    { name: 'setup', testMatch: setup.testMatch },
+    ...projects.map((project) => ({
+      ...project,
+      dependencies: [...(project.dependencies ?? []), 'setup'],
+    })),
+  ];
+}
+
 export function definePyreConfig(options: PyreConfigOptions): PlaywrightTestConfig {
   const baseURL = `http://localhost:${options.port}`;
 
   return defineConfig({
     testDir: options.testDir ?? './e2e',
+    // A setup file (PyreConfigOptions.setup) is matched by its own project.
     testMatch: '**/*.spec.ts',
     fullyParallel: true,
     forbidOnly: CI,
@@ -102,7 +120,7 @@ export function definePyreConfig(options: PyreConfigOptions): PlaywrightTestConf
       trace: 'on-first-retry',
       screenshot: 'only-on-failure',
     },
-    projects: options.projects ?? defaultProjects(),
+    projects: withSetup(options.projects ?? defaultProjects(), options.setup),
     webServer: options.webServers.map((server) => ({
       reuseExistingServer: !CI,
       // Dev-server request logs drown the report; startup errors still surface

@@ -263,7 +263,8 @@ Landing page uses:
 - The suite starts `astro dev --ignore-lock` on port 4329 and a mock upstream server on 4330 (`e2e/mock-server/`). Momence v1 (`MOMENCE_API_BASE`) and the integrations service point at the mock; all other credentials are blanked in `e2e/env.ts`, so tests never reach real services
 - Specs import `test`/`expect` from `e2e/test.ts`. Any browser `console.error` or page error fails a test; allow expected ones with `test.use({ consoleAllowlist: allowConsole(...) })`
 - Selectors: roles and accessible names first, then existing `data-*` hooks and ids; add `data-testid` only when neither exists
-- CI: `.github/workflows/e2e.yml` runs a suite on PRs that touch its app (Chromium and WebKit, report uploaded on failure)
+- Integrations: `yarn test:e2e:integrations` (needs Docker running). It runs against a real local Supabase stack, separate from your dev stack: project `pyre-e2e` on ports 553xx (API 55321, Mailpit 55324), rebuilt from `apps/supabase` (config and migrations) on every run, so new migrations apply automatically. `astro dev` on 4339, mock upstreams (Momence, Resend) on 4340. Under `E2E=1` the app reads no `.env` file at all (`vite.envDir` in astro.config.mjs), so it can never reach production; every variable comes from `apps/integrations/e2e/env.ts`. `e2e/auth.setup.ts` seeds the staff roster (`e2e/roles.ts`) and signs each role in; specs pick one with `test.use({ storageState })`. Start clean with `yarn workspace @pyre/integrations e2e:supabase:reset`; stop it with `e2e:supabase:stop`
+- CI: `.github/workflows/e2e.yml` runs a suite on PRs that touch its app or what it depends on (Chromium and WebKit, report uploaded on failure). The `E2E` check is required on master and covers every suite
 
 ### Type Checking
 - Run TypeScript checks: `yarn type-check`

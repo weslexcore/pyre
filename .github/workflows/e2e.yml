@@ -1,7 +1,9 @@
 # End-to-end tests (Playwright) for each app that has a suite, run on PRs
-# that touch it. Each app's suite starts its own dev server against a mock
-# upstream (see apps/<app>/e2e/ and packages/e2e-utils), so no secrets are
-# needed and nothing reaches a real service.
+# that touch it. Each app's suite starts its own dev server against mock
+# upstreams (see apps/<app>/e2e/ and packages/e2e-utils), so no secrets are
+# needed and nothing reaches a real service. Suites that need a database
+# (integrations) start a local Supabase stack in Docker from
+# apps/supabase/migrations as part of `test:e2e`.
 #
 # The status check to require on PRs is `E2E` (the `result` job at the end).
 #
@@ -25,7 +27,7 @@ permissions:
 
 env:
   # What a manual run (Actions tab -> Run workflow) tests.
-  ALL_APPS: '["landing-page"]'
+  ALL_APPS: '["landing-page", "integrations"]'
 
 jobs:
   changes:
@@ -48,12 +50,26 @@ jobs:
               - 'packages/e2e-utils/**'
               - 'yarn.lock'
               - '.github/workflows/e2e.yml'
+            integrations:
+              - 'apps/integrations/**'
+              - 'apps/supabase/migrations/**'
+              - 'apps/supabase/config.toml'
+              - 'apps/supabase/templates/**'
+              - 'packages/e2e-utils/**'
+              - 'packages/webhook-core/**'
+              - 'packages/jev/**'
+              - 'packages/schedule-core/**'
+              - 'packages/signals-core/**'
+              - 'yarn.lock'
+              - '.github/workflows/e2e.yml'
 
   e2e:
     needs: changes
     if: ${{ needs.changes.outputs.apps != '[]' && needs.changes.outputs.apps != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The integrations suite pulls Supabase's images and replays every
+    # migration before it starts (a few minutes on a cold runner).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

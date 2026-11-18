@@ -133,7 +133,10 @@ export function LostFoundIndex() {
           const asked = data?.noticeCounts[item.id] ?? 0;
           const note = donationNote(item);
           return (
-            <li key={item.id}>
+            // min-w-0 here and on the title: a grid item and a flex item both
+            // default to their content's width, so a long title would push the
+            // card past a phone's screen instead of truncating.
+            <li key={item.id} className="min-w-0">
               <a
                 href={`/admin/lost-found/${item.id}`}
                 className={`${cardClass} flex gap-3 transition-colors hover:border-white/25`}
@@ -153,7 +156,7 @@ export function LostFoundIndex() {
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
-                    <span className="truncate text-sm font-primary-semibold text-[var(--pyre-creme)]">
+                    <span className="min-w-0 truncate text-sm font-primary-semibold text-[var(--pyre-creme)]">
                       {item.title}
                     </span>
                     <LostFoundStatusBadge status={item.status} />
