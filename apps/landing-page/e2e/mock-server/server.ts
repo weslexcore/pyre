@@ -33,7 +33,9 @@ await runMockServer({
         if (headers.authorization !== `Bearer ${E2E_SECRET}`) {
           return { status: 401, json: { error: 'unauthorized' } };
         }
-        return query.get('code')?.toUpperCase() === REFERRAL.code
+        // Like the real service (apps/integrations src/lib/referral/registry.ts),
+        // lookups are case-insensitive and answer with the canonical code.
+        return query.get('code')?.trim().toUpperCase() === REFERRAL.code
           ? { json: REFERRAL }
           : { status: 404, json: { error: 'not_found' } };
       },

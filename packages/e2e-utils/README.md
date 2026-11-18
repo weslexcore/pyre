@@ -8,8 +8,9 @@ page (`apps/landing-page/e2e/`) is the reference suite.
 
 | Export | From | Purpose |
 |---|---|---|
-| `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, webServer defaults, and three projects. Every test runs on `chromium` (Desktop Chrome), `mobile-chrome` (Pixel 7) and `mobile-safari` (iPhone 15 on WebKit, the engine behind every iOS browser) |
+| `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, webServer defaults, the browser in Richmond's timezone (`America/New_York`, `en-US`), and three projects. Every test runs on `chromium` (Desktop Chrome), `mobile-chrome` (Pixel 7) and `mobile-safari` (iPhone 15 on WebKit, the engine behind every iOS browser) |
 | `MOBILE_ONLY_TAG` | `@pyre/e2e-utils` | Tag a test or `describe` with `{ tag: MOBILE_ONLY_TAG }` to run it on the phone projects only, for behaviour that doesn't exist on desktop (the hamburger menu). Where desktop and phone differ inside one test, branch on the `isMobile` fixture |
+| `DESKTOP_ONLY_TAG` | `@pyre/e2e-utils` | Tag tests that never open a page (they use the `request` fixture for a status, redirect or body) so they run once, on `chromium`, not three times |
 | `createTest` | `@pyre/e2e-utils` | The base `test`. It seeds localStorage before page scripts run, blocks browser requests to third-party hosts, and fails a test on any page error or `console.error`. Known noise is allowed by default: Chrome's blocked-request message, and WebKit's report of same-origin loads cancelled by a navigation |
 | `allowConsole` | `@pyre/e2e-utils` | `test.use({ consoleAllowlist: allowConsole(/status of 404/) })` for expected errors. Use it rather than a bare array, which Playwright reads as a fixture tuple |
 | `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered |
@@ -33,6 +34,15 @@ Playwright.
   real against fixtures. The env passed to the app's webServer must also blank
   every credential (`KV_REST_API_URL: ''`, …), because variables set in the
   process take priority over `.env` files.
+
+### Mock server overrides are global
+
+`mockServerClient(url).override(...)` changes the answer for **every** worker,
+not just the calling test: the app's server calls carry nothing that ties them
+to a test. Keep overriding specs in their own file with
+`test.describe.configure({ mode: 'serial' })` and a `reset()` in `afterEach`,
+and only override upstream paths that no other spec depends on. Where that's
+not possible, use a distinct fixture id that only the overriding spec asks for.
 
 ## Adding a suite for another app
 

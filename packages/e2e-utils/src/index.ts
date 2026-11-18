@@ -1,5 +1,6 @@
 export {
   definePyreConfig,
+  DESKTOP_ONLY_TAG,
   defaultProjects,
   MOBILE_ONLY_TAG,
   type PyreConfigOptions,

@@ -15,6 +15,14 @@ const CI = Boolean(process.env.CI);
  */
 export const MOBILE_ONLY_TAG = '@mobile-only';
 
+/**
+ * Tag a test with this to run it on the desktop project only. For tests that
+ * never open a page (they use the `request` fixture to check a status code,
+ * redirect or response body): the device makes no difference to them, so
+ * running them three times only adds time.
+ */
+export const DESKTOP_ONLY_TAG = '@desktop-only';
+
 type WebServerEntry = Extract<NonNullable<PlaywrightTestConfig['webServer']>, unknown[]>[number];
 
 export interface PyreConfigOptions {
@@ -41,7 +49,8 @@ export interface PyreConfigOptions {
  *   - mobile-chrome  Pixel 7 (Android Chrome)
  *   - mobile-safari  iPhone 15 on WebKit, the engine every iOS browser uses.
  *                    Chromium's phone emulation doesn't catch Safari-only bugs.
- * `@mobile-only` tests skip the desktop project.
+ * `@mobile-only` tests skip the desktop project; `@desktop-only` tests skip
+ * both phones.
  */
 export function defaultProjects(): Project[] {
   return [
@@ -50,8 +59,16 @@ export function defaultProjects(): Project[] {
       use: { ...devices['Desktop Chrome'] },
       grepInvert: new RegExp(MOBILE_ONLY_TAG),
     },
-    { name: 'mobile-chrome', use: { ...devices['Pixel 7'] } },
-    { name: 'mobile-safari', use: { ...devices['iPhone 15'] } },
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'] },
+      grepInvert: new RegExp(DESKTOP_ONLY_TAG),
+    },
+    {
+      name: 'mobile-safari',
+      use: { ...devices['iPhone 15'] },
+      grepInvert: new RegExp(DESKTOP_ONLY_TAG),
+    },
   ];
 }
 
@@ -73,6 +90,11 @@ export function definePyreConfig(options: PyreConfigOptions): PlaywrightTestConf
     expect: { timeout: 10_000 },
     use: {
       baseURL,
+      // Pyre is in Richmond; run the browser there so any date the client
+      // formats matches what a local customer sees. A test that checks
+      // behaviour for a visitor elsewhere overrides it with test.use.
+      timezoneId: 'America/New_York',
+      locale: 'en-US',
       trace: 'on-first-retry',
       screenshot: 'only-on-failure',
     },

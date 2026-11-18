@@ -1,8 +1,10 @@
-// Every public page renders: 200, a title, a visible h1, and nothing thrown or
-// logged as an error in the browser (the error guard in ./test.ts fails the
+// Every public page renders: 200, a title, a non-empty h1, no sideways
+// scrolling, and nothing thrown or logged as an error in the browser (the error guard in ./test.ts fails the
 // test otherwise). Then the links in the site chrome all resolve.
 
-import { expect, test } from './test';
+import { REFERRAL } from './mock-server/integrations-fixtures';
+import { FIXTURE_EVENTS } from './mock-server/momence-fixtures';
+import { expect, expectNoSidewaysScroll, test } from './test';
 
 const STATIC_PAGES = [
   '/',
@@ -31,28 +33,26 @@ for (const path of STATIC_PAGES) {
     // wordmark, which starts hidden for its intro animation.)
     await expect(page.locator('h1').first()).toHaveText(/\S/);
 
-    // Nothing pushes the page wider than the screen. On a phone that shows up
-    // as sideways scrolling, which reads as a broken page.
-    const overflow = await page.evaluate(() => {
-      const width = document.documentElement.clientWidth;
-      const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
-        .filter((el) => {
-          const rect = el.getBoundingClientRect();
-          return rect.width > 0 && rect.right > width + 1;
-        })
-        // Report the outermost offender, not every descendant of it.
-        .filter((el, _, all) => !all.some((other) => other !== el && other.contains(el)))
-        .slice(0, 5)
-        .map(
-          (el) =>
-            `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}.${[...el.classList].slice(0, 3).join('.')}`
-        );
-      return { scrollWidth: document.documentElement.scrollWidth, width, offenders };
-    });
-    expect(
-      overflow.scrollWidth,
-      `${path} scrolls sideways; widest elements: ${overflow.offenders.join(', ')}`
-    ).toBeLessThanOrEqual(overflow.width + 1);
+    await expectNoSidewaysScroll(page);
+  });
+}
+
+// Server-rendered pages whose content comes from fixtures or stubs: the same
+// checks, once their content is there.
+const DYNAMIC_PAGES = [
+  `/events/${FIXTURE_EVENTS.guided.id}-e2e-guided-sauna`,
+  `/r/${REFERRAL.code}`,
+  '/blog/history-of-sweat-bathing',
+  '/account',
+];
+
+for (const path of DYNAMIC_PAGES) {
+  test(`${path} renders`, async ({ page }) => {
+    const response = await page.goto(path);
+    expect(response?.status(), `status of ${path}`).toBe(200);
+    await expect(page).toHaveTitle(/\S/);
+    await expect(page.locator('h1').first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
   });
 }
 
