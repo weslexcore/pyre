@@ -8,12 +8,10 @@ import { defineConfig, devices, type PlaywrightTestConfig, type Project } from '
 
 const CI = Boolean(process.env.CI);
 
-/** Tag a test with this to also run it in the `mobile` project. */
-export const MOBILE_TAG = '@mobile';
-
 /**
- * Tag a test with this to run it in the `mobile` project only: behaviour that
- * doesn't exist at desktop widths, like the hamburger menu.
+ * Tag a test with this to run it on the phone projects only: behaviour that
+ * doesn't exist at desktop widths, like the hamburger menu. Every untagged
+ * test runs on all three projects.
  */
 export const MOBILE_ONLY_TAG = '@mobile-only';
 
@@ -30,17 +28,20 @@ export interface PyreConfigOptions {
   webServers: WebServerEntry[];
   /** Directory holding the specs. Defaults to `./e2e`. */
   testDir?: string;
-  /** Replaces the default `chromium` + `mobile` projects. */
+  /** Replaces the default desktop + phone projects (see defaultProjects). */
   projects?: Project[];
   /** Escape hatch for anything else; merged over the shared defaults. */
   overrides?: PlaywrightTestConfig;
 }
 
 /**
- * Desktop Chromium runs everything except `@mobile-only` tests. The mobile
- * project (Pixel 7, also Chromium, so CI only installs one browser) runs only
- * tests tagged `@mobile` or `@mobile-only`: the responsive behaviour worth
- * checking, not the whole suite twice.
+ * Every test runs on desktop and on two phones, because most customers book
+ * from a phone:
+ *   - chromium       Desktop Chrome
+ *   - mobile-chrome  Pixel 7 (Android Chrome)
+ *   - mobile-safari  iPhone 15 on WebKit, the engine every iOS browser uses.
+ *                    Chromium's phone emulation doesn't catch Safari-only bugs.
+ * `@mobile-only` tests skip the desktop project.
  */
 export function defaultProjects(): Project[] {
   return [
@@ -49,12 +50,8 @@ export function defaultProjects(): Project[] {
       use: { ...devices['Desktop Chrome'] },
       grepInvert: new RegExp(MOBILE_ONLY_TAG),
     },
-    {
-      name: 'mobile',
-      use: { ...devices['Pixel 7'] },
-      // Matches both tags: `@mobile` is a prefix of `@mobile-only`.
-      grep: new RegExp(MOBILE_TAG),
-    },
+    { name: 'mobile-chrome', use: { ...devices['Pixel 7'] } },
+    { name: 'mobile-safari', use: { ...devices['iPhone 15'] } },
   ];
 }
 

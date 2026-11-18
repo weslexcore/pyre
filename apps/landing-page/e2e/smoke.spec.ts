@@ -30,6 +30,29 @@ for (const path of STATIC_PAGES) {
     // Every page names itself with an h1. (The home page's is the logo
     // wordmark, which starts hidden for its intro animation.)
     await expect(page.locator('h1').first()).toHaveText(/\S/);
+
+    // Nothing pushes the page wider than the screen. On a phone that shows up
+    // as sideways scrolling, which reads as a broken page.
+    const overflow = await page.evaluate(() => {
+      const width = document.documentElement.clientWidth;
+      const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
+        .filter((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.right > width + 1;
+        })
+        // Report the outermost offender, not every descendant of it.
+        .filter((el, _, all) => !all.some((other) => other !== el && other.contains(el)))
+        .slice(0, 5)
+        .map(
+          (el) =>
+            `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}.${[...el.classList].slice(0, 3).join('.')}`
+        );
+      return { scrollWidth: document.documentElement.scrollWidth, width, offenders };
+    });
+    expect(
+      overflow.scrollWidth,
+      `${path} scrolls sideways; widest elements: ${overflow.offenders.join(', ')}`
+    ).toBeLessThanOrEqual(overflow.width + 1);
   });
 }
 

@@ -2,7 +2,6 @@ export {
   definePyreConfig,
   defaultProjects,
   MOBILE_ONLY_TAG,
-  MOBILE_TAG,
   type PyreConfigOptions,
 } from './config';
 export { daysFromNow } from './dates';
@@ -13,6 +12,7 @@ export {
   type CreateTestOptions,
   createTest,
   expect,
+  WEBKIT_CANCELLED_LOAD_PATTERN,
 } from './fixtures';
 export { fillByName, waitForMinFillTime } from './forms';
 export {

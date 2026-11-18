@@ -17,6 +17,8 @@ export const E2E_SECRET = 'e2e-secret';
  * the app reads these.
  */
 export const APP_ENV: Record<string, string> = {
+  // Turns off the Astro dev toolbar (astro.config.mjs).
+  E2E: '1',
   // Momence v1 (events, teachers, products) -> mock server
   MOMENCE_HOST_ID: 'e2e',
   MOMENCE_API_TOKEN: 'e2e',
