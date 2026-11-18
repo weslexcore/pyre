@@ -10,6 +10,10 @@ interface ImportMetaEnv {
   readonly MOMENCE_HOST_PASSWORD?: string;
   readonly MOMENCE_OAUTH_CLIENT_ID?: string;
   readonly MOMENCE_OAUTH_CLIENT_SECRET?: string;
+  // Momence API base URLs (v1 and v2). Unset in deployments; the E2E suite
+  // points them at its mock server.
+  readonly MOMENCE_API_BASE?: string;
+  readonly MOMENCE_API_V2_BASE?: string;
   // Momence v1 Events API (session-type resolution + the special-event
   // conflict check)
   readonly MOMENCE_HOST_ID?: string;

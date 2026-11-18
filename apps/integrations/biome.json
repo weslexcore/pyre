@@ -12,6 +12,7 @@
       "*.json",
       "*.ts",
       "*.mjs",
+      "e2e/**",
       "!**/dist",
       "!**/node_modules",
       "!**/.astro",

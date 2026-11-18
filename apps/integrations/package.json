@@ -15,7 +15,12 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "type-check": "astro check",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "e2e:mock": "tsx e2e/mock-server/server.ts",
+    "e2e:supabase:reset": "tsx e2e/supabase.ts reset",
+    "e2e:supabase:stop": "tsx e2e/supabase.ts stop"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.10",
@@ -51,9 +56,12 @@
   "packageManager": "yarn@4.18.0",
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
+    "@playwright/test": "^1.64.1",
+    "@pyre/e2e-utils": "workspace:^",
     "@react-email/ui": "6.9.1",
     "@types/node": "^22.20.1",
     "react-email": "^6.9.0",
+    "tsx": "^4.23.1",
     "vitest": "^4.1.11"
   }
 }

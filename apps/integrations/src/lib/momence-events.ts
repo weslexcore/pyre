@@ -9,7 +9,11 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 
 const log = createWebhookLogger('MomenceEvents');
 
-const MOMENCE_API_V1 = 'https://api.momence.com/api/v1';
+// Overridable so the E2E suite can point it at a mock server (e2e/env.ts).
+const MOMENCE_API_V1 =
+  import.meta.env.MOMENCE_API_BASE ??
+  process.env.MOMENCE_API_BASE ??
+  'https://api.momence.com/api/v1';
 /** The bathhouse's wall-clock zone; every customer-facing time is rendered in it. */
 export const TIME_ZONE = 'America/New_York';
 

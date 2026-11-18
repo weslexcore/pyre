@@ -9,7 +9,7 @@
 
 import { type MockRequest, type MockResponse, runMockServer } from '@pyre/e2e-utils/server';
 import { E2E_SECRET, MOCK_PORT } from '../env';
-import { REFERRAL } from './integrations-fixtures';
+import { REFERRAL, REFERRAL_UNKNOWN } from './integrations-fixtures';
 import { momenceEvents, momenceProducts, momenceTeachers } from './momence-fixtures';
 
 /** Momence authenticates the v1 API with hostId + token query params. */
@@ -37,7 +37,7 @@ await runMockServer({
         // lookups are case-insensitive and answer with the canonical code.
         return query.get('code')?.trim().toUpperCase() === REFERRAL.code
           ? { json: REFERRAL }
-          : { status: 404, json: { error: 'not_found' } };
+          : { status: 404, json: REFERRAL_UNKNOWN };
       },
     },
   ],

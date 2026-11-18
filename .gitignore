@@ -61,6 +61,9 @@ next-env.d.ts
 
 apps/supabase/.temp/**
 apps/supabase/.branches
+# The E2E suites' own Supabase stack, rebuilt from apps/supabase on every run
+# (packages/e2e-utils/src/supabase.ts).
+apps/supabase/.e2e/
 
 # design-sync (staged scripts, build output, machine state)
 .ds-sync/
