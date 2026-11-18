@@ -17,27 +17,41 @@ export function fmtHours(hours: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
+// Month, day and time together are joined differently by different engines
+// (Node: 'Nov 18, 3:32 PM'; Safari: 'Nov 18 at 3:32 PM'), so a stamp rendered
+// on the server and hydrated on an iPhone never matched. These assemble the
+// string from its parts instead, the same everywhere.
+const STAMP_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: STUDIO_TZ,
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+function stampParts(iso: string) {
+  const parts = Object.fromEntries(
+    STAMP_PARTS.formatToParts(new Date(iso)).map((part) => [part.type, part.value])
+  );
+  return {
+    date: `${parts.month} ${parts.day}`,
+    year: parts.year,
+    time: `${parts.hour}:${parts.minute} ${String(parts.dayPeriod).toUpperCase()}`,
+  };
+}
+
 /** 'Aug 22, 6:04 PM' on the studio's clock. */
 export function etStamp(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: STUDIO_TZ,
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const { date, time } = stampParts(iso);
+  return `${date}, ${time}`;
 }
 
 /** 'Aug 22, 2026, 6:04 PM' on the studio's clock. */
 export function etStampWithYear(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: STUDIO_TZ,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const { date, year, time } = stampParts(iso);
+  return `${date}, ${year}, ${time}`;
 }
 
 /** '9:42 PM' on the studio's clock. */

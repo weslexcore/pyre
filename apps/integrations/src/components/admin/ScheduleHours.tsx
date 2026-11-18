@@ -291,8 +291,10 @@ export function ScheduleHours() {
             aria-label="To"
           />
         </div>
+        {/* Full width on a phone: a select is as wide as its longest option
+            (pay-period labels), which is wider than the screen. */}
         <select
-          className={inputClass}
+          className={`${inputClass} w-full max-w-full sm:w-auto`}
           value={jumpValue}
           onChange={(e) => {
             const [kind, from] = e.target.value.split(':');
