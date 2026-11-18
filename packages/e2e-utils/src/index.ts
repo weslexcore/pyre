@@ -1,4 +1,10 @@
-export { definePyreConfig, defaultProjects, MOBILE_TAG, type PyreConfigOptions } from './config';
+export {
+  definePyreConfig,
+  defaultProjects,
+  MOBILE_ONLY_TAG,
+  MOBILE_TAG,
+  type PyreConfigOptions,
+} from './config';
 export { daysFromNow } from './dates';
 export {
   allowConsole,

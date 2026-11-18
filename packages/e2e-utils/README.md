@@ -9,7 +9,8 @@ page (`apps/landing-page/e2e/`) is the reference suite.
 | Export | From | Purpose |
 |---|---|---|
 | `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, the `chromium` + `mobile` (Pixel 7) projects, webServer defaults |
-| `MOBILE_TAG` | `@pyre/e2e-utils` | Tag a test `{ tag: MOBILE_TAG }` to also run it in the `mobile` project |
+| `MOBILE_TAG` | `@pyre/e2e-utils` | Tag a test `{ tag: MOBILE_TAG }` to run it in the `mobile` project as well as on desktop |
+| `MOBILE_ONLY_TAG` | `@pyre/e2e-utils` | Tag a test `{ tag: MOBILE_ONLY_TAG }` to run it in the `mobile` project only, for behaviour that doesn't exist on desktop |
 | `createTest` | `@pyre/e2e-utils` | The base `test`. It seeds localStorage before page scripts run, blocks browser requests to third-party hosts, and fails a test on any page error or `console.error` |
 | `allowConsole` | `@pyre/e2e-utils` | `test.use({ consoleAllowlist: allowConsole(/status of 404/) })` for expected errors. Use it rather than a bare array, which Playwright reads as a fixture tuple |
 | `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered |
