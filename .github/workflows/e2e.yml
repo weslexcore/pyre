@@ -3,6 +3,8 @@
 # upstream (see apps/<app>/e2e/ and packages/e2e-utils), so no secrets are
 # needed and nothing reaches a real service.
 #
+# The status check to require on PRs is `E2E` (the `result` job at the end).
+#
 # Adding an app: give it a `test:e2e` script (see packages/e2e-utils/README.md),
 # then add a filter below named after its directory under apps/, and add the
 # name to ALL_APPS. The filter name is the matrix value, and the workspace is
@@ -111,3 +113,30 @@ jobs:
             apps/${{ matrix.app }}/playwright-report/
             apps/${{ matrix.app }}/test-results/
           retention-days: 14
+
+  # One check that always reports, whether or not any suite ran. Require this
+  # one in branch protection, not the per-app `e2e (<app>)` jobs: those don't
+  # exist on a PR that touches no app with a suite, so a required check with
+  # their name would wait forever.
+  result:
+    name: E2E
+    needs: [changes, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the suites passed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          E2E: ${{ needs.e2e.result }}
+          APPS: ${{ needs.changes.outputs.apps }}
+        run: |
+          echo "changes: $CHANGES, e2e: $E2E, apps: ${APPS:-[]}"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::Could not work out which apps changed."
+            exit 1
+          fi
+          # Skipped means no app with a suite changed; nothing to test.
+          if [ "$E2E" != "success" ] && [ "$E2E" != "skipped" ]; then
+            echo "::error::E2E suites did not pass ($E2E)."
+            exit 1
+          fi
