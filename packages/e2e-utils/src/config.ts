@@ -90,6 +90,10 @@ export function definePyreConfig(options: PyreConfigOptions): PlaywrightTestConf
     expect: { timeout: 10_000 },
     use: {
       baseURL,
+      // CI runners have no GPU, so Chromium draws WebGL in software. The
+      // animated hero shader then saturates the CPU and slows every action.
+      // The shader (and the site's other animations) stop under reduced motion.
+      reducedMotion: 'reduce',
       // Pyre is in Richmond; run the browser there so any date the client
       // formats matches what a local customer sees. A test that checks
       // behaviour for a visitor elsewhere overrides it with test.use.
