@@ -59,8 +59,11 @@ const page = <T>(items: T[]) => ({
 });
 
 export function momenceWorld(): MockRoute[] {
-  // Ids start high so they never look like a real Momence id in a log.
-  let nextId = 7_000_000;
+  // Ids never look like a real Momence id (7 billion and up), and each start
+  // of the mock takes its own block of them: the database keeps what earlier
+  // runs filed under an id, so a reused id would inherit old profiles and
+  // check-ins. A block per second of the clock repeats only after ~11 days.
+  let nextId = 7_000_000_000 + (Math.floor(Date.now() / 1000) % 1_000_000) * 1000;
   const members = new Map<number, WorldMember>();
   const sessions = new Map<number, WorldSession>();
   const bookings = new Map<number, WorldBooking>();

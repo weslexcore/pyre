@@ -304,9 +304,12 @@ export function GuestProfile({
             <SectionTitle note="The one line to read before greeting them. Shown on the roster.">
               In a sentence
             </SectionTitle>
+            {/* Not editable until our side has loaded: the draft is seeded
+                from it then, which would throw away anything typed first. */}
             <textarea
               className={`${inputClass} min-h-[72px]`}
               maxLength={FIELD_LIMITS.summary}
+              disabled={!ours.data}
               value={draft.summary}
               placeholder="Regular on Tuesday evenings, comes with her sister, likes it quiet."
               onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}

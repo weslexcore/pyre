@@ -21,7 +21,7 @@ import {
 } from '@/components/admin/ui';
 import { ApiError, sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { optimistic, tempId } from '@/lib/client/optimistic';
+import { isTempId, optimistic, tempId } from '@/lib/client/optimistic';
 import type { ColdPlungeRow } from '@/lib/db';
 import { CHART_GALLONS, PRODUCTS, shockDoses } from '@/lib/water/charts';
 import { formatGallons, PLUNGE_LIMITS } from '@/lib/water/plunges';
@@ -208,7 +208,9 @@ export function ColdPlungesManager() {
   const row = (plunge: ColdPlungeRow, index: number) => {
     const count = entries[plunge.id] ?? 0;
     const editing = editingId === plunge.id;
-    const rowBusy = busy === plunge.id;
+    // A plunge still being added has a temporary id: anything done to it
+    // (Edit, Archive, Move) would be lost when the saved row replaces it.
+    const rowBusy = busy === plunge.id || isTempId(plunge.id);
 
     if (editing) {
       return (
