@@ -2,8 +2,9 @@
 // request, relative to now, so the calendar is always upcoming.
 //
 // The set is chosen to exercise the events pipeline: three category tags (so
-// the type filter renders), one full session (waitlist CTA), and three
-// sessions the public pipeline must drop (volunteer, cancelled, past).
+// the type filter renders), one full session (waitlist CTA), three sessions
+// the public pipeline must drop (volunteer, cancelled, past), and a special
+// event sold as overlapping 1hr/2hr sessions that share an hourly capacity.
 
 import { daysFromNow } from '@pyre/e2e-utils/server';
 import type { MomenceEvent, MomenceTeacher } from '../../src/lib/momence-types';
@@ -27,6 +28,28 @@ export const FIXTURE_EVENTS = {
   volunteer: { id: 900005, title: 'E2E Volunteer Shift' },
   cancelled: { id: 900006, title: 'E2E Cancelled Session' },
   past: { id: 900007, title: 'E2E Past Session' },
+} as const;
+
+/**
+ * A special event shaped like Blues // Tea // Sauna: a 1hr and a 2hr session
+ * at the same start plus a 1hr the hour after, every session created at the
+ * event's hourly capacity. The capacity is deliberately not 30 (or the 20-person
+ * Open Hours cap) so the specs prove it comes from the sessions themselves.
+ *
+ * Booked: 10 on the first 1hr, 12 on the 2hr, 5 on the second 1hr. So the
+ * first hour holds 22 people and the second 17, and with a shared cap of 40:
+ *   first hour, 1hr and 2hr options: 40 - 22 = 18 left each (the 2hr is held
+ *     to the tighter of its two hours: 18 vs 23)
+ *   second hour, 1hr: 40 - 17 = 23 left
+ * Selling each session's own capacity instead would show 30, 28 and 35.
+ */
+export const SHARED_CAPACITY_EVENT = {
+  title: 'E2E Blues Tea Sauna',
+  capacity: 40,
+  firstHour: { id: 900008, booked: 10 },
+  twoHour: { id: 900009, booked: 12 },
+  secondHour: { id: 900010, booked: 5 },
+  expected: { firstHourLeft: 18, secondHourLeft: 23 },
 } as const;
 
 function event(
@@ -79,6 +102,33 @@ export function momenceEvents(now = new Date()): MomenceEvent[] {
     event({ ...e.volunteer, dateTime: daysFromNow(2, 14, 0, now), tags: ['Volunteer'] }),
     event({ ...e.cancelled, dateTime: daysFromNow(3, 20, 0, now), isCancelled: true }),
     event({ ...e.past, dateTime: daysFromNow(-3, 18, 0, now), tags: ['Guided'] }),
+    ...sharedCapacityEvents(now),
+  ];
+}
+
+function sharedCapacityEvents(now: Date): MomenceEvent[] {
+  const s = SHARED_CAPACITY_EVENT;
+  const session = (
+    { id, booked }: { id: number; booked: number },
+    utcHour: number,
+    duration: number,
+    fixedPrice: number
+  ) =>
+    event({
+      id,
+      title: s.title,
+      dateTime: daysFromNow(6, utcHour, 0, now),
+      duration,
+      fixedPrice,
+      capacity: s.capacity,
+      spotsRemaining: s.capacity - booked,
+      ticketsSold: booked,
+      tags: ['Special Event'],
+    });
+  return [
+    session(s.firstHour, 19, 60, 25),
+    session(s.twoHour, 19, 120, 45),
+    session(s.secondHour, 20, 60, 25),
   ];
 }
 

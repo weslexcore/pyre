@@ -3,7 +3,11 @@
 // (mock-server/momence-fixtures.ts).
 
 import { allowConsole, DESKTOP_ONLY_TAG, stubJson } from '@pyre/e2e-utils';
-import { FIXTURE_EVENTS as E, momenceEvents } from './mock-server/momence-fixtures';
+import {
+  FIXTURE_EVENTS as E,
+  momenceEvents,
+  SHARED_CAPACITY_EVENT as SC,
+} from './mock-server/momence-fixtures';
 import { expect, expectNoSidewaysScroll, test } from './test';
 
 /** The fixture's start-end range as Pyre writes it, in Richmond time. */
@@ -65,6 +69,7 @@ test.describe('schedule', () => {
       'All',
       'Guided',
       'Social',
+      'Special Event',
       'Yoga',
       'Breathwork',
     ]);
@@ -188,6 +193,39 @@ test.describe('schedule', () => {
     await expect(page.getByText('No upcoming sessions at this time.')).toBeVisible();
     await expect(page.getByText("We couldn't load upcoming sessions.")).toHaveCount(0);
     await expect(row(page, E.guided.title)).toHaveCount(0);
+  });
+});
+
+// Overlapping sessions of one special event (a 1hr and a 2hr at the same start,
+// another 1hr after) are separate Momence sessions with their own capacities,
+// but the space holds the event's capacity per hour between them.
+test.describe('a special event sold in overlapping 1hr and 2hr sessions', () => {
+  const slot = (page: import('@playwright/test').Page, id: number) =>
+    row(page, SC.title).filter({ hasText: richmondTimeRange(id) });
+  // The duration's booking row in the details: [Duration] [Credits] [N left] [Book Now].
+  const option = (dialog: import('@playwright/test').Locator, label: string) =>
+    dialog.getByRole('link', { name: `${label} — ${SC.title}` }).locator('..');
+
+  test('the 2hr session is booked from the first hour, not its own row', async ({ page }) => {
+    await page.goto('/events');
+    await expect(slot(page, SC.firstHour.id)).toBeVisible();
+    await expect(slot(page, SC.secondHour.id)).toBeVisible();
+    await expect(slot(page, SC.twoHour.id)).toHaveCount(0);
+  });
+
+  test('both durations share the hourly capacity', async ({ page }) => {
+    await page.goto('/events');
+    await slot(page, SC.firstHour.id).click();
+
+    const dialog = page.getByRole('dialog');
+    const left = `${SC.expected.firstHourLeft} left`;
+    await expect(option(dialog, 'Book 1 hour')).toContainText(left);
+    await expect(option(dialog, 'Book 2 hours')).toContainText(left);
+  });
+
+  test('the next hour counts the 2hr bookings still in the space', async ({ page }) => {
+    await page.goto('/events');
+    await expect(slot(page, SC.secondHour.id)).toContainText(`${SC.expected.secondHourLeft} left`);
   });
 });
 
