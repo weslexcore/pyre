@@ -4,7 +4,7 @@
 
 import { REFERRAL } from './mock-server/integrations-fixtures';
 import { FIXTURE_EVENTS } from './mock-server/momence-fixtures';
-import { expect, expectNoSidewaysScroll, test } from './test';
+import { clickAfterScroll, expect, expectNoSidewaysScroll, test } from './test';
 
 const STATIC_PAGES = [
   '/',
@@ -55,6 +55,48 @@ for (const path of DYNAMIC_PAGES) {
     await expectNoSidewaysScroll(page);
   });
 }
+
+// Everything above runs under reduced motion (the shared config's default,
+// which keeps CI's software-rendered WebGL from saturating the runner). That
+// skips every animation, so here the pages whose content waits on one (the
+// home page's intro and hero shader, scroll-in reveals, the schedule's
+// transitions) load with motion on and must still end up showing it.
+test.describe('with motion on', () => {
+  test.use({ reducedMotion: 'no-preference' });
+
+  test('/ plays its intro and ends on the page', async ({ page }) => {
+    await page.goto('/');
+    // The wordmark starts hidden for the intro and is revealed by it. (Desktop
+    // and phone each have their own hero; the other one is display: none.)
+    await expect(page.locator('h1').filter({ visible: true }).first()).toHaveText(/\S/, {
+      timeout: 15_000,
+    });
+    await expect(page.locator('#signup [data-signup-form]').first()).toBeAttached();
+    await expectNoSidewaysScroll(page);
+  });
+
+  test('/events shows the schedule and opens a session', async ({ page }) => {
+    await page.goto('/events');
+    const session = page.getByRole('button').filter({ hasText: FIXTURE_EVENTS.guided.title });
+    await expect(session).toBeVisible();
+    await clickAfterScroll(session);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Close details' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expectNoSidewaysScroll(page);
+  });
+
+  for (const path of ['/intro', '/shop', '/blog']) {
+    test(`${path} renders`, async ({ page }) => {
+      const response = await page.goto(path);
+      expect(response?.status(), `status of ${path}`).toBe(200);
+      await expect(page.locator('h1').filter({ visible: true }).first()).toHaveText(/\S/, {
+        timeout: 15_000,
+      });
+      await expectNoSidewaysScroll(page);
+    });
+  }
+});
 
 test('links in the header and footer resolve', async ({ page, request }) => {
   await page.goto('/');

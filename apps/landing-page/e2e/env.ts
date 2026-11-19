@@ -10,6 +10,15 @@ export const MOCK_URL = `http://localhost:${MOCK_PORT}`;
 export const E2E_SECRET = 'e2e-secret';
 
 /**
+ * Turnstile runs for real on both sides. In the browser, test.ts swaps
+ * Cloudflare's loader for a fake widget (stubTurnstile) that hands back
+ * TURNSTILE_TOKEN; on the server, the app's siteverify call goes to the mock
+ * server, which accepts only that token with only this secret.
+ */
+export const TURNSTILE_SECRET = 'e2e-turnstile-secret';
+export const TURNSTILE_TOKEN = 'e2e-turnstile-token';
+
+/**
  * Passed to `astro dev`. Variables already in the process environment take
  * priority over .env / .env.local, so this both points the upstreams at the
  * mock server and blanks every credential that would otherwise reach a real
@@ -27,8 +36,13 @@ export const APP_ENV: Record<string, string> = {
   INTEGRATIONS_API_URL: `${MOCK_URL}/integrations`,
   REFERRAL_API_SECRET: E2E_SECRET,
   PARTNER_API_SECRET: E2E_SECRET,
-  // Not configured: Redis, Google Places, PostHog, Momence OAuth, Mailchimp,
-  // Turnstile, admin list, webhooks.
+  // Turnstile (see TURNSTILE_SECRET): a site key so the forms run the widget,
+  // and siteverify -> mock server.
+  PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: 'e2e-site-key',
+  CLOUDFLARE_TURNSTILE_SECRET_KEY: TURNSTILE_SECRET,
+  CLOUDFLARE_TURNSTILE_VERIFY_URL: `${MOCK_URL}/turnstile/v0/siteverify`,
+  // Not configured: Redis (so rate limits fail open), Google Places, PostHog,
+  // Momence OAuth, Mailchimp, admin list, webhooks.
   KV_REST_API_URL: '',
   KV_REST_API_TOKEN: '',
   GOOGLE_PLACES_API_KEY: '',
@@ -46,8 +60,6 @@ export const APP_ENV: Record<string, string> = {
   MOMENCE_BACKFILL_SECRET: '',
   MAILCHIMP_API_KEY: '',
   MAILCHIMP_AUDIENCE_ID: '',
-  CLOUDFLARE_TURNSTILE_SECRET_KEY: '',
-  PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: '',
   ADMIN_EMAILS: '',
   // Root base path and a localhost site URL, whatever .env says.
   PUBLIC_ASTRO_BASE: '/',

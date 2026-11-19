@@ -171,7 +171,10 @@ function BookingRow({
   action: BookingRowAction;
 }) {
   return (
-    <div className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0">
+    <div
+      data-booking-option={minutes}
+      className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0"
+    >
       <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
         {durationRowLabel(minutes, fallbackLabel)}
       </span>

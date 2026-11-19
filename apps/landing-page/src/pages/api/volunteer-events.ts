@@ -8,12 +8,11 @@ import {
   sortEventsByDate,
   transformToEventItem,
 } from '@/lib/momence';
+import { MOMENCE_API_BASE } from '@/lib/momence-api';
 import type { MomenceEvent } from '@/lib/momence-types';
 import type { EventItem } from '@/lib/types';
 
 export const prerender = false;
-
-const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 interface VolunteerEventsApiResponse {
   events: EventItem[];
