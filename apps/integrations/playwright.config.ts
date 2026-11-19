@@ -10,6 +10,17 @@ import { APP_ENV, APP_PORT, MOCK_PORT } from './e2e/env';
 // auth.setup.ts runs first: it seeds the staff roster and signs each role in.
 export default definePyreConfig({
   port: APP_PORT,
+  // A side-by-side run (E2E_APP_PORT) keeps its own results; each run clears
+  // its output folder, which would otherwise wipe the other run's failures.
+  ...(process.env.E2E_APP_PORT && {
+    overrides: {
+      outputDir: `test-results/${APP_PORT}`,
+      reporter: [
+        ['list'],
+        ['html', { open: 'never', outputFolder: `playwright-report/${APP_PORT}` }],
+      ],
+    },
+  }),
   setup: { testMatch: /auth\.setup\.ts/ },
   webServers: [
     {
