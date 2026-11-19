@@ -8,10 +8,19 @@
 // Besides the app's routes it serves a small control API:
 //   GET  /__health            readiness probe for Playwright's webServer
 //   GET  /__requests          every request received since the last reset
-//   POST /__override          { method?, path, status?, json? } — answer that
-//                             route with a canned response instead
+//   POST /__override          { method?, path, status?, json?, bodyIncludes?,
+//                             times? } — answer that route with a canned
+//                             response instead; answers { id }
+//   DELETE /__override?id=    drop one override
+//   GET  /__unexpected        requests no route or override answered
+//   DELETE /__unexpected      clear that list
 //   POST /__reset             drop overrides and the request log
 // Tests drive it with `mockServerClient(url)`.
+//
+// An override can be scoped so parallel tests never see each other's: give it
+// `bodyIncludes` (a string only this test's request body contains, such as its
+// unique email or entity id) and/or `times` (answer that many requests, then
+// stop). Without either it answers every matching request until removed.
 
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 
@@ -53,6 +62,15 @@ export interface MockOverride {
   path: string;
   status?: number;
   json?: unknown;
+  /** Only requests whose path, query or body contains this string. */
+  bodyIncludes?: string;
+  /** Answer this many matching requests, then stand down. */
+  times?: number;
+}
+
+interface StoredOverride extends MockOverride {
+  id: string;
+  remaining: number;
 }
 
 export interface RecordedRequest {
@@ -79,8 +97,19 @@ function overrideKey(method: string | undefined, path: string): string {
 }
 
 export function createMockServer(options: MockServerOptions) {
-  const overrides = new Map<string, MockOverride>();
+  // Newest first, so a scoped override wins over an older blanket one.
+  let overrides: StoredOverride[] = [];
+  let overrideSeq = 0;
   const requests: RecordedRequest[] = [];
+  const unexpected: RecordedRequest[] = [];
+
+  const findOverride = (method: string, path: string, haystack: string) =>
+    overrides.find(
+      (o) =>
+        o.remaining > 0 &&
+        overrideKey(o.method, o.path) === overrideKey(method, path) &&
+        (o.bodyIncludes === undefined || haystack.includes(o.bodyIncludes))
+    );
 
   const findRoute = (method: string, path: string) =>
     options.routes.find(
@@ -107,16 +136,37 @@ export function createMockServer(options: MockServerOptions) {
     // -- Control API ---------------------------------------------------------
     if (url.pathname === '/__health') return send({ json: { ok: true } });
     if (url.pathname === '/__requests') return send({ json: requests });
+    if (url.pathname === '/__unexpected') {
+      if (method === 'DELETE') unexpected.length = 0;
+      return send({ json: unexpected });
+    }
     if (url.pathname === '/__reset' && method === 'POST') {
-      overrides.clear();
+      overrides = [];
       requests.length = 0;
+      return send({ json: { ok: true } });
+    }
+    if (url.pathname === '/__override' && method === 'DELETE') {
+      const id = url.searchParams.get('id');
+      overrides = overrides.filter((o) => o.id !== id);
       return send({ json: { ok: true } });
     }
     if (url.pathname === '/__override' && method === 'POST') {
       const override = body as MockOverride;
       if (!override?.path) return send({ status: 400, json: { error: 'path is required' } });
-      overrides.set(overrideKey(override.method, override.path), override);
-      return send({ json: { ok: true } });
+      const scoped = override.bodyIncludes !== undefined || override.times !== undefined;
+      // An unscoped override replaces the last one for its route, as before.
+      if (!scoped) {
+        const key = overrideKey(override.method, override.path);
+        overrides = overrides.filter(
+          (o) =>
+            overrideKey(o.method, o.path) !== key ||
+            o.bodyIncludes !== undefined ||
+            o.times !== undefined
+        );
+      }
+      const id = `o${++overrideSeq}`;
+      overrides.unshift({ ...override, id, remaining: override.times ?? Number.POSITIVE_INFINITY });
+      return send({ json: { ok: true, id } });
     }
 
     // -- App routes ----------------------------------------------------------
@@ -128,12 +178,21 @@ export function createMockServer(options: MockServerOptions) {
     });
     if (options.log) console.log(`[mock] ${method} ${url.pathname}`);
 
-    const override = overrides.get(overrideKey(method, url.pathname));
-    if (override) return send({ status: override.status ?? 200, json: override.json ?? {} });
+    const haystack = `${url.pathname}${url.search} ${
+      typeof body === 'string' ? body : JSON.stringify(body ?? '')
+    }`;
+    const override = findOverride(method, url.pathname, haystack);
+    if (override) {
+      override.remaining -= 1;
+      return send({ status: override.status ?? 200, json: override.json ?? {} });
+    }
 
     const route = findRoute(method, url.pathname);
-    if (!route)
+    if (!route) {
+      unexpected.push(requests[requests.length - 1] as RecordedRequest);
+      console.error(`[mock] unexpected ${method} ${url.pathname}`);
       return send({ status: 404, json: { error: `No mock for ${method} ${url.pathname}` } });
+    }
 
     try {
       send(
@@ -179,18 +238,32 @@ export async function runMockServer(options: MockServerOptions): Promise<void> {
 
 /** Drive a running mock server's control API from a test. */
 export function mockServerClient(baseUrl: string) {
-  const post = async (path: string, body?: unknown) => {
+  const call = async (method: string, path: string, body?: unknown) => {
     const res = await fetch(`${baseUrl}${path}`, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`Mock server ${path} returned ${res.status}`);
+    if (!res.ok) throw new Error(`Mock server ${method} ${path} returned ${res.status}`);
+    return res.json() as Promise<unknown>;
   };
 
   return {
-    override: (override: MockOverride) => post('/__override', override),
-    reset: () => post('/__reset'),
+    /** Answer a route with a canned response. Resolves to the override's id. */
+    override: async (override: MockOverride): Promise<string> =>
+      ((await call('POST', '/__override', override)) as { id: string }).id,
+    removeOverride: async (id: string): Promise<void> => {
+      await call('DELETE', `/__override?id=${encodeURIComponent(id)}`);
+    },
+    reset: async (): Promise<void> => {
+      await call('POST', '/__reset');
+    },
+    /** Requests no route or override answered (each got a 404). */
+    unexpected: async (): Promise<RecordedRequest[]> =>
+      (await call('GET', '/__unexpected')) as RecordedRequest[],
+    clearUnexpected: async (): Promise<void> => {
+      await call('DELETE', '/__unexpected');
+    },
     requests: async (): Promise<RecordedRequest[]> => {
       const res = await fetch(`${baseUrl}/__requests`);
       return (await res.json()) as RecordedRequest[];

@@ -24,7 +24,7 @@ Supabase stack). Start from whichever is closer to the new app.
 | `supabaseAdmin`, `ensureAuthUser`, `supabaseSessionCookies` | both | A service-role client for seeding and checking rows; an idempotent confirmed Auth user; a user's session as @supabase/ssr cookies, for someone the app's own sign-in would refuse |
 | `mailpitClient`, `emailLinks` | both | Read the stack's mail catcher: sign-in links and codes |
 | `REFERRAL`, `REFERRAL_UNKNOWN` | both | Shared contracts (`src/contracts/`): what one app's API answers, which another app's suite mocks. The owning app's suite checks its real endpoint against the same value, so the mock can't drift |
-| `createMockServer`, `runMockServer`, `mockServerClient` | `@pyre/e2e-utils/server` | A small HTTP server that plays the app's upstream APIs for its server-side code, plus a control API (`/__override`, `/__reset`, `/__requests`) |
+| `createMockServer`, `runMockServer`, `mockServerClient` | `@pyre/e2e-utils/server` | A small HTTP server that plays the app's upstream APIs for its server-side code, plus a control API (`/__override`, `/__reset`, `/__requests`, `/__unexpected`) |
 | `daysFromNow` | `@pyre/e2e-utils/server` | Fixture dates relative to now, so fixtures never go stale |
 
 Code that runs in a plain Node process, such as the mock server and its
@@ -71,14 +71,28 @@ running app must see should be seeded in the setup project. To start clean:
 `resetLocalSupabase(...)` (integrations: `yarn workspace @pyre/integrations
 e2e:supabase:reset`).
 
-### Mock server overrides are global
+### Scope mock server overrides
 
-`mockServerClient(url).override(...)` changes the answer for **every** worker,
-not just the calling test: the app's server calls carry nothing that ties them
-to a test. Keep overriding specs in their own file with
-`test.describe.configure({ mode: 'serial' })` and a `reset()` in `afterEach`,
-and only override upstream paths that no other spec depends on. Where that's
-not possible, use a distinct fixture id that only the overriding spec asks for.
+`mockServerClient(url).override(...)` is seen by **every** worker: the app's
+server calls carry nothing that ties them to a test. So scope an override to
+the calling test's own request with `bodyIncludes` (a string only its request
+contains: its unique email, or an entity id in the path) and/or `times` (answer
+that many requests, then stand down). `override` resolves to an id; remove it
+with `removeOverride(id)` when the test ends. An unscoped override answers
+every request on that route, so keep those for specs that run alone.
+
+### Unexpected upstream requests
+
+A request no route or override answers gets a 404 and is kept in
+`/__unexpected` (`mockServerClient(url).unexpected()`). A suite should fail
+the run when that list isn't empty (integrations does it in its global
+teardown), so a mock can't quietly answer an endpoint the app calls wrongly.
+
+### A second person in the same test
+
+`newPage({ storageState })` opens a page in its own browser context, on the
+project's device, with the same external-request blocking and browser-error
+guard as `page`. Use it rather than `browser.newContext()`.
 
 ## Adding a suite for another app
 

@@ -43,6 +43,7 @@ const BLANK = Object.fromEntries(
     'MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS',
     'MAILCHIMP_API_KEY',
     'MAILCHIMP_AUDIENCE_ID',
+    'MAILCHIMP_API_BASE',
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
     'POSTHOG_API_KEY',
@@ -121,6 +122,11 @@ export const APP_ENV: Record<string, string> = {
   RESEND_API_KEY: 're_e2e',
   RESEND_FROM: 'Pyre E2E <e2e@pyresauna.com>',
 
+  // Mailchimp -> mock server: the suppression mirror and subscriber sync.
+  MAILCHIMP_API_BASE: `${MOCK_URL}/mailchimp/3.0`,
+  MAILCHIMP_API_KEY: 'e2e-key-us1',
+  MAILCHIMP_AUDIENCE_ID: 'e2e-audience',
+
   // Shared secrets.
   CRON_SECRET: SECRETS.cron,
   UNSUBSCRIBE_SECRET: SECRETS.unsubscribe,
@@ -134,6 +140,10 @@ export const APP_ENV: Record<string, string> = {
   MAILCHIMP_WEBHOOK_SECRET: SECRETS.mailchimpWebhook,
   MAILCHIMP_WEBHOOK_SIGNING_SECRET: SECRETS.mailchimpSigning,
   RESEND_WEBHOOK_SECRET: SECRETS.resendWebhook,
+
+  // The tag a referrer's reward rides on (left blank, the app would look up a
+  // tag named "").
+  REFERRAL_REWARD_TAG_NAME: 'referral-reward',
 
   VERCEL_PROJECT_PRODUCTION_URL: `localhost:${APP_PORT}`,
 };

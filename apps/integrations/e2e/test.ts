@@ -5,6 +5,7 @@ import { type APIRequestContext, type Page, request as playwrightRequest } from 
 import {
   createTest,
   expect,
+  type MockOverride,
   mockServerClient,
   supabaseAdmin,
   waitForHydration,
@@ -20,10 +21,29 @@ const base = createTest({
   ],
 });
 
+/** An upstream failure for one test: `bodyIncludes` ties it to that test's own request. */
+export type UpstreamFailure = Omit<MockOverride, 'bodyIncludes'> & {
+  /** A string only this test's request carries (its unique email, an entity id in the path). */
+  bodyIncludes: string;
+  /** Defaults to 503. */
+  status?: number;
+};
+
 interface Fixtures {
   db: SupabaseClient;
   /** An API client signed in as `role` (its saved session), closed when the test ends. */
   as: (role: Role) => Promise<APIRequestContext>;
+  /**
+   * A page signed in as `role` beside the test's own `page` (a second person
+   * on the same device), with the same request blocking and error guard.
+   */
+  pageAs: (role: Role) => Promise<Page>;
+  /**
+   * Make upstream calls (Momence, Resend) fail for this test only. Each
+   * failure is scoped to requests carrying `bodyIncludes` and removed when
+   * the test ends, so tests running beside it never see it.
+   */
+  upstream: { fail: (failure: UpstreamFailure) => Promise<void> };
 }
 
 export const test = base.extend<Fixtures>({
@@ -47,6 +67,28 @@ export const test = base.extend<Fixtures>({
       return context;
     });
     await Promise.all(contexts.map((context) => context.dispose()));
+  },
+  pageAs: async ({ newPage }, use) => {
+    await use(async (role) => {
+      if (!role.storageState) throw new Error(`${role.email} has no saved session`);
+      return newPage({ storageState: role.storageState });
+    });
+  },
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixtures need the destructuring
+  upstream: async ({}, use) => {
+    const ids: string[] = [];
+    await use({
+      fail: async ({ status = 503, json, ...failure }) => {
+        ids.push(
+          await mock.override({
+            status,
+            json: json ?? { message: 'E2E upstream failure' },
+            ...failure,
+          })
+        );
+      },
+    });
+    await Promise.all(ids.map((id) => mock.removeOverride(id)));
   },
 });
 

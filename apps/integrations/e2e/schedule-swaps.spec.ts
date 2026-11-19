@@ -5,11 +5,9 @@ import type { APIRequestContext } from '@playwright/test';
 import { DESKTOP_ONLY_TAG } from '@pyre/e2e-utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type Role, STAFF, STAFF_2 } from './roles';
-import { expect, type SeededShift, type ShiftInput, test } from './schedule-helpers';
+import { expect, type SeededShift, type ShiftInput, type TestDays, test } from './schedule-helpers';
 
 test.describe.configure({ mode: 'parallel' });
-
-const farDay = () => 30 + Math.floor(Math.random() * 270);
 
 async function assignee(db: SupabaseClient, shiftId: string): Promise<string[]> {
   const { data } = await db.from('shift_assignments').select('staff_id').eq('shift_id', shiftId);
@@ -25,12 +23,14 @@ test.describe('swaps', { tag: DESKTOP_ONLY_TAG }, () => {
     as,
     db,
     seedShift,
+    days,
   }: {
     as: (role: Role) => Promise<APIRequestContext>;
     db: SupabaseClient;
     seedShift: (input?: ShiftInput) => Promise<SeededShift>;
+    days: TestDays;
   }) {
-    const day = farDay();
+    const day = days.ahead(0);
     const shiftA = await seedShift({ staff: [STAFF], daysAhead: day });
     const shiftB = await seedShift({ staff: [STAFF_2], daysAhead: day + 1 });
     const sam = await as(STAFF);
@@ -55,8 +55,8 @@ test.describe('swaps', { tag: DESKTOP_ONLY_TAG }, () => {
     return { shiftA, shiftB, sam, casey, offerId: (offer as { id: string }).id };
   }
 
-  test('accepting trades the two shifts', async ({ as, db, seedShift, staffId }) => {
-    const { shiftA, shiftB, sam, casey, offerId } = await offerSetup({ as, db, seedShift });
+  test('accepting trades the two shifts', async ({ as, db, seedShift, staffId, days }) => {
+    const { shiftA, shiftB, sam, casey, offerId } = await offerSetup({ as, db, seedShift, days });
 
     // Only the person who asked can accept.
     expect(
@@ -79,8 +79,14 @@ test.describe('swaps', { tag: DESKTOP_ONLY_TAG }, () => {
     expect((sub as { status: string }).status).not.toBe('open');
   });
 
-  test('declining leaves both shifts as they were', async ({ as, db, seedShift, staffId }) => {
-    const { shiftA, shiftB, sam, offerId } = await offerSetup({ as, db, seedShift });
+  test('declining leaves both shifts as they were', async ({
+    as,
+    db,
+    seedShift,
+    staffId,
+    days,
+  }) => {
+    const { shiftA, shiftB, sam, offerId } = await offerSetup({ as, db, seedShift, days });
 
     const declined = await sam.patch('/api/admin/shift-swap', {
       data: { id: offerId, action: 'decline' },
@@ -97,8 +103,8 @@ test.describe('swaps', { tag: DESKTOP_ONLY_TAG }, () => {
     expect(await assignee(db, shiftB.id)).toEqual([await staffId(STAFF_2)]);
   });
 
-  test('only the offerer can withdraw an offer', async ({ as, db, seedShift }) => {
-    const { sam, casey, offerId } = await offerSetup({ as, db, seedShift });
+  test('only the offerer can withdraw an offer', async ({ as, db, seedShift, days }) => {
+    const { sam, casey, offerId } = await offerSetup({ as, db, seedShift, days });
 
     expect(
       (
@@ -118,8 +124,8 @@ test.describe('swaps', { tag: DESKTOP_ONLY_TAG }, () => {
     expect((offer as { status: string }).status).toBe('withdrawn');
   });
 
-  test('you cannot offer a swap on your own sub request', async ({ as, db, seedShift }) => {
-    const day = farDay();
+  test('you cannot offer a swap on your own sub request', async ({ as, db, seedShift, days }) => {
+    const day = days.ahead(0);
     const shiftA = await seedShift({ staff: [STAFF], daysAhead: day });
     const shiftB = await seedShift({ staff: [STAFF], daysAhead: day + 1 });
     const sam = await as(STAFF);

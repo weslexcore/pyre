@@ -25,19 +25,35 @@ test.describe('running a checklist', () => {
 
     await expect
       .poll(async () => {
-        const { data } = await db
+        const { data, error } = await db
           .from('sop_runs')
           .select('status, started_by, ended_by')
           .eq('sop_id', sop.id);
+        expect(error).toBeNull();
         return data;
       })
       .toEqual([{ status: 'completed', started_by: STAFF.email, ended_by: STAFF.email }]);
-    const { count } = await db
+    // The checks of this document's one run: every item, each once, by Sam.
+    const { data: run, error: runError } = await db
+      .from('sop_runs')
+      .select('id')
+      .eq('sop_id', sop.id)
+      .single();
+    expect(runError).toBeNull();
+    const { data: checks, error: checksError } = await db
       .from('sop_run_checks')
-      .select('id', { count: 'exact', head: true })
-      .eq('checked_by', STAFF.email)
-      .in('item_text', CHECKLIST_ITEMS);
-    expect(count).toBeGreaterThanOrEqual(3);
+      .select('item_index, item_text, checked_by, skipped')
+      .eq('run_id', (run as { id: string }).id)
+      .order('item_index');
+    expect(checksError).toBeNull();
+    expect(checks).toEqual(
+      CHECKLIST_ITEMS.map((item_text, item_index) => ({
+        item_index,
+        item_text,
+        checked_by: STAFF.email,
+        skipped: false,
+      }))
+    );
   });
 });
 
@@ -90,6 +106,45 @@ test.describe('the runs API', { tag: DESKTOP_ONLY_TAG }, () => {
       [0, STAFF.email],
       [2, STAFF_2.email],
     ]);
+  });
+
+  test('people starting the same checklist at once share one run', async ({ as, db }) => {
+    // Three people tap the first item of a checklist nobody has started, at
+    // the same moment: one run opens and the others join it.
+    const people = [STAFF, STAFF_2, SHIFT_LEAD];
+    const clients = await Promise.all(people.map((role) => as(role)));
+    const responses = await Promise.all(
+      clients.map((client, index) =>
+        client.post('/api/admin/sop-runs', start([{ itemIndex: index }]))
+      )
+    );
+    const statuses = responses.map((response) => response.status());
+    expect(
+      statuses.filter((status) => status === 201),
+      `statuses ${statuses}`
+    ).toHaveLength(1);
+    expect(
+      statuses.filter((status) => status === 200),
+      `statuses ${statuses}`
+    ).toHaveLength(2);
+    const runIds = await Promise.all(
+      responses.map(async (response) => ((await response.json()) as { run: { id: string } }).run.id)
+    );
+    expect(new Set(runIds).size, 'every start answers with the same run').toBe(1);
+
+    const { data: runs, error } = await db.from('sop_runs').select('id').eq('sop_id', sop.id);
+    expect(error).toBeNull();
+    expect(runs).toEqual([{ id: runIds[0] }]);
+    // Everyone's tap landed on that run, so it's complete.
+    const { data: checks, error: checksError } = await db
+      .from('sop_run_checks')
+      .select('item_index, checked_by')
+      .eq('run_id', runIds[0])
+      .order('item_index');
+    expect(checksError).toBeNull();
+    expect(checks).toEqual(
+      people.map((role, item_index) => ({ item_index, checked_by: role.email }))
+    );
   });
 
   test('a required item cannot be skipped; an optional one can', async ({ as }) => {

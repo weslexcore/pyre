@@ -6,19 +6,17 @@ import { request } from '@playwright/test';
 import { DESKTOP_ONLY_TAG } from '@pyre/e2e-utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { APP_URL } from './env';
-import { ADMIN, STAFF, STAFF_2 } from './roles';
+import { ADMIN, MANAGER, SHIFT_LEAD, STAFF, STAFF_2 } from './roles';
 import { boardUrl, expect, type SeededShift, test } from './schedule-helpers';
 import { mock, open } from './test';
 
-/** Far enough out that no other test's time off lands on the same day. */
-const farDay = () => 30 + Math.floor(Math.random() * 270);
-
 async function subFor(db: SupabaseClient, shiftId: string) {
-  const { data } = await db
+  const { data, error } = await db
     .from('sub_requests')
     .select('id, status, claimed_by_staff_id, time_off_id')
     .eq('shift_id', shiftId)
     .maybeSingle();
+  expect(error).toBeNull();
   return data as {
     id: string;
     status: string;
@@ -28,7 +26,11 @@ async function subFor(db: SupabaseClient, shiftId: string) {
 }
 
 async function assigneeIds(db: SupabaseClient, shiftId: string): Promise<string[]> {
-  const { data } = await db.from('shift_assignments').select('staff_id').eq('shift_id', shiftId);
+  const { data, error } = await db
+    .from('shift_assignments')
+    .select('staff_id')
+    .eq('shift_id', shiftId);
+  expect(error).toBeNull();
   return ((data ?? []) as { staff_id: string }[]).map((row) => row.staff_id);
 }
 
@@ -65,11 +67,11 @@ test.describe('on the board', () => {
 
   test('a teammate takes a shift someone asked a sub for', async ({
     page,
-    browser,
+    pageAs,
     db,
     seedShift,
     staffId,
-  }, testInfo) => {
+  }) => {
     const shift = await seedShift({ staff: [STAFF] });
 
     // Sam asks for a sub from their own shift card.
@@ -105,18 +107,9 @@ test.describe('on the board', () => {
       )
       .toBe(true);
 
-    // Casey takes it from the board, on the same kind of device.
-    const { viewport, userAgent, isMobile, hasTouch, deviceScaleFactor } = testInfo.project.use;
-    const casey = await browser.newContext({
-      viewport,
-      userAgent,
-      isMobile,
-      hasTouch,
-      deviceScaleFactor,
-      timezoneId: 'America/New_York',
-      storageState: STAFF_2.storageState as string,
-    });
-    const caseyPage = await casey.newPage();
+    // Casey takes it from the board, on the same kind of device (and under
+    // the same browser-error guard as Sam's page).
+    const caseyPage = await pageAs(STAFF_2);
     await open(caseyPage, boardUrl(shift));
     await caseyPage
       .locator(`#shift-${shift.id}`)
@@ -127,13 +120,12 @@ test.describe('on the board', () => {
     await expect.poll(async () => (await subFor(db, shift.id))?.status).toBe('claimed');
     // The claim marks the request first, then moves the assignment.
     await expect.poll(() => assigneeIds(db, shift.id)).toEqual([caseyId]);
-    await casey.close();
   });
 });
 
 test.describe('the emailed claim link', () => {
   test('takes the shift without signing in', async ({ as, db, seedShift, staffId, page }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     const sam = await as(STAFF);
     expect((await sam.post('/api/admin/shift-sub', { data: { shiftId: shift.id } })).status()).toBe(
       201
@@ -165,7 +157,7 @@ test.describe('the emailed claim link', () => {
 
 test.describe('the rules', { tag: DESKTOP_ONLY_TAG }, () => {
   test('you cannot take your own sub request', async ({ as, db, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     const sam = await as(STAFF);
     await sam.post('/api/admin/shift-sub', { data: { shiftId: shift.id } });
     const sub = await subFor(db, shift.id);
@@ -178,7 +170,7 @@ test.describe('the rules', { tag: DESKTOP_ONLY_TAG }, () => {
   });
 
   test('a claimed shift cannot be claimed again', async ({ as, db, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     await (await as(STAFF)).post('/api/admin/shift-sub', { data: { shiftId: shift.id } });
     const sub = await subFor(db, shift.id);
 
@@ -196,8 +188,50 @@ test.describe('the rules', { tag: DESKTOP_ONLY_TAG }, () => {
     expect((await second.json()).error).toMatch(/already took this shift/);
   });
 
-  test('a shift in the past cannot be subbed out', async ({ as, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: -3 });
+  test('people taking the same sub at once: exactly one gets it', async ({
+    as,
+    db,
+    seedShift,
+    staffId,
+  }) => {
+    const shift = await seedShift({ staff: [STAFF] });
+    const asked = await (await as(STAFF)).post('/api/admin/shift-sub', {
+      data: { shiftId: shift.id },
+    });
+    expect(asked.status(), await asked.text()).toBe(201);
+    const sub = await subFor(db, shift.id);
+    expect(sub?.status).toBe('open');
+
+    // Three teammates tap "Take shift" at the same moment.
+    const rivals = [STAFF_2, SHIFT_LEAD, MANAGER];
+    const clients = await Promise.all(rivals.map((role) => as(role)));
+    const responses = await Promise.all(
+      clients.map((client) =>
+        client.patch('/api/admin/shift-sub', { data: { id: sub?.id, action: 'claim' } })
+      )
+    );
+    const statuses = responses.map((response) => response.status());
+    expect(
+      statuses.filter((status) => status === 200),
+      `statuses ${statuses}`
+    ).toHaveLength(1);
+    expect(
+      statuses.filter((status) => status === 409),
+      `statuses ${statuses}`
+    ).toHaveLength(2);
+    for (const lost of responses.filter((response) => response.status() === 409)) {
+      expect((await lost.json()).error).toMatch(/already took this shift/);
+    }
+
+    // The one who won is on the shift, alone, and the request names them.
+    const winnerId = await staffId(rivals[statuses.indexOf(200)]);
+    const claimed = await subFor(db, shift.id);
+    expect(claimed).toMatchObject({ status: 'claimed', claimed_by_staff_id: winnerId });
+    await expect.poll(() => assigneeIds(db, shift.id)).toEqual([winnerId]);
+  });
+
+  test('a shift in the past cannot be subbed out', async ({ as, seedShift, days }) => {
+    const shift = await seedShift({ staff: [STAFF], daysAhead: days.past(2) });
     const response = await (await as(STAFF)).post('/api/admin/shift-sub', {
       data: { shiftId: shift.id },
     });
@@ -206,7 +240,7 @@ test.describe('the rules', { tag: DESKTOP_ONLY_TAG }, () => {
   });
 
   test('you can only ask for a sub on your own shift', async ({ as, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     const response = await (await as(STAFF_2)).post('/api/admin/shift-sub', {
       data: { shiftId: shift.id },
     });
@@ -218,7 +252,7 @@ test.describe('the rules', { tag: DESKTOP_ONLY_TAG }, () => {
     db,
     seedShift,
   }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     await (await as(STAFF)).post('/api/admin/shift-sub', { data: { shiftId: shift.id } });
     const sub = await subFor(db, shift.id);
     expect(sub?.time_off_id).toBeTruthy();

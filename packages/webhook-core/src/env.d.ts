@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly KV_REST_API_TOKEN?: string;
   readonly MAILCHIMP_API_KEY?: string;
   readonly MAILCHIMP_AUDIENCE_ID?: string;
+  readonly MAILCHIMP_API_BASE?: string;
 }
 
 interface ImportMeta {

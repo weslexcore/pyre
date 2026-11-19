@@ -8,8 +8,6 @@ import { expect, test } from './schedule-helpers';
 
 test.describe.configure({ mode: 'parallel' });
 
-const farDay = () => 30 + Math.floor(Math.random() * 270);
-
 test.describe('time off', { tag: DESKTOP_ONLY_TAG }, () => {
   test('staff log their own, and only their own; a manager logs anyone’s', async ({
     as,
@@ -18,7 +16,7 @@ test.describe('time off', { tag: DESKTOP_ONLY_TAG }, () => {
     seedShift,
   }, testInfo) => {
     // Any seeded shift gives a future date to book against.
-    const { date } = await seedShift({ daysAhead: farDay() });
+    const { date } = await seedShift();
     const note = uniqueTag(testInfo, 'time off');
     const entry = (forRole: string) => ({
       staffId: forRole,
@@ -59,7 +57,7 @@ test.describe('picking up a shift', { tag: DESKTOP_ONLY_TAG }, () => {
     seedShift,
     staffId,
   }) => {
-    const shift = await seedShift({ daysAhead: farDay() });
+    const shift = await seedShift();
     const asked = await (await as(STAFF)).post('/api/admin/shift-requests', {
       data: { shiftId: shift.id, note: 'Happy to cover' },
     });
@@ -91,7 +89,7 @@ test.describe('picking up a shift', { tag: DESKTOP_ONLY_TAG }, () => {
   });
 
   test('you can’t ask for a shift you’re already on', async ({ as, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF] });
     const response = await (await as(STAFF)).post('/api/admin/shift-requests', {
       data: { shiftId: shift.id },
     });
@@ -103,7 +101,6 @@ test.describe('changing your hours', { tag: DESKTOP_ONLY_TAG }, () => {
   test('a manager approves new hours and the shift follows', async ({ as, db, seedShift }) => {
     const shift = await seedShift({
       staff: [STAFF],
-      daysAhead: farDay(),
       startsAt: '10:00',
       endsAt: '14:00',
     });
@@ -132,7 +129,7 @@ test.describe('changing your hours', { tag: DESKTOP_ONLY_TAG }, () => {
   });
 
   test('you can only change your own hours', async ({ as, seedShift }) => {
-    const shift = await seedShift({ staff: [STAFF_2], daysAhead: farDay() });
+    const shift = await seedShift({ staff: [STAFF_2] });
     const response = await (await as(STAFF)).post('/api/admin/hours-change-requests', {
       data: { assignmentId: shift.assignments[STAFF_2.email], startsAt: '06:00', endsAt: '23:00' },
     });
@@ -155,7 +152,7 @@ test.describe('changing the schedule', { tag: DESKTOP_ONLY_TAG }, () => {
       const created = await (await as(MANAGER)).post('/api/admin/shifts', { data: fields });
       expect(created.status(), await created.text()).toBeLessThan(300);
 
-      const shift = await seedShift({ daysAhead: farDay() });
+      const shift = await seedShift();
       expect(
         (
           await (

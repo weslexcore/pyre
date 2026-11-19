@@ -18,6 +18,17 @@ test('checking a guest in, out, and undoing it', async ({ page, db }, testInfo) 
     ...sessionAround(10),
   });
   const booking = await addBooking({ sessionId: session.id, memberId: guest.id });
+  /** The booking's check-out time. Fails when the read errors or the row is gone. */
+  const checkedOutAt = async (): Promise<string | null> => {
+    const { data, error } = await db
+      .from('guest_floor_checkins')
+      .select('checked_out_at')
+      .eq('booking_id', booking.id)
+      .maybeSingle();
+    expect(error).toBeNull();
+    expect(data, 'the check-in row').not.toBeNull();
+    return (data as { checked_out_at: string | null }).checked_out_at;
+  };
 
   await open(page, '/admin/guests/check-ins');
   const row = page.getByRole('listitem').filter({ hasText: guest.name }).last();
@@ -40,15 +51,10 @@ test('checking a guest in, out, and undoing it', async ({ page, db }, testInfo) 
   const checkedIn = page.getByRole('listitem').filter({ hasText: guest.name }).last();
   await checkedIn.getByRole('button', { name: 'Check out' }).click();
   await expect
-    .poll(async () => {
-      const { data } = await db
-        .from('guest_floor_checkins')
-        .select('checked_out_at')
-        .eq('booking_id', booking.id)
-        .single();
-      return data?.checked_out_at !== null;
+    .poll(async () => Date.parse((await checkedOutAt()) ?? ''), {
+      message: 'the check-out time is recorded',
     })
-    .toBe(true);
+    .not.toBeNaN();
 
   await page
     .getByRole('listitem')
@@ -56,16 +62,7 @@ test('checking a guest in, out, and undoing it', async ({ page, db }, testInfo) 
     .last()
     .getByRole('button', { name: 'Undo check-out' })
     .click();
-  await expect
-    .poll(async () => {
-      const { data } = await db
-        .from('guest_floor_checkins')
-        .select('checked_out_at')
-        .eq('booking_id', booking.id)
-        .single();
-      return data?.checked_out_at;
-    })
-    .toBeNull();
+  await expect.poll(checkedOutAt, { message: 'the check-out is cleared' }).toBeNull();
 
   // Undoing the check-in (under Adjust) asks first, then clears it here and
   // at Momence.

@@ -23,12 +23,13 @@ test.describe('reading a message', () => {
       requiresAck: true,
     });
 
-    const { data: notice } = await db
+    const { data: notice, error: noticeError } = await db
       .from('staff_notifications')
       .select('kind, read_at')
       .eq('recipient_email', STAFF.email)
       .eq('source_id', message.id)
       .single();
+    expect(noticeError).toBeNull();
     expect(notice).toEqual({ kind: 'admin_message', read_at: null });
 
     await open(page, '/admin/messages');
@@ -55,19 +56,21 @@ test.describe('reading a message', () => {
     await expect(page.getByText('Got it,')).toBeVisible();
 
     // Opening the message marked its notice read.
-    const { data: read } = await db
+    const { data: read, error: readError } = await db
       .from('staff_notifications')
       .select('read_at')
       .eq('recipient_email', STAFF.email)
       .eq('source_id', message.id)
       .eq('kind', 'admin_message')
       .single();
-    expect(read?.read_at).not.toBeNull();
+    expect(readError).toBeNull();
+    expect(Date.parse(read?.read_at ?? ''), 'read_at is a timestamp').not.toBeNaN();
 
-    const { data: acks } = await db
+    const { data: acks, error: acksError } = await db
       .from('admin_message_acks')
       .select('email')
       .eq('message_id', message.id);
+    expect(acksError).toBeNull();
     expect(acks).toEqual([{ email: STAFF.email }]);
 
     await expect
@@ -103,7 +106,7 @@ test.describe('the messages API', { tag: DESKTOP_ONLY_TAG }, () => {
     expect(reply.status()).toBe(404);
   });
 
-  test('acknowledging is once, and only where it is asked for', async ({ as }, testInfo) => {
+  test('acknowledging is once, and only where it is asked for', async ({ as, db }, testInfo) => {
     const admin = await as(ADMIN);
     const staff = await as(STAFF);
     const { message: asks } = await postMessage(admin, {
@@ -116,9 +119,21 @@ test.describe('the messages API', { tag: DESKTOP_ONLY_TAG }, () => {
     expect(first.status()).toBe(200);
     const second = await staff.post('/api/admin/message-acks', { data: { messageId: asks.id } });
     expect(second.status()).toBe(200);
-    const at = async (response: typeof first) =>
-      JSON.stringify(await response.json()).match(/"acknowledged_at":"([^"]+)"/)?.[1];
-    expect(await at(second)).toBe(await at(first));
+    // The second acknowledgement keeps the first one's time.
+    const at = async (response: typeof first) => {
+      const { acknowledgedAt } = (await response.json()) as { acknowledgedAt?: string };
+      expect(Date.parse(acknowledgedAt ?? ''), 'acknowledgedAt is a timestamp').not.toBeNaN();
+      return acknowledgedAt as string;
+    };
+    const firstAt = await at(first);
+    expect(await at(second)).toBe(firstAt);
+    const { data: ackRows, error: ackError } = await db
+      .from('admin_message_acks')
+      .select('acknowledged_at')
+      .eq('message_id', asks.id);
+    expect(ackError).toBeNull();
+    expect(ackRows).toHaveLength(1);
+    expect(Date.parse(ackRows?.[0]?.acknowledged_at)).toBe(Date.parse(firstAt as string));
 
     // The author doesn't acknowledge their own message.
     const own = await admin.post('/api/admin/message-acks', { data: { messageId: asks.id } });
@@ -172,6 +187,43 @@ test.describe('the messages API', { tag: DESKTOP_ONLY_TAG }, () => {
 
     const again = await admin.patch('/api/admin/messages', { data: { id: draft.id, send: true } });
     expect(again.status()).toBe(409);
+  });
+
+  test('sending a draft twice at once sends it once', async ({ as, db }, testInfo) => {
+    const admin = await as(ADMIN);
+    const { message: draft } = await postMessage(admin, {
+      title: uniqueTag(testInfo, 'Double send'),
+      audienceEmails: [STAFF.email, STAFF_2.email],
+      draft: true,
+    });
+
+    // Two tabs (or a double tap) send the same draft at the same moment.
+    const second = await as(ADMIN);
+    const responses = await Promise.all(
+      [admin, second].map((client) =>
+        client.patch('/api/admin/messages', { data: { id: draft.id, send: true, email: false } })
+      )
+    );
+    const statuses = responses.map((response) => response.status()).sort();
+    expect(statuses).toEqual([200, 409]);
+
+    // One send: each person in the audience is notified once.
+    const { data: notices, error } = await db
+      .from('staff_notifications')
+      .select('recipient_email')
+      .eq('source_id', draft.id)
+      .eq('kind', 'admin_message');
+    expect(error).toBeNull();
+    expect((notices ?? []).map((n) => n.recipient_email).sort()).toEqual(
+      [STAFF.email, STAFF_2.email].sort()
+    );
+    const { data: sent, error: sentError } = await db
+      .from('admin_messages')
+      .select('sent_at')
+      .eq('id', draft.id)
+      .single();
+    expect(sentError).toBeNull();
+    expect(Date.parse(sent?.sent_at ?? '')).not.toBeNaN();
   });
 
   test('only admins post, and a stale edit is refused', async ({ as }, testInfo) => {
