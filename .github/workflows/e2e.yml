@@ -130,9 +130,18 @@ jobs:
           key: apt-playwright-${{ steps.image.outputs.os }}-${{ steps.playwright.outputs.version }}
           restore-keys: apt-playwright-${{ steps.image.outputs.os }}-
 
+      # A mirror can also stall outright (one run sat here for 29 minutes), so
+      # apt gives up on a dead connection and retries, and the step has its
+      # own timeout well inside the job's.
       - name: Install Playwright system dependencies
+        timeout-minutes: 10
         run: |
-          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs > /dev/null
+          printf '%s\n' \
+            'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
+            'Acquire::Retries "5";' \
+            'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' \
+            | sudo tee /etc/apt/apt.conf.d/99e2e > /dev/null
           if compgen -G ~/.cache/apt-debs/'*.deb' > /dev/null; then
             sudo cp ~/.cache/apt-debs/*.deb /var/cache/apt/archives/
           fi
