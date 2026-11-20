@@ -22,6 +22,15 @@
 //                                ...payload, shiftNoteId?, rationale }] }
 //                      → { suggestions, reviewer } | 4xx { error, index? }
 //                      (one batch, read out of shift notes, approved together)
+//     op 'schedule_draft'  → { weekStart } the week's open draft, item by item, and
+//                            whether a draft or revision is still being worked on
+//     op 'schedule_start'  → { weekStart, note? } start a fresh draft (the board's
+//                            Draft button, as the person) → { started, weekStart }
+//     op 'schedule_revise' → { weekStart, note } ask for changes to the open draft
+//                            → { started, weekStart }
+//   The schedule ops need the schedule's manage grant. Confirming parts of a
+//   draft is a proposal (op 'propose', kind schedule.review), applied only
+//   when the person presses Apply — the agent never makes a draft live.
 //
 // A suggestion is not a proposal: it goes through the shift-note suggestion
 // pipeline (lib/pyre-agent/suggestions) and is decided by whoever decides
@@ -32,7 +41,7 @@
 // /api/admin/knowledge-ask from the asker's own login — not from the model.
 
 import type { APIRoute } from 'astro';
-import { canViewPage } from '@/components/admin/adminTools';
+import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getAccess } from '@/lib/auth/access';
 import { canViewBoardsTool } from '@/lib/boards/access';
@@ -43,6 +52,7 @@ import { INVENTORY_HREF } from '@/lib/inventory/types';
 import { proposeAction } from '@/lib/pyre-agent/actions';
 import { inventoryForAgent } from '@/lib/pyre-agent/inventory';
 import { messageForAgent, messagesForAgent } from '@/lib/pyre-agent/messages';
+import { loadScheduleDraft } from '@/lib/pyre-agent/schedule';
 import {
   isPyreAgentSuggestionKind,
   PYRE_AGENT_SUGGESTION_KINDS,
@@ -55,14 +65,36 @@ import {
   type ActionKind,
   INVENTORY_ACTION_KINDS,
   PYRE_AGENT_HREF,
+  SCHEDULE_ACTION_KINDS,
 } from '@/lib/pyre-agent/types';
 import { boardForAgent, findCardsForAgent, goalsForAgent } from '@/lib/pyre-agent/workspace';
+import {
+  type DraftRequester,
+  isWeekStart,
+  parseDraftNote,
+  refineDraft,
+  startDraftRuns,
+} from '@/lib/schedule/draft-run';
 import type { SopViewer } from '@/lib/sops/levels';
+import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { isUuid } from '@/lib/suggestions/types';
 
 const NO_BOARDS = 'This person has no boards; there are no goals or tasks to show them';
 const NO_INVENTORY = 'This person does not hold the Inventory page; the list is not theirs to see';
+const NO_SCHEDULE =
+  'This person cannot manage the schedule, so they cannot draft or confirm one; a schedule manager or an admin can';
+const SCHEDULE_OPS = ['schedule_draft', 'schedule_start', 'schedule_revise'];
+
+/** The person as the schedule change log and the draft request name them. */
+async function requesterFor(email: string, sessionId: string): Promise<DraftRequester> {
+  const names = await getPeopleNames([email]);
+  return {
+    actor: { kind: 'user', email, label: names[email] || email },
+    origin: 'pyre_agent',
+    pyreSessionId: sessionId || null,
+  };
+}
 
 export const prerender = false;
 
@@ -101,6 +133,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (boardOps.includes(String(body.op)) && !boards) return json({ error: NO_BOARDS }, 403);
   if ((body.op === 'inventory' || body.op === 'suggest_inventory') && !inventory) {
     return json({ error: NO_INVENTORY }, 403);
+  }
+  const scheduleManage = hasScheduleManage(access);
+  if (SCHEDULE_OPS.includes(String(body.op)) && !scheduleManage) {
+    return json({ error: NO_SCHEDULE }, 403);
   }
 
   try {
@@ -153,8 +189,10 @@ export const POST: APIRoute = async ({ request }) => {
           return json({ error: `kind must be one of ${ACTION_KINDS.join(', ')}` }, 400);
         }
         const onInventory = (INVENTORY_ACTION_KINDS as readonly string[]).includes(kind);
+        const onSchedule = (SCHEDULE_ACTION_KINDS as readonly string[]).includes(kind);
         if (onInventory && !inventory) return json({ error: NO_INVENTORY }, 403);
-        if (!onInventory && !boards) return json({ error: NO_BOARDS }, 403);
+        if (onSchedule && !scheduleManage) return json({ error: NO_SCHEDULE }, 403);
+        if (!onInventory && !onSchedule && !boards) return json({ error: NO_BOARDS }, 403);
         const result = await proposeAction(
           db,
           access,
@@ -231,11 +269,59 @@ export const POST: APIRoute = async ({ request }) => {
         }
         return json({ suggestions: result.suggestions, reviewer: result.reviewer });
       }
+      case 'schedule_draft': {
+        if (!isWeekStart(input.weekStart)) {
+          return json({ error: 'weekStart must be a Monday as YYYY-MM-DD' }, 400);
+        }
+        return json(await loadScheduleDraft(db, input.weekStart));
+      }
+      case 'schedule_start': {
+        if (!isWeekStart(input.weekStart)) {
+          return json({ error: 'weekStart must be a Monday as YYYY-MM-DD' }, 400);
+        }
+        const note = parseDraftNote(input.note, false);
+        if (!note.ok) return json({ error: note.error }, 400);
+        const current = await loadScheduleDraft(db, input.weekStart);
+        if (current.inProgress) {
+          return json(
+            { error: 'A draft for this week is already being worked on; wait for it to land' },
+            409
+          );
+        }
+        const result = await startDraftRuns(
+          db,
+          [input.weekStart],
+          note.note,
+          await requesterFor(email, sessionId)
+        );
+        if (!result.ok) return json({ error: result.error }, result.status);
+        return json({
+          started: true,
+          weekStart: input.weekStart,
+          replacesOpenDraft: !!current.draft,
+          syncError: 'error' in result.sync ? result.sync.error : null,
+        });
+      }
+      case 'schedule_revise': {
+        if (!isWeekStart(input.weekStart)) {
+          return json({ error: 'weekStart must be a Monday as YYYY-MM-DD' }, 400);
+        }
+        const note = parseDraftNote(input.note, true);
+        if (!note.ok) return json({ error: note.error }, 400);
+        const result = await refineDraft(
+          db,
+          input.weekStart,
+          note.note,
+          await requesterFor(email, sessionId)
+        );
+        if (!result.ok) return json({ error: result.error }, result.status);
+        return json({ started: true, weekStart: input.weekStart });
+      }
       default:
         return json(
           {
             error:
-              'op must be goals, board, cards, inventory, propose, messages, message, suggest, or suggest_inventory',
+              'op must be goals, board, cards, inventory, propose, messages, message, suggest, suggest_inventory, schedule_draft, schedule_start, or schedule_revise',
           },
           400
         );

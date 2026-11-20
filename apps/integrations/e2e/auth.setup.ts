@@ -10,7 +10,7 @@ import { ensureAuthUser, expect, supabaseAdmin, supabaseSessionCookies } from '@
 import { SESSION_COOKIE } from '../src/lib/supabase/server';
 import { APP_URL, SUPABASE } from './env';
 import { LIVE_TEMPLATES, PARTNER, PARTNER_OFF, REFERRAL_TIER } from './partners';
-import { PASSWORD, ROLES } from './roles';
+import { OFF_SHIFT_DUTY, PASSWORD, ROLES } from './roles';
 
 setup('seed the staff roster and sign each role in', async () => {
   const db = supabaseAdmin(SUPABASE);
@@ -45,10 +45,19 @@ setup('seed the staff roster and sign each role in', async () => {
   // Settings the app caches for ~30s, so they are set before any spec runs.
   // Guest profiles are off by default, which sends most guest pages to
   // Check Ins; the schedule's request toggles are on by default, kept on here.
-  const settings = await db
-    .from('app_settings')
-    .upsert({ key: 'guests.profiles', value: true, updated_by: 'e2e' }, { onConflict: 'key' });
-  expect(settings.error, 'guests.profiles setting').toBeNull();
+  // Automatic suggestions are on, so a reply on a shift note has the
+  // suggester (the mock Eve app, where it only parks) look at the note again
+  // (shift-note-suggestions.spec.ts). Classification is off in the suite (no
+  // AI Gateway key), so nothing else starts a run on its own.
+  const settings = await db.from('app_settings').upsert(
+    [
+      { key: 'guests.profiles', value: true, updated_by: 'e2e' },
+      { key: 'suggestions.enabled', value: true, updated_by: 'e2e' },
+      { key: 'suggestions.auto', value: true, updated_by: 'e2e' },
+    ],
+    { onConflict: 'key' }
+  );
+  expect(settings.error, 'app settings').toBeNull();
   const toggles = await db.from('schedule_settings').upsert(
     ['shift_requests', 'sub_requests', 'hours_changes'].map((key) => ({
       key,
@@ -58,6 +67,21 @@ setup('seed the staff roster and sign each role in', async () => {
     { onConflict: 'key' }
   );
   expect(toggles.error, 'schedule request toggles').toBeNull();
+
+  // An off-shift duty (one person a day, outside any shift), so schedule
+  // drafts can hand one out (pyre-agent-schedule.spec.ts). The duty catalog
+  // is cached ~30s, so it is in place before any spec runs.
+  const duty = await db.from('shift_duties').upsert(
+    {
+      key: OFF_SHIFT_DUTY.key,
+      label: OFF_SHIFT_DUTY.label,
+      phase: 'off_shift',
+      sort_order: 900,
+      updated_by: 'e2e',
+    },
+    { onConflict: 'key' }
+  );
+  expect(duty.error, 'off-shift duty').toBeNull();
 
   // Partners, the referral tier and the template gate are cached ~30s too.
   // Reconciliation stays off: its quarterly email would go out on every

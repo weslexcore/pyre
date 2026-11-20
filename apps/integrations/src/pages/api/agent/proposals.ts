@@ -44,6 +44,7 @@ import { getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
 import { checkDraftDuties, type DraftDuty } from '@/lib/schedule/draft-duties';
+import { settleDraftRequest } from '@/lib/schedule/draft-run';
 import { loadDutyCatalog, loadDutyTraining } from '@/lib/schedule/duties';
 import { type OnCallRecommendation, recommendOnCall } from '@/lib/schedule/on-call';
 import { getShiftBufferSettings } from '@/lib/schedule/settings';
@@ -635,6 +636,12 @@ export const POST: APIRoute = async ({ request }) => {
     summary: `Proposed draft schedule for week of ${weekStart} (${draftShifts.length} shifts, ${draftAssignments.length} assignments, ${draftDuties.length} off-shift duty days)`,
     details: { source, agentSessionId, superseded: (openProposals ?? []).map((p) => p.id) },
   });
+
+  // Close the request this draft answers and tell whoever asked for it from
+  // Pyre Agent (lib/schedule/draft-run).
+  if (agentSessionId) {
+    await settleDraftRequest(db, agentSessionId, { id: proposalId, weekStart, summary });
+  }
 
   return json(
     {

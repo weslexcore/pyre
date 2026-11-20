@@ -18,7 +18,8 @@ export type ProposalKind =
   | 'board_card.comment'
   | 'goal_kpi.measure'
   | 'inventory.update'
-  | 'inventory.create';
+  | 'inventory.create'
+  | 'schedule.review';
 
 export type PyreOp =
   | 'goals'
@@ -29,15 +30,22 @@ export type PyreOp =
   | 'messages'
   | 'message'
   | 'suggest'
-  | 'suggest_inventory';
+  | 'suggest_inventory'
+  | 'schedule_draft'
+  | 'schedule_start'
+  | 'schedule_revise';
 
 /**
  * Which page an op or proposal needs the person to hold. Messages and
  * suggestions need none beyond Pyre Agent itself: everyone reads the
  * messages addressed to them, and anyone may suggest (someone else decides).
  */
-export function areaOf(op: PyreOp, kind?: ProposalKind): 'boards' | 'inventory' | 'any' {
+export function areaOf(
+  op: PyreOp,
+  kind?: ProposalKind
+): 'boards' | 'inventory' | 'schedule' | 'any' {
   if (op === 'messages' || op === 'message' || op === 'suggest') return 'any';
+  if (op.startsWith('schedule_') || kind === 'schedule.review') return 'schedule';
   if (op === 'inventory' || op === 'suggest_inventory') return 'inventory';
   if (op === 'propose' && kind?.startsWith('inventory.')) return 'inventory';
   return 'boards';
@@ -60,6 +68,12 @@ export async function callPyre(
   }
   if (area === 'inventory' && !scope.inventory) {
     return { error: 'This person does not hold the Inventory page, so the list is not available.' };
+  }
+  if (area === 'schedule' && !scope.scheduleManage) {
+    return {
+      error:
+        'This person cannot manage the schedule, so they cannot draft or confirm one. A schedule manager or an admin can.',
+    };
   }
   if (!scope.email) return { error: 'This session has no asker email; this is unavailable.' };
   const { status, body } = await postAgentApi('/api/agent/pyre', {

@@ -17,6 +17,11 @@ export interface SourceRecord {
   id: string;
   /** The text the agent reads, and the hash of it. */
   text: string;
+  /**
+   * The version of the record a run looked at. For a shift note this covers
+   * its replies too (./sources noteThreadHash), so a reply is a new version:
+   * the suggester reads the thread with the note.
+   */
   hash: string;
   /** A short name for links and notifications: "Maya's shift note (Sep 24)". */
   label: string;
@@ -42,6 +47,13 @@ export interface SuggestionSource {
    * AI button ignores this.
    */
   autoEligible(record: SourceRecord, signals: unknown, autoSignals: readonly string[]): boolean;
+  /**
+   * Whether someone replying on the record should start a run on its own,
+   * whatever the classifier found in the record: a reply can answer what the
+   * record asked ("yes, order a case — we have 2 left"), and only the
+   * suggester reads the thread. True for an open shift note.
+   */
+  replyEligible(record: SourceRecord): boolean;
   /**
    * Whether a new run over the record replaces its older pending suggestions
    * nobody has edited. True for a shift note, which the suggester re-reads
@@ -72,19 +84,42 @@ export function formatMonthDay(ymd: string): string {
   });
 }
 
+/** A comment in a note's thread, as far as the version hash cares. */
+export interface ThreadReply {
+  id: string;
+  body: string;
+}
+
+/**
+ * The version of a note the suggester reads: its body, plus the comments in
+ * its thread in writing order. A note nobody replied to hashes as its body
+ * alone, the same as before replies counted, so its runs and suggestions
+ * keep matching.
+ */
+export function noteThreadHash(body: string, replies: readonly ThreadReply[]): string {
+  if (replies.length === 0) return contentHash(body);
+  return contentHash(
+    [body, ...replies.map((r) => `\u0000reply ${r.id}\u0000${r.body}`)].join('\n')
+  );
+}
+
 type NoteFields = Pick<
   ShiftNoteRow,
   'id' | 'body' | 'note_date' | 'author_email' | 'status' | 'created_at'
 >;
 
-function noteRecord(note: NoteFields, names: Map<string, string>): SourceRecord {
+function noteRecord(
+  note: NoteFields,
+  names: Map<string, string>,
+  replies: readonly ThreadReply[]
+): SourceRecord {
   const email = note.author_email.trim().toLowerCase();
   const author = names.get(email);
   return {
     type: 'shift_note',
     id: note.id,
     text: note.body,
-    hash: contentHash(note.body),
+    hash: noteThreadHash(note.body, replies),
     label: `${author ? `${author}'s shift note` : 'Shift note'} (${formatMonthDay(note.note_date)})`,
     href: sourceHref('shift_note', note.id),
     closed: note.status === 'resolved',
@@ -106,6 +141,30 @@ async function staffNames(db: SupabaseClient, emails: string[]): Promise<Map<str
 }
 
 const NOTE_COLUMNS = 'id, body, note_date, author_email, status, created_at';
+
+/** The comments in each note's thread, oldest first, keyed by note id. Events are not replies. */
+async function threadReplies(
+  db: SupabaseClient,
+  noteIds: readonly string[]
+): Promise<Map<string, ThreadReply[]>> {
+  const out = new Map<string, ThreadReply[]>();
+  if (noteIds.length === 0) return out;
+  const { data, error } = await db
+    .from('shift_note_replies')
+    .select('id, note_id, body')
+    .in('note_id', [...noteIds])
+    .eq('kind', 'comment')
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw new Error(error.message);
+  for (const row of (data ?? []) as (ThreadReply & { note_id: string })[]) {
+    const list = out.get(row.note_id);
+    const reply = { id: row.id, body: row.body };
+    if (list) list.push(reply);
+    else out.set(row.note_id, [reply]);
+  }
+  return out;
+}
 
 interface ConversationStart {
   session_id: string;
@@ -159,7 +218,11 @@ export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> 
       const { data } = await db.from('shift_notes').select(NOTE_COLUMNS).eq('id', id).maybeSingle();
       const note = data as NoteFields | null;
       if (!note) return null;
-      return noteRecord(note, await staffNames(db, [note.author_email]));
+      const [names, replies] = await Promise.all([
+        staffNames(db, [note.author_email]),
+        threadReplies(db, [note.id]),
+      ]);
+      return noteRecord(note, names, replies.get(note.id) ?? []);
     },
     async loadMany(db, ids) {
       const out = new Map<string, SourceRecord>();
@@ -170,15 +233,26 @@ export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> 
         .in('id', [...ids]);
       if (error) throw new Error(error.message);
       const notes = (data ?? []) as NoteFields[];
-      const names = await staffNames(
-        db,
-        notes.map((n) => n.author_email)
-      );
-      for (const note of notes) out.set(note.id, noteRecord(note, names));
+      const [names, replies] = await Promise.all([
+        staffNames(
+          db,
+          notes.map((n) => n.author_email)
+        ),
+        threadReplies(
+          db,
+          notes.map((n) => n.id)
+        ),
+      ]);
+      for (const note of notes) {
+        out.set(note.id, noteRecord(note, names, replies.get(note.id) ?? []));
+      }
       return out;
     },
     autoEligible(record, signals, autoSignals) {
       return !record.closed && hasAutoSuggestSignal(signals, autoSignals);
+    },
+    replyEligible(record) {
+      return !record.closed;
     },
     rerunSupersedes: true,
   },
@@ -200,6 +274,9 @@ export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> 
     },
     // Pyre Agent suggests only when asked, inside the conversation.
     autoEligible() {
+      return false;
+    },
+    replyEligible() {
       return false;
     },
     rerunSupersedes: false,

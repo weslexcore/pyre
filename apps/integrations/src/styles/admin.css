@@ -213,3 +213,29 @@ html {
     transform: translateX(0);
   }
 }
+
+/* Pyre Agent's dock (PyreAgentDock): the launcher sits in the bottom-right
+ * corner, clear of the iPhone home indicator. A page with something of its
+ * own along the bottom edge marks it with data-dock-lift, and the launcher
+ * (and the desktop window) stand above it instead of covering it:
+ * "always" for a bar at every width, "below-lg" for one shown only below lg. */
+.pyre-agent-launcher {
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+body:has([data-dock-lift="always"]) .pyre-agent-launcher {
+  bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 48rem) {
+  .pyre-agent-window {
+    bottom: 1rem;
+  }
+  body:has([data-dock-lift="always"]) .pyre-agent-window {
+    bottom: 5rem;
+    max-height: calc(100dvh - 10rem);
+  }
+}
+@media (max-width: 63.99rem) {
+  body:has([data-dock-lift="below-lg"]) .pyre-agent-launcher {
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}

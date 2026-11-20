@@ -45,6 +45,10 @@ export const TOOL_LABELS: Record<string, string> = {
   propose_comment: 'Proposed a comment',
   propose_board: 'Proposed a board',
   propose_kpi_measurement: 'Proposed a KPI reading',
+  get_schedule_draft: 'Read the schedule draft',
+  draft_schedule: 'Started a schedule draft',
+  revise_schedule_draft: 'Asked for draft changes',
+  propose_schedule_review: 'Proposed a draft confirmation',
 };
 
 /** The same tools, present tense, for the line shown while one runs. */
@@ -64,6 +68,10 @@ export const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   propose_comment: 'Drafting a comment',
   propose_board: 'Drafting a board',
   propose_kpi_measurement: 'Drafting a KPI reading',
+  get_schedule_draft: 'Reading the schedule draft',
+  draft_schedule: 'Starting a schedule draft',
+  revise_schedule_draft: 'Asking for draft changes',
+  propose_schedule_review: 'Preparing a draft confirmation',
 };
 
 /** A tool's output as one string for the trail, cut to the cap with a marker. */
@@ -176,6 +184,18 @@ export function summarizeToolResult(step: TrailToolStep): string {
           : '';
       return count === null ? 'done' : `${count} shift${count === 1 ? '' : 's'}${range}`;
     }
+    case 'get_schedule_draft': {
+      const draft = out.draft as { items?: unknown } | null | undefined;
+      if (out.inProgress) return 'still being drafted';
+      if (!draft) return 'no open draft';
+      const items = Array.isArray(draft.items) ? draft.items.length : 0;
+      return `${items} draft item${items === 1 ? '' : 's'}`;
+    }
+    case 'draft_schedule':
+    case 'revise_schedule_draft':
+      return out.started === true && typeof out.weekStart === 'string'
+        ? `week of ${out.weekStart}`
+        : 'done';
     default: {
       const proposal = out.proposal as { summary?: unknown } | undefined;
       if (typeof proposal?.summary === 'string') return proposal.summary;

@@ -214,7 +214,7 @@ export function SuggestionCard({
         )}
         {suggestion.sourceChanged && (
           <span className="font-mono text-[10px] text-[var(--pyre-gold)]">
-            note edited since this was suggested
+            note edited or replied to since this was suggested
           </span>
         )}
         {collapsible && (

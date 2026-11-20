@@ -67,6 +67,7 @@ import { AgentActions } from './AgentActions';
 import { AgentSuggestions, type ConversationSuggestions, NO_SUGGESTIONS } from './AgentSuggestions';
 import { AskHistory } from './AskHistory';
 import { AskTrail, liveActivityLabel } from './AskTrail';
+import { ScheduleDraftWatch } from './ScheduleDraftWatch';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 
@@ -201,6 +202,36 @@ export function suggestionIdsOf(trail: TrailStep[]): string[] {
   return ids;
 }
 
+/** The tools that start a schedule draft run; the chat watches the week for it. */
+const DRAFT_TOOLS = new Set(['draft_schedule', 'revise_schedule_draft']);
+
+/** The weeks a turn's trail started a draft or revision for, in order. Exported for tests. */
+export function draftWeeksOf(trail: TrailStep[]): string[] {
+  const weeks: string[] = [];
+  for (const step of trail) {
+    if (step.kind !== 'tool' || !DRAFT_TOOLS.has(step.tool) || step.status !== 'completed')
+      continue;
+    const week = step.input.weekStart;
+    if (typeof week !== 'string' || !step.output?.includes('"started"')) continue;
+    if (!weeks.includes(week)) weeks.push(week);
+  }
+  return weeks;
+}
+
+/**
+ * Each week's draft card goes under the latest turn that started or revised
+ * it, so the conversation shows one live card per week. Exported for tests.
+ */
+export function draftWeeksByTurn(turns: Pick<Turn, 'id' | 'trail'>[]): Map<string, string[]> {
+  const latest = new Map<string, string>();
+  for (const turn of turns) {
+    for (const week of draftWeeksOf(turn.trail)) latest.set(week, turn.id);
+  }
+  const byTurn = new Map<string, string[]>();
+  for (const [week, turnId] of latest) byTurn.set(turnId, [...(byTurn.get(turnId) ?? []), week]);
+  return byTurn;
+}
+
 /**
  * Each item under the turn whose trail made it; any the trails do not
  * account for (a trail cut short) go under the last finished answer.
@@ -280,9 +311,26 @@ interface Props {
   isAdmin?: boolean;
   /** Whether this person can see goals and boards (their examples and copy). */
   hasBoards?: boolean;
+  /**
+   * 'page' is the /admin/ask page: a history sidebar from md up, and the open
+   * conversation in the URL (?c=, and ?q= to ask). 'dock' is the chat window
+   * every admin page carries (PyreAgentDock): no sidebar (history is a drawer
+   * inside the window at every width), a tighter layout, and the URL left
+   * alone — the page under it is someone else's. Both share the open
+   * conversation through localStorage.
+   */
+  variant?: 'page' | 'dock';
+  /** Told whenever an answer starts or stops being written. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
+export function SopAsk({
+  isAdmin = false,
+  hasBoards = false,
+  variant = 'page',
+  onBusyChange,
+}: Props) {
+  const docked = variant === 'dock';
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -409,6 +457,20 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     if (wasBusy.current && !busy) composerRef.current?.focus({ preventScroll: true });
     wasBusy.current = busy;
   }, [busy]);
+
+  const onBusyChangeRef = useRef(onBusyChange);
+  onBusyChangeRef.current = onBusyChange;
+  useEffect(() => {
+    onBusyChangeRef.current?.(busy);
+  }, [busy]);
+
+  // The dock sits over other pages, so it never touches their URL.
+  const syncParam = useCallback(
+    (sessionId: string | null) => {
+      if (!docked) writeConversationParam(sessionId);
+    },
+    [docked]
+  );
 
   const streamAnswer = useCallback(
     async (turnId: string, current: AskSession, options: { resume?: boolean } = {}) => {
@@ -597,7 +659,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         // Remember it before the answer arrives: leaving now and coming back
         // reopens this conversation and picks the answer up where it is.
         writeStored({ sessionId: current.id, conversationId, token: current.token, pending: text });
-        writeConversationParam(conversationId);
+        syncParam(conversationId);
 
         await streamAnswer(id, current);
         writeStored({ sessionId: current.id, conversationId, token: current.token });
@@ -622,6 +684,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
       history.reload,
       resizeComposer,
       refreshActions,
+      syncParam,
     ]
   );
 
@@ -633,7 +696,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   // the restore further down must not reopen an old conversation over it.
   const initialSearch = useRef(typeof window === 'undefined' ? '' : window.location.search);
   useEffect(() => {
-    if (askedFromUrl.current) return;
+    if (docked || askedFromUrl.current) return;
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q')?.trim();
     if (!q) return;
@@ -646,7 +709,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
       `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
     );
     void ask(q);
-  }, [ask]);
+  }, [ask, docked]);
 
   const startNew = () => {
     if (busy) return;
@@ -662,7 +725,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
     setQuestion('');
     setHistoryOpen(false);
     writeStored(null);
-    writeConversationParam(null);
+    syncParam(null);
     requestAnimationFrame(() => {
       resizeComposer();
       composerRef.current?.focus();
@@ -793,11 +856,11 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
             ...(pending ? { pending } : {}),
           });
         }
-        writeConversationParam(conversationId);
+        syncParam(conversationId);
       } catch (error) {
         if (opts.quiet) {
           writeStored(null);
-          writeConversationParam(null);
+          syncParam(null);
         } else {
           setNotice(
             `Could not open that conversation: ${error instanceof Error ? error.message : 'unknown error'}`
@@ -828,7 +891,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         setTimeout(() => void history.reload(), 800);
       }
     },
-    [patchTurn, refreshActions, streamAnswer, history.reload]
+    [patchTurn, refreshActions, streamAnswer, history.reload, syncParam]
   );
 
   const openConversation = useCallback(
@@ -847,13 +910,13 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    const params = new URLSearchParams(initialSearch.current);
+    const params = new URLSearchParams(docked ? '' : initialSearch.current);
     if (params.get('q')?.trim()) return;
     const stored = readStored();
     const sessionId =
       params.get(CONVERSATION_PARAM)?.trim() || stored?.conversationId || stored?.sessionId;
     if (sessionId) void loadConversation(sessionId, { stored, quiet: true });
-  }, [loadConversation]);
+  }, [loadConversation, docked]);
 
   const historyPanel = (
     <AskHistory
@@ -874,17 +937,21 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   // Each proposal and suggestion sits under the answer whose trail made it.
   const actionsByTurn = placeByTurn(turns, actions, proposalIdsOf);
   const suggestionsByTurn = placeByTurn(turns, suggestions.items, suggestionIdsOf);
+  const draftsByTurn = draftWeeksByTurn(turns);
+  const appliedCount = actions.filter((a) => a.status === 'applied').length;
   const examples = hasBoards ? [...BOARD_EXAMPLES, ...EXAMPLES.slice(0, 2)] : EXAMPLES;
 
   return (
-    <div className="flex min-h-0 flex-1 gap-4">
-      <aside className="hidden w-64 shrink-0 flex-col rounded border border-white/10 bg-white/[0.03] md:flex">
-        {historyPanel}
-      </aside>
+    <div className={`flex min-h-0 flex-1 ${docked ? 'relative' : 'gap-4'}`}>
+      {!docked && (
+        <aside className="hidden w-64 shrink-0 flex-col rounded border border-white/10 bg-white/[0.03] md:flex">
+          {historyPanel}
+        </aside>
+      )}
 
       {historyOpen && (
         <div
-          className="fixed inset-0 z-50 md:hidden"
+          className={docked ? 'absolute inset-0 z-10' : 'fixed inset-0 z-50 md:hidden'}
           role="dialog"
           aria-label="Previous conversations"
         >
@@ -894,7 +961,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
             aria-label="Close history"
             onClick={() => setHistoryOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col border-r border-white/10 bg-[var(--pyre-black)] shadow-lg">
+          <div className="absolute inset-y-0 left-0 flex w-80 max-w-[85%] flex-col border-r border-white/10 bg-[var(--pyre-black)] shadow-lg">
             <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
               <span className="font-mono text-xs uppercase tracking-wide text-white/60">
                 Conversations
@@ -912,8 +979,16 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         </div>
       )}
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded border border-white/10 bg-white/[0.03]">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-2 md:hidden">
+      <section
+        className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+          docked ? '' : 'rounded border border-white/10 bg-white/[0.03]'
+        }`}
+      >
+        <div
+          className={`flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-2 ${
+            docked ? '' : 'md:hidden'
+          }`}
+        >
           <button
             type="button"
             className={smallButtonClass}
@@ -935,7 +1010,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5"
+          className={`min-h-0 flex-1 overflow-y-auto px-3 py-4 ${docked ? '' : 'sm:px-5'}`}
         >
           {notice && <ErrorBanner className="mb-4">{notice}</ErrorBanner>}
 
@@ -950,7 +1025,7 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                 <h2 className="mb-2 text-center font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
                   Try asking
                 </h2>
-                <ul className="grid gap-2 sm:grid-cols-2">
+                <ul className={`grid gap-2 ${docked ? '' : 'sm:grid-cols-2'}`}>
                   {examples.map((example) => (
                     <li key={example}>
                       <button
@@ -1057,6 +1132,13 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                             Writing…
                           </p>
                         )}
+                        {(draftsByTurn.get(turn.id) ?? []).map((week) => (
+                          <ScheduleDraftWatch
+                            key={week}
+                            weekStart={week}
+                            refreshKey={appliedCount}
+                          />
+                        ))}
                         <AgentActions
                           actions={actionsByTurn.get(turn.id) ?? []}
                           workingId={workingActionId}
@@ -1078,19 +1160,19 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
         </div>
 
         <form
-          className="shrink-0 border-t border-white/10 px-3 py-3 sm:px-5"
+          className={`shrink-0 border-t border-white/10 px-3 py-3 ${docked ? '' : 'sm:px-5'}`}
           onSubmit={(e) => {
             e.preventDefault();
             void ask(question);
           }}
         >
           <div className="mx-auto max-w-3xl">
-            <label htmlFor="ask-question" className="sr-only">
+            <label htmlFor={docked ? 'ask-question-dock' : 'ask-question'} className="sr-only">
               Your question
             </label>
             <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 transition-colors focus-within:border-white/30">
               <textarea
-                id="ask-question"
+                id={docked ? 'ask-question-dock' : 'ask-question'}
                 ref={composerRef}
                 className="max-h-40 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm leading-6 text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none"
                 rows={1}
@@ -1123,11 +1205,17 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                 {busy ? 'Answering…' : 'Send'}
               </button>
             </div>
-            <p className="mt-1.5 text-[11px] text-white/35">
-              Enter sends, Shift+Enter for a new line. Answers link to their sources
-              {hasBoards ? ', and board changes wait for you to apply them' : ''}. You can leave and
-              come back — the conversation stays open.
-            </p>
+            {docked ? (
+              <p className="mt-1.5 text-[11px] text-white/35">
+                Enter sends. Close this or change pages — the answer keeps coming.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-white/35">
+                Enter sends, Shift+Enter for a new line. Answers link to their sources
+                {hasBoards ? ', and board changes wait for you to apply them' : ''}. You can leave
+                and come back — the conversation stays open.
+              </p>
+            )}
           </div>
         </form>
       </section>

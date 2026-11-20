@@ -7,26 +7,36 @@
 // immediately with the session ids — the board polls for the resulting
 // proposals rather than holding this request open through the agent runs.
 // An optional `prompt` carries the admin's last-minute steer into every
-// session's opening message (see lib/schedule/draft-prompt).
+// session's opening message (see lib/schedule/draft-prompt). The run itself
+// is lib/schedule/draft-run, shared with Pyre Agent.
 
-import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 import { json } from '@/lib/http/route';
+import { loadScheduleDraft } from '@/lib/pyre-agent/schedule';
 import { actorFromGate } from '@/lib/schedule/change-log';
-import {
-  buildDraftMessage,
-  MAX_DRAFT_PROMPT_LENGTH,
-  MAX_DRAFT_WEEKS,
-  sanitizeDraftPrompt,
-} from '@/lib/schedule/draft-prompt';
-import { startEveSession } from '@/lib/schedule/eve-session';
-import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
+import { MAX_DRAFT_WEEKS } from '@/lib/schedule/draft-prompt';
+import { isWeekStart, parseDraftNote, startDraftRuns } from '@/lib/schedule/draft-run';
 
 export const prerender = false;
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * GET ?weekStart=YYYY-MM-DD → the week's open draft, item by item, and
+ * whether a draft or revision is still being worked on. Pyre Agent's chat
+ * polls it to show a draft it started (ScheduleDraftWatch).
+ */
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const gate = await requireScheduleManage(cookies);
+  if (gate instanceof Response) return gate;
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
+  const weekStart = url.searchParams.get('weekStart');
+  if (!isWeekStart(weekStart)) {
+    return json({ error: 'weekStart must be a Monday as YYYY-MM-DD' }, 400);
+  }
+  return json(await loadScheduleDraft(db, weekStart));
+};
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requireScheduleManage(cookies);
@@ -34,18 +44,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-
-  const agentsBaseUrl = import.meta.env.AGENTS_BASE_URL;
-  const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
-  if (!agentsBaseUrl || !channelSecret) {
-    return json({ error: 'Agent not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
-  }
-
-  // Preview/staging deployments of pyre-agents sit behind Vercel Deployment
-  // Protection, which 401s at the edge before EVE_CHANNEL_SECRET is ever
-  // checked. The bypass secret gets us past that layer only — the channel
-  // secret above is still what authenticates us to the agent.
-  const agentsBypass = import.meta.env.AGENTS_PROTECTION_BYPASS;
 
   let body: Record<string, unknown> = {};
   try {
@@ -67,70 +65,30 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (uniqueWeeks.length === 0 || uniqueWeeks.length > MAX_DRAFT_WEEKS) {
     return json({ error: `weekStarts must list 1–${MAX_DRAFT_WEEKS} weeks` }, 400);
   }
-  for (const week of uniqueWeeks) {
-    if (typeof week !== 'string' || !DATE_RE.test(week) || weekStartOf(week) !== week) {
-      return json({ error: 'Each week start must be a Monday as YYYY-MM-DD' }, 400);
-    }
+  if (!uniqueWeeks.every(isWeekStart)) {
+    return json({ error: 'Each week start must be a Monday as YYYY-MM-DD' }, 400);
   }
   const weekStarts = (uniqueWeeks as string[]).sort();
 
   // Optional last-minute steer from the admin ("give Sarah a shift to lead").
   // The same note goes to every week in the run.
-  if (body.prompt !== undefined && body.prompt !== null && typeof body.prompt !== 'string') {
-    return json({ error: 'prompt must be a string' }, 400);
-  }
-  const rawPrompt = typeof body.prompt === 'string' ? body.prompt : '';
-  if (rawPrompt.length > MAX_DRAFT_PROMPT_LENGTH * 2) {
-    return json({ error: `prompt must be ${MAX_DRAFT_PROMPT_LENGTH} characters or fewer` }, 400);
-  }
-  const prompt = sanitizeDraftPrompt(rawPrompt);
+  const note = parseDraftNote(body.prompt, false);
+  if (!note.ok) return json({ error: note.error }, 400);
 
-  // Fresh windows before drafting — a stale board is the agent's worst input.
-  let sync: SyncShiftsSummary | { error: string };
-  try {
-    sync = await syncShifts({ actor: actorFromGate(gate) });
-  } catch (error) {
-    // Draft anyway on sync failure (Momence hiccups shouldn't block a manual
-    // draft of already-synced shifts), but tell the admin.
-    sync = { error: error instanceof Error ? error.message : 'Sync failed' };
-  }
-
-  const eveConfig = { baseUrl: agentsBaseUrl, channelSecret, bypassSecret: agentsBypass };
-  const db = getDb();
-
-  const sessions: Array<{ weekStart: string; sessionId: string | null }> = [];
-  for (const week of weekStarts) {
-    let sessionId: string | null;
-    try {
-      sessionId = await startEveSession(eveConfig, buildDraftMessage(week, prompt));
-    } catch (error) {
-      return json(
-        {
-          error: `Agent session for week ${week} failed: ${error instanceof Error ? error.message : String(error)}`,
-          sessions,
-          sync,
-        },
-        502
-      );
-    }
-    sessions.push({ weekStart: week, sessionId });
-
-    // The note opens the drafting conversation — persist it as the thread's
-    // first message so the review banner can show what was asked. Best-effort:
-    // a failed insert must never fail the draft run.
-    if (prompt && sessionId && db) {
-      const { error } = await db.from('schedule_draft_messages').insert({
-        agent_session_id: sessionId,
-        week_start: week,
-        role: 'admin',
-        content: prompt,
-      });
-      if (error) console.warn('[schedule-draft] thread insert failed:', error.message);
-    }
+  const result = await startDraftRuns(getDb(), weekStarts, note.note, {
+    actor: actorFromGate(gate),
+    origin: 'board',
+  });
+  if (!result.ok) {
+    return json(
+      { error: result.error, sessions: result.sessions, sync: result.sync },
+      result.status
+    );
   }
 
   // weekStart/sessionId mirror the first entry for the original single-week
   // response shape.
+  const { sessions, sync } = result;
   return json(
     { ok: true, sessions, weekStart: weekStarts[0], sessionId: sessions[0]?.sessionId, sync },
     202

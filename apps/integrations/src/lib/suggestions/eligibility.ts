@@ -2,7 +2,9 @@
 // looked at automatically at most once per version of its text (the runs
 // table's unique index), and not at all while that version has a dismissed
 // suggestion — an admin already said no to what it would propose. Editing
-// the text makes it eligible again. A note's AI button skips all this.
+// the text, or replying on a note, makes it eligible again. A run after a
+// reply does not need the classifier to have found work in the note: the
+// reply may be what calls for it. A note's AI button skips all this.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSetting } from '@/lib/settings/store';
@@ -32,12 +34,17 @@ export function shouldAutoSuggest(input: {
   return input.enabled && input.eligible && !input.alreadyRun && !input.dismissed;
 }
 
-/** Whether this version of a record's text should get an automatic run now. */
+/**
+ * Whether this version of a record's text should get an automatic run now.
+ * `afterReply`: someone just replied on it, so the record's own eligibility
+ * after a reply decides rather than the classifier's signals.
+ */
 export async function autoSuggestCheck(
   db: SupabaseClient,
   sourceType: SuggestionSourceType,
   sourceId: string,
-  signals: unknown
+  signals: unknown,
+  options: { afterReply?: boolean } = {}
 ): Promise<{ ok: boolean; hash?: string }> {
   const source = await SUGGESTION_SOURCES[sourceType].load(db, sourceId);
   if (!source) return { ok: false };
@@ -60,11 +67,13 @@ export async function autoSuggestCheck(
   return {
     ok: shouldAutoSuggest({
       enabled: await autoSuggestEnabled(),
-      eligible: SUGGESTION_SOURCES[sourceType].autoEligible(
-        source,
-        signals,
-        await getSetting('suggestions.autoSignals')
-      ),
+      eligible: options.afterReply
+        ? SUGGESTION_SOURCES[sourceType].replyEligible(source)
+        : SUGGESTION_SOURCES[sourceType].autoEligible(
+            source,
+            signals,
+            await getSetting('suggestions.autoSignals')
+          ),
       alreadyRun: (runs ?? 0) > 0,
       dismissed: (dismissed ?? 0) > 0,
     }),

@@ -81,6 +81,13 @@ export interface KnowledgeScope {
    */
   schedule: boolean;
   /**
+   * Whether they manage the schedule (schedule:manage, or admin): the
+   * schedule-draft tools — read the week's draft, start or revise one, and
+   * propose confirming parts of it — are offered only then, and the
+   * integrations app checks the live grant again on every call.
+   */
+  scheduleManage: boolean;
+  /**
    * Whether they hold the Boards tool or any single board (goals, boards,
    * and their cards). Which boards, and whether they may create one, the
    * integrations app resolves from `email` on every call (/api/agent/pyre),
@@ -104,6 +111,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScope = {
   incidents: null,
   water: false,
   schedule: false,
+  scheduleManage: false,
   boards: false,
   inventory: false,
 };
@@ -135,6 +143,7 @@ export function parseKnowledgeScope(raw: unknown): KnowledgeScope {
     incidents: logScope(v.incidents),
     water: v.water === true,
     schedule: v.schedule === true,
+    scheduleManage: v.scheduleManage === true,
     boards: v.boards === true,
     inventory: v.inventory === true,
   };

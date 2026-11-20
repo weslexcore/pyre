@@ -3,8 +3,10 @@
 // suggestion that could never be approved is refused while the agent can
 // still fix it. SOP edits arrive as find-and-replace hunks and leave here as
 // the whole proposed document. Message edits arrive as the new title and/or
-// body and leave with the message as it stood, to diff and to guard against. New cards leave with the board's default
-// assignees and a due date from their severity and importance. Inventory
+// body and leave with the message as it stood, to diff and to guard against. New cards leave with
+// the people the agent named (active staff only) or else the board's default
+// assignees, and the due date it gave or else one from their severity and
+// importance. Inventory
 // counts and new items leave credited to the source's author at the
 // source's time — or, for one Pyre Agent read out of a particular shift
 // note, to that note's author at its time.
@@ -127,14 +129,54 @@ async function expandMessageEdit(
 }
 
 /**
- * A new card as the admin first sees it: on the board's default assignees
- * (the agent never names anyone), and due when its severity and importance
- * say, unless the note gave a date of its own.
+ * The people the agent named for a card, lowercased, when every one is on the
+ * active roster; an error naming the first that is not. The agent reads them
+ * from the roster in its context, so anything else is a mistake (or an
+ * address the text tried to slip in) for it to fix.
+ */
+export async function checkAssignees(
+  db: SupabaseClient,
+  raw: unknown
+): Promise<{ ok: true; emails: string[] } | { ok: false; error: string }> {
+  if (raw === undefined || raw === null) return { ok: true, emails: [] };
+  if (!Array.isArray(raw) || !raw.every((e) => typeof e === 'string')) {
+    return { ok: false, error: 'assigneeEmails must be a list of staff emails' };
+  }
+  const emails = [...new Set(raw.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  if (emails.length === 0) return { ok: true, emails: [] };
+  const { data, error } = await db
+    .from('staff')
+    .select('email')
+    .eq('active', true)
+    .in('email', emails);
+  if (error) return { ok: false, error: `could not check assignees: ${error.message}` };
+  const known = new Set(
+    ((data ?? []) as { email: string | null }[]).map((r) => (r.email ?? '').trim().toLowerCase())
+  );
+  const missing = emails.find((e) => !known.has(e));
+  if (missing) {
+    return {
+      ok: false,
+      error: `${missing} is not on the active staff roster; assign only people from staff, or leave assigneeEmails out`,
+    };
+  }
+  return { ok: true, emails };
+}
+
+/**
+ * A new card as the admin first sees it: on the people the agent named from
+ * the thread ("Sam, can you order a case?"), or else the board's default
+ * assignees, and due on the date the thread gave, or else when its severity
+ * and importance say.
  */
 async function fillCardDefaults(
   db: SupabaseClient,
   raw: Record<string, unknown>
-): Promise<Record<string, unknown>> {
+): Promise<
+  { ok: true; payload: Record<string, unknown> } | { ok: false; status: 422; error: string }
+> {
+  const named = await checkAssignees(db, raw.assigneeEmails);
+  if (!named.ok) return { ok: false, status: 422, error: named.error };
   const board = typeof raw.board === 'string' ? raw.board.trim() : '';
   const { data } = board
     ? await db.from('boards').select('default_assignee_emails').eq('slug', board).maybeSingle()
@@ -147,7 +189,14 @@ async function fillCardDefaults(
   const dueDate = hasDate
     ? raw.dueDate
     : dueDateFor(severity, importance, await getSetting('suggestions.dueDays'), todayEastern());
-  return { ...raw, assigneeEmails: defaults ?? [], dueDate };
+  return {
+    ok: true,
+    payload: {
+      ...raw,
+      assigneeEmails: named.emails.length > 0 ? named.emails : (defaults ?? []),
+      dueDate,
+    },
+  };
 }
 
 /**
@@ -213,7 +262,11 @@ export async function intakeSuggestions(
       if (!expanded.ok) return { ...expanded, index };
       payload = expanded.payload;
     }
-    if (kind === 'board_card.create') payload = await fillCardDefaults(db, payload);
+    if (kind === 'board_card.create') {
+      const filled = await fillCardDefaults(db, payload);
+      if (!filled.ok) return { ...filled, index };
+      payload = filled.payload;
+    }
     if (kind === 'inventory.count' || kind === 'inventory.create') {
       payload = fillCountCredit(payload, credits?.[index] ?? source);
     }

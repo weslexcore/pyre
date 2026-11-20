@@ -14,6 +14,9 @@ import { APP_PORT } from './ports';
 
 export const PASSWORD = 'e2e-password-1234';
 
+/** The off-shift duty auth.setup.ts adds to the catalog, for schedule drafts to hand out. */
+export const OFF_SHIFT_DUTY = { key: 'e2e_off_shift', label: 'E2E carboys' } as const;
+
 export interface Role {
   email: string;
   displayName: string;
@@ -94,6 +97,40 @@ export const MANAGER: Role = {
   storageState: state('manager'),
 };
 
+/**
+ * Pyre Agent's schedule drafts (pyre-agent-schedule.spec.ts): a schedule
+ * manager who is not an admin and holds no boards, so the drafting tools
+ * stand on schedule:manage alone.
+ */
+export const SCHEDULER: Role = {
+  email: 'e2e-scheduler@e2e.test',
+  displayName: 'Skyler Scheduler',
+  isAdmin: false,
+  pages: ['/admin/ask', '/admin/schedule', SCHEDULE_MANAGE],
+  storageState: state('scheduler'),
+};
+
+/** Sees the schedule and uses Pyre Agent, but cannot manage the schedule. */
+export const SCHEDULE_VIEWER: Role = {
+  email: 'e2e-schedule-viewer@e2e.test',
+  displayName: 'Vic Viewer',
+  isAdmin: false,
+  pages: ['/admin/ask', '/admin/schedule'],
+  storageState: state('schedule-viewer'),
+};
+
+/**
+ * A schedule manager whose grant one test takes away mid-flow (and gives
+ * back), so no other test signs in as them.
+ */
+export const REVOCABLE_SCHEDULER: Role = {
+  email: 'e2e-revocable-scheduler@e2e.test',
+  displayName: 'Robin Revocable',
+  isAdmin: false,
+  pages: ['/admin/ask', '/admin/schedule', SCHEDULE_MANAGE],
+  storageState: state('revocable-scheduler'),
+};
+
 /** On the roster (scheduled) but with no dashboard access. */
 export const ROSTER_ONLY: Role = {
   email: 'e2e-roster@e2e.test',
@@ -126,6 +163,9 @@ export const ROLES: Role[] = [
   STAFF_2,
   SHIFT_LEAD,
   MANAGER,
+  SCHEDULER,
+  SCHEDULE_VIEWER,
+  REVOCABLE_SCHEDULER,
   ROSTER_ONLY,
   ...defaultProjects().flatMap((project) =>
     (['link', 'code'] as const).map((purpose) => signInRole(project.name ?? 'default', purpose))

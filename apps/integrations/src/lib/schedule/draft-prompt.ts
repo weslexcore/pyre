@@ -94,8 +94,8 @@ const MAX_REPLAYED_MESSAGE_LENGTH = 2000;
 
 /**
  * The opening message for a FRESH session refining an existing draft — used
- * when the original drafting session is gone (expired, or a cron draft whose
- * schedule-triggered session already completed). Replays a capped transcript
+ * when the original drafting session is gone (expired, or one whose turn
+ * already completed). Replays a capped transcript
  * of the prior thread so the new session has the conversation context.
  */
 export function buildRefineFallbackMessage(

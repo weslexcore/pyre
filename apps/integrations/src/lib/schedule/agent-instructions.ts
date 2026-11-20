@@ -5,8 +5,8 @@
 //
 // This app owns the writes; the agents app reads the same row when a
 // scheduler session starts and folds it into the drafter's system prompt, so
-// every draft run picks it up — board drafts, refinements, and the Monday
-// cron draft alike. Same shape as lib/schedule/settings.ts: the row is the
+// every draft run picks it up — board drafts, refinements, and drafts asked
+// for from Pyre Agent alike. Same shape as lib/schedule/settings.ts: the row is the
 // source of truth, with a ~30s in-process cache the mutation invalidates.
 
 import { sanitizeStandingInstructions } from '@pyre/schedule-core';

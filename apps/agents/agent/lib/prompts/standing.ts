@@ -2,7 +2,7 @@
 // schedule_agent_instructions row), read here and folded into the scheduler's
 // system prompt by agent/instructions/role.ts. Reading them on the agent side
 // rather than stuffing them into each drafting message is what makes them
-// global: cron drafts, board drafts, and refinement turns all start from the
+// global: board drafts, Pyre Agent drafts, and refinement turns all start from the
 // same prompt.
 //
 // Never fatal. A missing row, an unreachable database, or a schema that

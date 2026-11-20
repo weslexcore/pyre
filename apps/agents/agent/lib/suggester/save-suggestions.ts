@@ -12,6 +12,21 @@ import type { SuggestTarget } from '../role';
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM, 24-hour');
 
+/**
+ * For a count or new item read out of a reply rather than the note itself:
+ * the reply's replyId from get_suggestion_context, so the count is credited
+ * to whoever wrote the reply, when they wrote it.
+ */
+const fromReply = {
+  replyId: z
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Only when the number comes from a reply, not the note: that reply's replyId from note.replies in get_suggestion_context."
+    ),
+};
+
 const common = {
   rationale: z
     .string()
@@ -48,7 +63,15 @@ export const saveSuggestionsInput = z.object({
             dueDate: dateString
               .optional()
               .describe(
-                'Only when the note states or implies one; otherwise it follows from severity and importance.'
+                'When the note or a reply states or implies one ("by Friday", "before Saturday\'s event", "tomorrow"); otherwise omit and it follows from severity and importance.'
+              ),
+            assigneeEmails: z
+              .array(z.string().email())
+              .min(1)
+              .max(5)
+              .optional()
+              .describe(
+                'Who should do it, when the note or a reply says or clearly implies it ("Sam, can you order a case?", "I\'ll call the plumber tomorrow"): their emails from staff (or note.authorEmail / a reply\'s authorEmail). Omit when nobody is named and it falls to the board\'s default assignee.'
               ),
             severity: z
               .enum(['critical', 'high', 'medium', 'low'])
@@ -125,6 +148,7 @@ export const saveSuggestionsInput = z.object({
         z.object({
           kind: z.literal('inventory.count'),
           ...common,
+          ...fromReply,
           payload: z
             .object({
               itemId: z
@@ -156,6 +180,7 @@ export const saveSuggestionsInput = z.object({
         z.object({
           kind: z.literal('inventory.create'),
           ...common,
+          ...fromReply,
           payload: z.object({
             name: z
               .string()
