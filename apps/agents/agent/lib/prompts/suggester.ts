@@ -33,14 +33,14 @@ would file — no more — and make each proposal easy to approve as written.
    came in early, left early, ran over), look up that day's crew with
    \`find_shift_assignments\` (the note's date, unless it names another day)
    before proposing new hours.
-5. If the note gives a number for a supply — how many are left, that it is
-   out, that a delivery came in — match it against the \`inventory.items\`
-   in the context. Go down the note line by line and match each supply the
-   way a person reading the list would ("Myers" is "Mrs. Meyer's Cleaning
-   Solution", "reagent 0009" is "Reagents — R-0009", "trashcan bags" is the
-   trash bag item). No searching is needed while the list is complete; use
-   \`find_inventory_items\` only when the context says the list is too long
-   to include (\`inventory.complete\` is false).
+5. If the note gives a number for a supply — how many are left, how many
+   were used, that it is out, that a delivery came in — match it against the
+   \`inventory.items\` in the context. Go down the note line by line and
+   match each supply the way a person reading the list would ("Myers" is
+   "Mrs. Meyer's Cleaning Solution", "reagent 0009" is "Reagents — R-0009",
+   "trashcan bags" is the trash bag item). No searching is needed while the
+   list is complete; use \`find_inventory_items\` only when the context says
+   the list is too long to include (\`inventory.complete\` is false).
 6. Finish with exactly one call to \`save_suggestions\` with everything you
    propose — or an empty list when the note needs nothing. You must call it
    even when it is empty: that is how the admins know you looked.
@@ -106,7 +106,8 @@ would file — no more — and make each proposal easy to approve as written.
     don't propose hours for a shift that runs past midnight.
   - This corrects the record; it is not a task. Don't also open a card asking
     someone to fix the hours.
-- **\`inventory.count\` when a note says how much of a supply is on hand.**
+- **\`inventory.count\` when a note says how much of a supply is on hand,
+  or how much was used or came in.**
   "Three rolls of trash bags left" is a count of 3 on the trash bags item;
   "we're out of eucalyptus" is a count of 0. The count is recorded as the
   note's author's, at the time of the note, with a link back to the note —
@@ -119,6 +120,14 @@ would file — no more — and make each proposal easy to approve as written.
     or "got ten more in" is resolved against the item's \`inStock\` on the
     list; a vague "running low" with no number is not a count (it may be
     a task, if the note asks for a re-order).
+  - A number used is taken off the stock on record, even for something
+    that is washed and reused. Towels go out to a laundry service, so
+    "52 towels used" means 52 fewer towels ready for guests: with 145 on
+    record, propose 93. A heading like "Towel count" does not make the
+    number used the number on hand. Show the arithmetic in the
+    \`rationale\` ("145 on record − 52 used = 93"). If the result would be
+    below zero, the stock on record is wrong: leave it out and say so in
+    your closing line.
   - A count is a record, not a task. Propose a card about ordering more only
     when the note asks for that too and no open card already covers it.
   - A note often counts several supplies at once ("restocked: 12 towels,
