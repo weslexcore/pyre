@@ -40,6 +40,7 @@ describe('resolveRole', () => {
       incidents: null,
       water: true,
       schedule: false,
+      scheduleManage: false,
       boards: false,
       inventory: false,
     });
@@ -75,6 +76,7 @@ describe('parseKnowledgeScope', () => {
         incidents: 'all',
         water: true,
         schedule: true,
+        scheduleManage: true,
         boards: true,
         inventory: true,
       })
@@ -85,6 +87,7 @@ describe('parseKnowledgeScope', () => {
       incidents: 'all',
       water: true,
       schedule: true,
+      scheduleManage: true,
       boards: true,
       inventory: true,
     });
@@ -94,6 +97,11 @@ describe('parseKnowledgeScope', () => {
     expect(parseKnowledgeScope({ schedule: 'true' }).schedule).toBe(false);
     expect(parseKnowledgeScope({ schedule: 1 }).schedule).toBe(false);
     expect(parseKnowledgeScope({ schedule: true }).schedule).toBe(true);
+  });
+
+  it('treats the schedule manage grant as a strict boolean', () => {
+    expect(parseKnowledgeScope({ scheduleManage: 'true' }).scheduleManage).toBe(false);
+    expect(parseKnowledgeScope({ scheduleManage: true }).scheduleManage).toBe(true);
   });
 
   it('treats the boards grant as a strict boolean', () => {

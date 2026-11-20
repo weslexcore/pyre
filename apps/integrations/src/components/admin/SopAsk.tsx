@@ -67,6 +67,7 @@ import { AgentActions } from './AgentActions';
 import { AgentSuggestions, type ConversationSuggestions, NO_SUGGESTIONS } from './AgentSuggestions';
 import { AskHistory } from './AskHistory';
 import { AskTrail, liveActivityLabel } from './AskTrail';
+import { ScheduleDraftWatch } from './ScheduleDraftWatch';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 
@@ -199,6 +200,36 @@ export function suggestionIdsOf(trail: TrailStep[]): string[] {
     ids.push(...suggestionIdsIn(step.output));
   }
   return ids;
+}
+
+/** The tools that start a schedule draft run; the chat watches the week for it. */
+const DRAFT_TOOLS = new Set(['draft_schedule', 'revise_schedule_draft']);
+
+/** The weeks a turn's trail started a draft or revision for, in order. Exported for tests. */
+export function draftWeeksOf(trail: TrailStep[]): string[] {
+  const weeks: string[] = [];
+  for (const step of trail) {
+    if (step.kind !== 'tool' || !DRAFT_TOOLS.has(step.tool) || step.status !== 'completed')
+      continue;
+    const week = step.input.weekStart;
+    if (typeof week !== 'string' || !step.output?.includes('"started"')) continue;
+    if (!weeks.includes(week)) weeks.push(week);
+  }
+  return weeks;
+}
+
+/**
+ * Each week's draft card goes under the latest turn that started or revised
+ * it, so the conversation shows one live card per week. Exported for tests.
+ */
+export function draftWeeksByTurn(turns: Pick<Turn, 'id' | 'trail'>[]): Map<string, string[]> {
+  const latest = new Map<string, string>();
+  for (const turn of turns) {
+    for (const week of draftWeeksOf(turn.trail)) latest.set(week, turn.id);
+  }
+  const byTurn = new Map<string, string[]>();
+  for (const [week, turnId] of latest) byTurn.set(turnId, [...(byTurn.get(turnId) ?? []), week]);
+  return byTurn;
 }
 
 /**
@@ -874,6 +905,8 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
   // Each proposal and suggestion sits under the answer whose trail made it.
   const actionsByTurn = placeByTurn(turns, actions, proposalIdsOf);
   const suggestionsByTurn = placeByTurn(turns, suggestions.items, suggestionIdsOf);
+  const draftsByTurn = draftWeeksByTurn(turns);
+  const appliedCount = actions.filter((a) => a.status === 'applied').length;
   const examples = hasBoards ? [...BOARD_EXAMPLES, ...EXAMPLES.slice(0, 2)] : EXAMPLES;
 
   return (
@@ -1057,6 +1090,13 @@ export function SopAsk({ isAdmin = false, hasBoards = false }: Props) {
                             Writing…
                           </p>
                         )}
+                        {(draftsByTurn.get(turn.id) ?? []).map((week) => (
+                          <ScheduleDraftWatch
+                            key={week}
+                            weekStart={week}
+                            refreshKey={appliedCount}
+                          />
+                        ))}
                         <AgentActions
                           actions={actionsByTurn.get(turn.id) ?? []}
                           workingId={workingActionId}

@@ -4,7 +4,8 @@
 // page grant (/admin/ask).
 //
 // Applying replays the stored request through the routes themselves
-// (board-cards, board-events, boards, goal-kpis, inventory), handed this
+// (board-cards, board-events, boards, goal-kpis, inventory, and
+// schedule-proposals for a schedule draft review), handed this
 // request's own cookies — so the change is made by the person, under their
 // grants, with every rule, trail entry, and notification the page would give
 // a click. A refused or failed change puts the row back to pending with the
@@ -38,6 +39,7 @@ import * as boardEvents from './board-events';
 import * as boards from './boards';
 import * as goalKpis from './goal-kpis';
 import * as inventory from './inventory';
+import * as scheduleProposals from './schedule-proposals';
 
 export const prerender = false;
 
@@ -47,6 +49,7 @@ const ROUTES: Record<string, Partial<Record<'POST' | 'PATCH', APIRoute>>> = {
   '/api/admin/boards': { POST: boards.POST },
   '/api/admin/goal-kpis': { PATCH: goalKpis.PATCH },
   '/api/admin/inventory': { POST: inventory.POST, PATCH: inventory.PATCH },
+  '/api/admin/schedule-proposals': { POST: scheduleProposals.POST },
 };
 
 /** Per conversation; a long planning chat proposes a few dozen at most. */
@@ -125,7 +128,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 function runAsCaller(context: APIContext) {
   return async (step: ApplyStep): Promise<StepResponse> => {
     const handler = ROUTES[step.path]?.[step.method];
-    if (!handler) return { status: 400, body: { error: 'Not a board or inventory change' } };
+    if (!handler) return { status: 400, body: { error: 'Not a change Pyre Agent can apply' } };
     const target = new URL(step.path, context.url);
     for (const [key, value] of Object.entries(step.query ?? {})) {
       target.searchParams.set(key, value);

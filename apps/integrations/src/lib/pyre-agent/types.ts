@@ -1,5 +1,5 @@
 // What a Pyre Agent action is, as the server stores it and the chat shows it:
-// a change to the boards or the inventory the agent proposed in a
+// a change to the boards, the inventory, or a schedule draft the agent proposed in a
 // conversation, applied only when the person in the conversation presses
 // Apply. Pure and client-bundle-safe; the checks against live data are in
 // ./actions.
@@ -14,6 +14,7 @@ export const ACTION_KINDS = [
   'goal_kpi.measure',
   'inventory.update',
   'inventory.create',
+  'schedule.review',
 ] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -29,6 +30,8 @@ export const INVENTORY_ACTION_KINDS: readonly ActionKind[] = [
   'inventory.update',
   'inventory.create',
 ];
+/** Confirming or dropping parts of a schedule draft; needs the schedule's manage grant. */
+export const SCHEDULE_ACTION_KINDS: readonly ActionKind[] = ['schedule.review'];
 
 export type ActionStatus = 'pending' | 'applying' | 'applied' | 'dismissed';
 
@@ -40,6 +43,7 @@ export const ACTION_KIND_LABELS: Record<ActionKind, string> = {
   'goal_kpi.measure': 'KPI measurement',
   'inventory.update': 'Inventory change',
   'inventory.create': 'New inventory item',
+  'schedule.review': 'Schedule draft',
 };
 
 /**

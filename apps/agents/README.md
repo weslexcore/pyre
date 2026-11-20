@@ -172,9 +172,15 @@ admin board ── proposal banner, dashed "AI draft" cards, approve ───�
   off. Shared pure logic (availability, hours, window math) lives in
   `@pyre/schedule-core`.
 - Triggers: the board's "✦ Draft schedule" button (`POST
-  /api/admin/schedule-draft` → `POST {this app}/eve/v1/session`) and the
-  weekly schedule in `agent/schedules/weekly_draft.md` (Mon 14:00 UTC →
-  a Vercel Cron Job on deploy).
+  /api/admin/schedule-draft` → `POST {this app}/eve/v1/session`), and Pyre
+  Agent for anyone who manages the schedule (`draft_schedule` /
+  `revise_schedule_draft` → `/api/agent/pyre` → the same run, in
+  `lib/schedule/draft-run.ts` on the integrations side). There is no cron:
+  to draft every week, save a Pyre Agent routine ("Draft next week's
+  schedule", Mondays at 9am) on `/admin/ask`. Whoever asked from Pyre Agent
+  is notified when the draft lands, with a link back to the conversation,
+  where they can ask for changes and confirm parts of it
+  (`propose_schedule_review`, applied only when they press Apply).
 - The button opens a composer first: the admin can add an optional note for
   the run ("give Sarah a shift to lead"), which rides in as an `<admin-note>`
   block on the session's opening message. It steers judgment only — the hard
@@ -188,7 +194,7 @@ admin board ── proposal banner, dashed "AI draft" cards, approve ───�
   when a scheduler session starts (`agent/lib/prompts/standing.ts`, ~30s
   cache) and `schedulerInstructionsWith` appends it to the system prompt as a
   `<standing-instructions>` block — so it reaches board drafts, refinement
-  turns, and the weekly cron run alike, with no redeploy. Precedence, spelled
+  turns, and Pyre Agent drafts alike, with no redeploy. Precedence, spelled
   out in the prompt: hard rules > a run's `<admin-note>` > standing
   instructions > the judgment guidelines. Both sides sanitise the text
   (`sanitizeStandingInstructions` in `@pyre/schedule-core`), and an
@@ -247,8 +253,5 @@ without writing anything, set `AGENT_FORCE_DRY_RUN=1` and run
    unset in production, where neither deployment is protected.
 6. Verify `GET /eve/v1/health`, then button-draft a future week from
    `/admin/schedule`.
-7. The weekly cron registers automatically on deploy (check Vercel
-   Observability → Cron Jobs). If plan limits block Vercel Cron, delete
-   `agent/schedules/weekly_draft.md` and add a QStash schedule (or a
-   `CRON_JOBS` entry in integrations) POSTing the same `/eve/v1/session`
-   message the button sends.
+7. To draft on a schedule, save a Pyre Agent routine on `/admin/ask` (the
+   hourly integrations tick runs it as its owner); see Triggers above.

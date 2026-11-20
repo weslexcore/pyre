@@ -31,7 +31,7 @@ async function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
   }
   // The scheduler's prompt carries the admin's standing instructions, read
   // fresh (behind a short cache) so an edit on the board reaches the next
-  // draft — cron runs included — without a redeploy.
+  // draft — Pyre Agent's included — without a redeploy.
   const standing = await loadStandingInstructions();
   return defineInstructions({ markdown: schedulerInstructionsWith(standing) });
 }
