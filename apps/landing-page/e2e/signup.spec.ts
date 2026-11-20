@@ -23,24 +23,39 @@ const success = (page: Page) =>
   page.locator('#signup [data-signup-success]').filter({ visible: true });
 const error = (page: Page) => page.locator('#signup [data-signup-error]').filter({ visible: true });
 
-/** Counts mouse input the page receives, so a test can prove it used none. */
-async function countMouseInput(page: Page) {
+/**
+ * Hides every mouse move from the page, so the form can't count one as human
+ * input. Chromium fires a fake mousemove (and pointermove) after a scroll to
+ * update hover state, even when nothing touched the mouse; on CI that alone
+ * could get a keyboard-only or touch-only visitor past the bot check. The
+ * listeners sit on window in the capture phase, ahead of the form's own on
+ * document.
+ *
+ * Returns a count of mouse presses, which a browser never fakes, so a test can
+ * prove it clicked nothing.
+ */
+async function withholdMouseMoves(page: Page) {
   await page.addInitScript(() => {
-    const w = window as Window & { __mouseInput?: number };
-    w.__mouseInput = 0;
-    for (const type of ['mousemove', 'mousedown', 'pointermove'] as const) {
-      document.addEventListener(
+    const w = window as Window & { __mousePresses?: number };
+    w.__mousePresses = 0;
+    for (const type of ['mousemove', 'pointermove'] as const) {
+      window.addEventListener(type, (event) => event.stopImmediatePropagation(), {
+        capture: true,
+      });
+    }
+    for (const type of ['mousedown', 'pointerdown'] as const) {
+      window.addEventListener(
         type,
         (event) => {
           if (!('pointerType' in event) || (event as PointerEvent).pointerType === 'mouse') {
-            w.__mouseInput = (w.__mouseInput ?? 0) + 1;
+            w.__mousePresses = (w.__mousePresses ?? 0) + 1;
           }
         },
         { capture: true, passive: true }
       );
     }
   });
-  return () => page.evaluate(() => (window as Window & { __mouseInput?: number }).__mouseInput);
+  return () => page.evaluate(() => (window as Window & { __mousePresses?: number }).__mousePresses);
 }
 
 test('subscribes a valid email through Mailchimp', async ({ page }) => {
@@ -58,7 +73,7 @@ test('subscribes a valid email through Mailchimp', async ({ page }) => {
 });
 
 test('a keyboard-only visitor can subscribe', async ({ page }) => {
-  const mouseInput = await countMouseInput(page);
+  const mousePresses = await withholdMouseMoves(page);
   const mailchimp = await stubMailchimpJsonp(page, { result: 'success' });
   const form = await openForm(page);
 
@@ -71,10 +86,13 @@ test('a keyboard-only visitor can subscribe', async ({ page }) => {
   await expect(success(page)).toHaveText(/\S/);
   expect(mailchimp).toHaveLength(1);
   expect(mailchimp[0].searchParams.get('EMAIL')).toBe('keyboard@example.com');
-  expect(await mouseInput()).toBe(0);
+  expect(await mousePresses()).toBe(0);
 });
 
 test('a touch-only visitor can subscribe', { tag: MOBILE_ONLY_TAG }, async ({ page }) => {
+  // A tap also fires compatibility mousedown events, so presses aren't
+  // counted here; withholding moves is what keeps the bot check honest.
+  await withholdMouseMoves(page);
   const mailchimp = await stubMailchimpJsonp(page, { result: 'success' });
   const form = await openForm(page);
 
