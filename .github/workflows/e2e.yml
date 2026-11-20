@@ -111,11 +111,52 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: yarn workspace @pyre/${{ matrix.app }} playwright install --with-deps chromium webkit
+        run: yarn workspace @pyre/${{ matrix.app }} playwright install chromium webkit
+
+      # Playwright's system packages (~185 debs, ~140 MB) are cached too. The
+      # runner downloads them from Ubuntu's mirrors, which are sometimes slow
+      # enough to take 7 minutes, even though installing them takes about 20s.
+      # On a hit, apt finds the debs locally and only downloads what's newer.
+      # The key is per runner image, so both matrix jobs share one entry.
+      - name: Get runner image
+        id: image
+        run: echo "os=$ImageOS" >> "$GITHUB_OUTPUT"
+
+      - name: Restore apt packages
+        id: apt-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/apt-debs
+          key: apt-playwright-${{ steps.image.outputs.os }}-${{ steps.playwright.outputs.version }}
+          restore-keys: apt-playwright-${{ steps.image.outputs.os }}-
 
       - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: yarn workspace @pyre/${{ matrix.app }} playwright install-deps chromium webkit
+        run: |
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs > /dev/null
+          if compgen -G ~/.cache/apt-debs/'*.deb' > /dev/null; then
+            sudo cp ~/.cache/apt-debs/*.deb /var/cache/apt/archives/
+          fi
+          yarn workspace @pyre/${{ matrix.app }} playwright install-deps chromium webkit
+
+      # Only on an exact miss. When both matrix jobs miss, the second save
+      # finds the key taken and logs a warning; that's fine.
+      - name: Collect apt packages
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.cache/apt-debs
+          rm -f ~/.cache/apt-debs/*.deb
+          if ! sudo cp /var/cache/apt/archives/*.deb ~/.cache/apt-debs/; then
+            echo "::warning::No apt packages to cache; the next run downloads them again."
+          fi
+          sudo chown -R "$(id -u):$(id -g)" ~/.cache/apt-debs
+          du -sh ~/.cache/apt-debs
+
+      - name: Save apt packages
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/apt-debs
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
 
       - name: Run E2E tests
         id: tests
