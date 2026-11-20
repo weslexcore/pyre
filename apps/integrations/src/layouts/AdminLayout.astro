@@ -11,6 +11,7 @@
 import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
 import {
+  ASK_HREF,
   canViewPath,
   SHIFT_NOTES_HREF,
   SUGGESTIONS_HREF,
@@ -21,12 +22,14 @@ import {
 import { CardPeek } from '@/components/admin/boards/CardPeek';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
+import { PyreAgentDock } from '@/components/admin/PyreAgentDock';
 import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
 import Favicon from '@/components/Favicon.astro';
 import PullToRefresh from '@/components/PullToRefresh.astro';
 import PyreMark from '@/components/PyreMark.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
+import { canViewBoardsTool } from '@/lib/boards/access';
 import { getUnreadCount } from '@/lib/notifications/unread';
 import { getSetting } from '@/lib/settings/store';
 import { directoryEntryOf, STAFF_DIRECTORY_ELEMENT_ID } from '@/lib/staff/avatar';
@@ -88,6 +91,9 @@ const searchPages = access ? searchablePages(tools, access) : [];
 // The header's plus button writes a shift note from any page — offered to
 // whoever may open the shift-notes page (everyone on the roster, by default).
 const canAddShiftNote = !!access && canViewPath(access, SHIFT_NOTES_HREF);
+// Pyre Agent's dock rides on every page for whoever holds the Ask page — the
+// same grant the page and its API routes check.
+const canAskAgent = allowed && !!access && canViewPath(access, ASK_HREF);
 // The count only shows beside a Suggestions entry that is actually in the menu.
 const pendingSuggestions = tools.some((tool) => tool.href === SUGGESTIONS_HREF) ? pendingCount : 0;
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
@@ -203,6 +209,16 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
           />
           {/* A card link opens its drawer over this page, not on its board. */}
           <CardPeek client:load />
+          {/* Persisted across ClientRouter navigations, so a chat (and an
+              answer still streaming into it) survives changing pages. */}
+          {canAskAgent && access && (
+            <PyreAgentDock
+              client:idle
+              transition:persist="pyre-agent-dock"
+              isAdmin={access.isAdmin}
+              hasBoards={canViewBoardsTool(access)}
+            />
+          )}
         </>
       )
     }
