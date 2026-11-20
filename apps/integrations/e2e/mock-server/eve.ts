@@ -15,7 +15,9 @@
 //
 // Scheduler sessions (the board's Draft button, a Pyre Agent draft) and
 // suggester sessions only park: the spec plays the scheduler by saving a
-// proposal through /api/agent/proposals with the session id.
+// proposal through /api/agent/proposals with the session id, and the
+// suggester by saving through /api/agent/suggestions with the session's run
+// (recorded from its headers, with the record it is about).
 //
 //   POST /agents/eve/v1/session               open a session ({ message })
 //   POST /agents/eve/v1/session/:id           a follow-up ({ message })
@@ -55,6 +57,9 @@ export interface EveSessionView {
   state: EveState;
   scope: Record<string, unknown> | null;
   routineRunId: string | null;
+  /** Suggester sessions: the run to save into, and the record (`shift_note:<id>`). */
+  suggestRunId: string | null;
+  suggestSource: string | null;
   /** When it was opened (ms since the epoch), so a spec sees only its own. */
   createdAt: number;
   messages: string[];
@@ -277,6 +282,8 @@ async function openSession(request: MockRequest): Promise<MockResponse> {
     state: 'waiting',
     scope,
     routineRunId: header(request, 'x-pyre-routine-run') ?? null,
+    suggestRunId: header(request, 'x-pyre-suggest-run') ?? null,
+    suggestSource: header(request, 'x-pyre-suggest-source') ?? null,
     createdAt: Date.now(),
     messages: [message],
     outputs: [],
@@ -346,8 +353,30 @@ function stream(request: MockRequest): MockResponse {
 }
 
 function view(session: Session): EveSessionView {
-  const { id, role, state, scope, routineRunId, createdAt, messages, outputs } = session;
-  return { id, role, state, scope, routineRunId, createdAt, messages, outputs };
+  const {
+    id,
+    role,
+    state,
+    scope,
+    routineRunId,
+    suggestRunId,
+    suggestSource,
+    createdAt,
+    messages,
+    outputs,
+  } = session;
+  return {
+    id,
+    role,
+    state,
+    scope,
+    routineRunId,
+    suggestRunId,
+    suggestSource,
+    createdAt,
+    messages,
+    outputs,
+  };
 }
 
 export function eveRoutes(): MockRoute[] {

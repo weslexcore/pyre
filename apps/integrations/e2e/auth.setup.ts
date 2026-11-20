@@ -45,10 +45,19 @@ setup('seed the staff roster and sign each role in', async () => {
   // Settings the app caches for ~30s, so they are set before any spec runs.
   // Guest profiles are off by default, which sends most guest pages to
   // Check Ins; the schedule's request toggles are on by default, kept on here.
-  const settings = await db
-    .from('app_settings')
-    .upsert({ key: 'guests.profiles', value: true, updated_by: 'e2e' }, { onConflict: 'key' });
-  expect(settings.error, 'guests.profiles setting').toBeNull();
+  // Automatic suggestions are on, so a reply on a shift note has the
+  // suggester (the mock Eve app, where it only parks) look at the note again
+  // (shift-note-suggestions.spec.ts). Classification is off in the suite (no
+  // AI Gateway key), so nothing else starts a run on its own.
+  const settings = await db.from('app_settings').upsert(
+    [
+      { key: 'guests.profiles', value: true, updated_by: 'e2e' },
+      { key: 'suggestions.enabled', value: true, updated_by: 'e2e' },
+      { key: 'suggestions.auto', value: true, updated_by: 'e2e' },
+    ],
+    { onConflict: 'key' }
+  );
+  expect(settings.error, 'app settings').toBeNull();
   const toggles = await db.from('schedule_settings').upsert(
     ['shift_requests', 'sub_requests', 'hours_changes'].map((key) => ({
       key,
