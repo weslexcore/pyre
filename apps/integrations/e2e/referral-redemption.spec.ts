@@ -4,7 +4,8 @@
 // away for a reason the form can explain, with nothing written anywhere.
 // Each test has its own referrer and friend, so they run in parallel.
 
-import { DESKTOP_ONLY_TAG } from '@pyre/e2e-utils';
+import type { APIRequestContext } from '@playwright/test';
+import { DESKTOP_ONLY_TAG, uniqueEmail } from '@pyre/e2e-utils';
 import { momence } from './momence';
 import { REFERRAL_TIER } from './partners';
 import {
@@ -12,6 +13,7 @@ import {
   friendFor,
   redeem,
   redemptionsFor,
+  referralAuth,
   seedReferrer,
 } from './referral-helpers';
 import { expect, test } from './test';
@@ -160,5 +162,100 @@ test.describe('referral redemption', { tag: DESKTOP_ONLY_TAG }, () => {
     expect((await momence.member(Number(row.friend_momence_member_id)))?.tags).toEqual([
       REFERRAL_TIER.tagName,
     ]);
+  });
+
+  // The /account card: the landing page asks for the signed-in member's code,
+  // creating their referrer row the first time.
+  test.describe("a member's own code", () => {
+    interface MyReferral {
+      code: string;
+      url: string;
+      discountPercent: number;
+      enabled: boolean;
+      stats: { redemptions: number; conversions: number; rewardsEarned: number };
+    }
+    const me = (request: APIRequestContext, email: string, firstName = 'Morgan') =>
+      request.post('/api/referral/me', { headers: referralAuth, data: { email, firstName } });
+
+    async function referrersFor(db: Parameters<typeof redemptionsFor>[0], memberId: number) {
+      const { data, error } = await db
+        .from('referrers')
+        .select('code, email, referrer_type, enabled')
+        .eq('momence_member_id', memberId);
+      expect(error).toBeNull();
+      return data ?? [];
+    }
+
+    test('the first visit creates a code, and every later one returns it', async ({
+      request,
+      db,
+    }, testInfo) => {
+      const email = uniqueEmail(testInfo, 'member');
+      const { id } = await momence.addMember({ firstName: 'Morgan', lastName: 'Member', email });
+
+      const first = await me(request, email);
+      expect(first.status(), await first.text()).toBe(200);
+      const mine = (await first.json()) as MyReferral;
+      expect(mine.code).toMatch(/^[A-Z0-9]{3,16}$/);
+      expect(mine.url).toContain(`/r/${mine.code}`);
+      expect(mine).toMatchObject({
+        enabled: true,
+        stats: { redemptions: 0, conversions: 0, rewardsEarned: 0 },
+      });
+      expect(await referrersFor(db, id)).toEqual([
+        { code: mine.code, email, referrer_type: 'member', enabled: true },
+      ]);
+
+      const again = (await (await me(request, email)).json()) as MyReferral;
+      expect(again.code).toBe(mine.code);
+      expect(await referrersFor(db, id)).toHaveLength(1);
+    });
+
+    test('two first visits at once still make one code', async ({ request, db }, testInfo) => {
+      const email = uniqueEmail(testInfo, 'member');
+      const { id } = await momence.addMember({ firstName: 'Morgan', lastName: 'Member', email });
+
+      const [a, b] = await Promise.all([me(request, email), me(request, email)]);
+      expect([a.status(), b.status()]).toEqual([200, 200]);
+      expect(((await a.json()) as MyReferral).code).toBe(((await b.json()) as MyReferral).code);
+      expect(await referrersFor(db, id)).toHaveLength(1);
+    });
+
+    test('a friend redeeming the code shows up in its stats', async ({ request, db }, testInfo) => {
+      const email = uniqueEmail(testInfo, 'member');
+      await momence.addMember({ firstName: 'Morgan', lastName: 'Member', email });
+      const { code, discountPercent } = (await (await me(request, email)).json()) as MyReferral;
+      // A new referrer gets the default tier; its Momence tag has to exist
+      // before a friend can be given the discount.
+      const { data: tier, error } = await db
+        .from('referral_tiers')
+        .select('tag_name')
+        .eq('percent', discountPercent)
+        .single();
+      expect(error).toBeNull();
+      await momence.addTag((tier as { tag_name: string }).tag_name);
+
+      const friend = friendFor(testInfo);
+      expect((await (await redeem(request, code, friend)).json()).result).toBe('redeemed');
+      const after = (await (await me(request, email)).json()) as MyReferral;
+      expect(after.stats).toMatchObject({ redemptions: 1, conversions: 0 });
+    });
+
+    test('someone Momence has never heard of gets no code', async ({ request, db }, testInfo) => {
+      const email = uniqueEmail(testInfo, 'stranger');
+      const response = await me(request, email);
+      expect(response.status()).toBe(404);
+      expect(await response.json()).toEqual({ error: 'member-not-found' });
+      const { data, error } = await db.from('referrers').select('id').eq('email', email);
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    });
+
+    test('a caller without the secret is refused', async ({ request }, testInfo) => {
+      const response = await request.post('/api/referral/me', {
+        data: { email: uniqueEmail(testInfo, 'member') },
+      });
+      expect(response.status()).toBe(401);
+    });
   });
 });

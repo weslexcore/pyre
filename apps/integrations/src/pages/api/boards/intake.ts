@@ -45,6 +45,7 @@ import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { hasBearer } from '@/lib/http/bearer';
+import { isUniqueViolation } from '@/lib/http/json';
 import { type APIRoute, dbError, json } from '@/lib/http/route';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
@@ -115,42 +116,43 @@ export const POST: APIRoute = async ({ request }) => {
   // The idempotent path. A re-delivery refreshes what the caller knows — a
   // corrected party size, a phone number they added — and leaves everything
   // a person has since done to the card (its column, its owner, its notes)
-  // exactly where they put it.
-  if (externalRef) {
-    const { data: existingRow, error: existingError } = await db
+  // exactly where they put it. Answers `created: false`.
+  const refresh = async (existing: BoardCardRow): Promise<Response> => {
+    const { data, error } = await db
+      .from('board_cards')
+      .update({
+        title: parsed.value.title,
+        notes_md: parsed.value.notes_md || existing.notes_md,
+        properties: withoutLinks(
+          fields,
+          normalizeProperties(fields, body.properties, existing.properties)
+        ),
+        updated_by: INTAKE_ACTOR,
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) return dbError(error);
+    await logBoardEvent(db, {
+      cardId: existing.id,
+      action: 'updated',
+      actor: INTAKE_ACTOR,
+      detail: { external_ref: externalRef, redelivered: true },
+    });
+    return json({ card: data as BoardCardRow, created: false });
+  };
+  const findExisting = (ref: string) =>
+    db
       .from('board_cards')
       .select('*')
       .eq('board_id', board.id)
-      .eq('external_ref', externalRef)
+      .eq('external_ref', ref)
       .maybeSingle();
+
+  if (externalRef) {
+    const { data: existingRow, error: existingError } = await findExisting(externalRef);
     if (existingError) return dbError(existingError);
-
-    const existing = (existingRow as BoardCardRow) ?? null;
-    if (existing) {
-      const { data, error } = await db
-        .from('board_cards')
-        .update({
-          title: parsed.value.title,
-          notes_md: parsed.value.notes_md || existing.notes_md,
-          properties: withoutLinks(
-            fields,
-            normalizeProperties(fields, body.properties, existing.properties)
-          ),
-          updated_by: INTAKE_ACTOR,
-        })
-        .eq('id', existing.id)
-        .select('*')
-        .single();
-      if (error) return dbError(error);
-
-      await logBoardEvent(db, {
-        cardId: existing.id,
-        action: 'updated',
-        actor: INTAKE_ACTOR,
-        detail: { external_ref: externalRef, redelivered: true },
-      });
-      return json({ card: data as BoardCardRow, created: false });
-    }
+    if (existingRow) return refresh(existingRow as BoardCardRow);
   }
 
   const { data, error } = await db
@@ -173,7 +175,17 @@ export const POST: APIRoute = async ({ request }) => {
     })
     .select('*')
     .single();
-  if (error) return dbError(error);
+  if (error) {
+    // The same submission delivered twice at once: the other delivery made the
+    // card a moment ago (board_cards_external_ref_uniq). Treat this one as the
+    // redelivery it is rather than failing it.
+    if (externalRef && isUniqueViolation(error)) {
+      const { data: raced, error: racedError } = await findExisting(externalRef);
+      if (racedError) return dbError(racedError);
+      if (raced) return refresh(raced as BoardCardRow);
+    }
+    return dbError(error);
+  }
 
   const card = data as BoardCardRow;
   await logBoardEvent(db, {
