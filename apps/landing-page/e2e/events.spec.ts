@@ -332,6 +332,52 @@ test.describe('event page', () => {
     expect(schema.some((json) => json.includes('"@type":"Event"'))).toBe(true);
   });
 
+  test('Share opens the share sheet with a tagged link to the page', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __shared?: ShareData };
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: async (data: ShareData) => {
+          w.__shared = data;
+        },
+      });
+    });
+    await page.goto(`/events/${E.guided.id}-e2e-guided-sauna`);
+    await page.getByRole('button', { name: 'Share this event' }).click();
+
+    const shared = await page.waitForFunction(
+      () => (window as unknown as { __shared?: ShareData }).__shared
+    );
+    const data = (await shared.jsonValue()) as ShareData;
+    expect(data.title).toBe(E.guided.title);
+    const url = new URL(data.url ?? '');
+    expect(url.pathname).toBe(`/events/${E.guided.id}-e2e-guided-sauna`);
+    expect(url.searchParams.get('utm_campaign')).toBe('event_share');
+    expect(url.searchParams.get('utm_content')).toBe(String(E.guided.id));
+  });
+
+  test('Share copies the link where there is no share sheet', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __copied?: string };
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            w.__copied = text;
+          },
+        },
+      });
+    });
+    await page.goto(`/events/${E.guided.id}-e2e-guided-sauna`);
+    const button = page.getByRole('button', { name: 'Share this event' });
+    await button.click();
+
+    await expect(button).toContainText('Copied!');
+    const copied = await page.evaluate(() => (window as unknown as { __copied?: string }).__copied);
+    expect(copied).toContain(`/events/${E.guided.id}-e2e-guided-sauna?utm_source=share`);
+  });
+
   test('a session that has ended says so and sends the visitor to the schedule', async ({
     page,
   }) => {

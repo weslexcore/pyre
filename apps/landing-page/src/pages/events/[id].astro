@@ -328,6 +328,10 @@ const breadcrumbSchema = event
     }
   : null;
 
+// What the Share button needs; the URL (with its UTM tags) is built in the
+// browser from the current origin, same as the detail modal's.
+const shareData = event ? { id: event.id, title: event.title, path: eventPath(event) } : null;
+
 // Payload for the booking-click event, so the page feeds the same funnel as the
 // schedule rows and the detail modal (see lib/analytics.ts).
 const analyticsEvent = event
@@ -419,15 +423,34 @@ const analyticsEvent = event
             event.image ? 'pt-10' : 'pt-8',
           ]}
         >
-          <a
-            href={EVENTS_PATH}
-            class="inline-flex items-center gap-2 rounded-full font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/60 transition-colors hover:text-[var(--pyre-creme)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            All Upcoming Sessions
-          </a>
+          <div class="flex items-center justify-between gap-4">
+            <a
+              href={EVENTS_PATH}
+              class="inline-flex items-center gap-2 rounded-full font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/60 transition-colors hover:text-[var(--pyre-creme)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              All Upcoming Sessions
+            </a>
+
+            {/* Same share as the detail modal: the native share sheet where there
+                is one (most phones), else the link goes to the clipboard. */}
+            <button
+              type="button"
+              data-share-event
+              aria-label="Share this event"
+              class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--pyre-gold)]/70 px-3 py-1.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-[var(--pyre-gold)] hover:bg-[var(--pyre-creme)]/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+            >
+              <svg data-share-icon class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              <svg data-copied-icon class="hidden h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span data-share-label>Share</span>
+            </button>
+          </div>
 
           <h1 class="mt-5 font-primary-semibold text-[clamp(2.25rem,6vw,4.25rem)] uppercase leading-[0.95] tracking-[-0.03em] text-[var(--pyre-creme)]">
             {event.title}
@@ -604,6 +627,57 @@ const analyticsEvent = event
       setTimeout(function () {
         window.location.replace(target);
       }, delay);
+    </script>
+  )}
+
+  {shareData && (
+    <script is:inline define:vars={{ share: shareData }}>
+      // Mirrors handleShare() in EventDetailModal: the native share sheet when
+      // the browser has one, otherwise copy the link and say so on the button.
+      (function () {
+        var button = document.querySelector('[data-share-event]');
+        if (!button) return;
+        var label = button.querySelector('[data-share-label]');
+        var shareIcon = button.querySelector('[data-share-icon]');
+        var copiedIcon = button.querySelector('[data-copied-icon]');
+        var resetTimer;
+
+        function showCopied(copied) {
+          label.textContent = copied ? 'Copied!' : 'Share';
+          shareIcon.classList.toggle('hidden', copied);
+          copiedIcon.classList.toggle('hidden', !copied);
+        }
+
+        button.addEventListener('click', async function () {
+          var url = new URL(share.path, window.location.origin);
+          url.searchParams.set('utm_source', 'share');
+          url.searchParams.set('utm_medium', 'referral');
+          url.searchParams.set('utm_campaign', 'event_share');
+          url.searchParams.set('utm_content', share.id);
+          var shareUrl = url.toString();
+
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: share.title, url: shareUrl });
+            } catch (err) {
+              // A dismissed share sheet is not an error.
+              if (!err || err.name !== 'AbortError') console.error('Share failed:', err);
+            }
+            return;
+          }
+
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            showCopied(true);
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(function () {
+              showCopied(false);
+            }, 2000);
+          } catch (err) {
+            console.error('Failed to copy link:', err);
+          }
+        });
+      })();
     </script>
   )}
 
