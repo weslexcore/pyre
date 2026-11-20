@@ -7,6 +7,11 @@
 #
 # The status check to require on PRs is `E2E` (the `result` job at the end).
 #
+# It also runs on pushes to master. That checks the merged result and, more
+# importantly, saves the Yarn, browser and apt caches under master, where
+# every PR can restore them. GitHub only shares caches from the base branch,
+# so without these runs each PR's first run would start from nothing.
+#
 # Adding an app: give it a `test:e2e` script (see packages/e2e-utils/README.md),
 # then add a filter below named after its directory under apps/, and add the
 # name to ALL_APPS. The filter name is the matrix value, and the workspace is
@@ -16,11 +21,15 @@ name: E2E
 
 on:
   pull_request:
+  push:
+    branches: [master]
   workflow_dispatch:
 
+# A new push to a PR replaces its running suite. Master runs are left to
+# finish, so each merge is checked and its caches get saved.
 concurrency:
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -40,7 +49,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: filter
-        if: ${{ github.event_name == 'pull_request' }}
+        # On a push, the filter compares against the commit before the push.
+        if: ${{ github.event_name != 'workflow_dispatch' }}
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -154,6 +164,10 @@ jobs:
         run: |
           mkdir -p ~/.cache/apt-debs
           rm -f ~/.cache/apt-debs/*.deb
+          # Drop debs the current index no longer lists (superseded versions,
+          # often restored from an older key), so the cache doesn't grow with
+          # each Playwright upgrade.
+          sudo apt-get autoclean -qq
           if ! sudo cp /var/cache/apt/archives/*.deb ~/.cache/apt-debs/; then
             echo "::warning::No apt packages to cache; the next run downloads them again."
           fi
