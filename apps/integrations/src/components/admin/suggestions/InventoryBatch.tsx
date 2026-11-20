@@ -384,11 +384,15 @@ function CountRow({
         disabled={disabled}
         onValidity={onValidity}
         onChange={(next) => {
-          if (next !== null) onChange({ ...value, inStock: next });
+          // A typed number is what is on hand: a set, not a change.
+          if (next !== null) onChange({ ...value, inStock: next, change: null });
           else onValidity(false);
         }}
       />
       {delta && <span className="font-mono text-xs text-white/60">{delta}</span>}
+      {!delta && value.inStock === value.previousInStock && (
+        <span className="font-mono text-xs text-white/40">same, recounted</span>
+      )}
     </div>
   );
 }

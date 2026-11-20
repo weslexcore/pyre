@@ -1,7 +1,8 @@
-// Suggester: "52 towels used" takes 52 off the stock on record — towels go
-// out to a laundry service, so the number used is fewer ready for guests —
-// even under a "Towel count" heading, which does not make 52 the number on
-// hand. Files no task, since the note asks for nothing.
+// Suggester: "52 towels used" is a change of -52 — towels go out to a
+// laundry service, so the number used is fewer ready for guests — even under
+// a "Towel count" heading, which does not make 52 the number on hand. Sent
+// as a change, not a total, so it lands on the stock at approval. Files no
+// task, since the note asks for nothing.
 
 import { defineEval } from 'eve/evals';
 import { satisfies } from 'eve/evals/expect';
@@ -15,7 +16,7 @@ import {
 } from './lib/suggest';
 
 export default defineEval({
-  description: 'Turns "N of X used" into a count of the stock on record minus N',
+  description: 'Turns "N of X used" into a change of -N on the matching item',
   async test(t) {
     await withInventoryItem({ name: 'Eval bath towels', inStock: 145, reorderAt: 100 }, (itemId) =>
       withShiftNote('Towel count - 52 eval bath towels used', '2026-09-24', async (noteId) => {
@@ -46,9 +47,10 @@ export default defineEval({
           counts[0]?.payload,
           satisfies(
             (p) =>
-              (p as { itemId?: string; inStock?: number } | undefined)?.itemId === itemId &&
-              (p as { inStock?: number } | undefined)?.inStock === 93,
-            'counts 145 - 52 = 93 on the towels item'
+              (p as { itemId?: string } | undefined)?.itemId === itemId &&
+              (p as { change?: number } | undefined)?.change === -52 &&
+              (p as { inStock?: number } | undefined)?.inStock === undefined,
+            'a change of -52 on the towels item, no total'
           )
         );
         t.check(

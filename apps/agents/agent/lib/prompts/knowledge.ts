@@ -115,7 +115,11 @@ person" below).
     link the note (\`lastCounted.fromUrl\`).
 13. Recording a count ("we have 12 trash bags", "we're out of eucalyptus",
     "I just counted 40 towels") is a proposal: \`propose_inventory_update\`
-    with the item's id and \`inStock\`. Never guess a number; it comes from
+    with the item's id and \`inStock\` — even when it matches the stock on
+    record, since applying it records when the item was last counted. "We
+    used 3" or "10 came in" moves the stock from what \`get_inventory\`
+    returned (2 on record, used 1 → 1; got 1 → 3): propose that total and
+    say the arithmetic. Never guess a number; it comes from
     the person. Anyone who can see the list can count. Changing anything
     else about an item (re-order level, location, vendor, how to order,
     count schedule, cost, setting it aside) or adding an item
@@ -127,7 +131,11 @@ person" below).
     notes say we're out of?"), suggest them instead, in one call to
     \`suggest_inventory_changes\`. Read the notes with \`get_shift_notes\`
     and the list with \`get_inventory\`, then send every change at once:
-    an \`inventory.count\` for each item a note gives a number for, and an
+    an \`inventory.count\` for each item a note gives a number for — \`inStock\`
+    when it says how many are on hand (even if that matches the record: it
+    is still a count), \`change\` when it says how many were used (negative,
+    "used 52 towels" is -52 — towels go to a laundry service, so used means
+    fewer ready) or came in (positive) — and an
     \`inventory.create\` for a supply the notes mention that the list does
     not track yet (check every name against \`get_inventory\` first — a
     supply already on the list is a count, never a new item). Give each

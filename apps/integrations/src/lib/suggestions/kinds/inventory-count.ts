@@ -1,6 +1,9 @@
 // inventory.count: a new stock number for one inventory item, when a note
 // says how much of something is left ("three rolls of trash bags left",
-// "we're out of eucalyptus"). Applied the way a count on /admin/inventory
+// "we're out of eucalyptus") — a set, applied even when it matches the
+// record, since that is still a count and refreshes when it was last
+// counted — or how much it moved ("used 52 towels", "got 10 in"), a change
+// applied to the stock as it stands at approval. Applied the way a count on /admin/inventory
 // is — the item's in_stock, a history row, the low-stock alert — except that
 // the count is credited to the note's author at the time of the note, with
 // the suggestion (and through it the note) stamped on the item and the
@@ -12,7 +15,7 @@ import { notifyIfLow } from '@/lib/inventory/alerts';
 import { recordChange } from '@/lib/inventory/history';
 import { formatQuantity } from '@/lib/inventory/rules';
 import { type InventoryRow, inventoryItemHref } from '@/lib/inventory/types';
-import { type InventoryCountPayload, PAYLOAD_PARSERS } from '../types';
+import { type InventoryCountPayload, PAYLOAD_PARSERS, stockAfterChange } from '../types';
 import type { Applied, KindHandler } from './handler';
 
 /** PostgREST hands numeric columns back as strings. */
@@ -52,10 +55,25 @@ export const inventoryCount: KindHandler<'inventory.count'> = {
         error: `${item.name} is set aside (inactive); mark it active on /admin/inventory before counting it`,
       };
     }
+    // A change lands on the stock as it stands now, so the total the admin
+    // sees (and approves) is always against the current record.
+    let inStock = payload.inStock;
+    if (payload.change !== null) {
+      const next = stockAfterChange(item.in_stock, payload.change);
+      if (next === null) {
+        return {
+          ok: false,
+          status: 422,
+          error: `${item.name} has ${formatQuantity(item.in_stock)} on record, so a change of ${formatQuantity(payload.change)} would go below zero; count it instead`,
+        };
+      }
+      inStock = next;
+    }
     // The item as it stands, for the admin reading the suggestion. Who
     // counted it (the note's author) is filled at intake and kept as sent.
     const value: InventoryCountPayload = {
       ...payload,
+      inStock,
       itemName: item.name,
       previousInStock: item.in_stock,
       reorderAt: item.reorder_at,
@@ -85,10 +103,19 @@ export const inventoryCount: KindHandler<'inventory.count'> = {
     const countedAt =
       countedAtRaw && !Number.isNaN(Date.parse(countedAtRaw)) ? new Date(countedAtRaw) : new Date();
 
+    // A change is taken off (or added to) the stock as it is this moment.
+    const inStock =
+      payload.change === null ? payload.inStock : stockAfterChange(before.in_stock, payload.change);
+    if (inStock === null) {
+      throw new Error(
+        `${before.name} has ${formatQuantity(before.in_stock)} on record; a change of ${formatQuantity(payload.change ?? 0)} would go below zero`
+      );
+    }
+
     const { data, error } = await db
       .from('inventory')
       .update({
-        in_stock: payload.inStock,
+        in_stock: inStock,
         last_counted_at: countedAt.toISOString(),
         last_counted_by: countedBy,
         last_count_suggestion_id: context.suggestion.id,

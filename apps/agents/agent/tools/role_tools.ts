@@ -600,24 +600,38 @@ export default defineDynamic({
         }),
         suggest_inventory_changes: defineTool({
           description:
-            "Suggest the inventory changes the shift notes call for, as one batch an admin reviews and approves together: a count on an item the list has (inventory.count — the number on hand a note gives) and a new item for a supply the list does not track yet (inventory.create). Read the notes with get_shift_notes and the list with get_inventory first. Give each change the shiftNoteId it was read from, so its count is credited to that note's author at the note's time. Filed for review like a shift-note suggestion, not applied: an admin edits the counts or items in place and approves the batch.",
+            "Suggest the inventory changes the shift notes call for, as one batch an admin reviews and approves together: a count on an item the list has (inventory.count — the number on hand a note gives, or how much it moved: used, received) and a new item for a supply the list does not track yet (inventory.create). Read the notes with get_shift_notes and the list with get_inventory first. Give each change the shiftNoteId it was read from, so its count is credited to that note's author at the note's time. Filed for review like a shift-note suggestion, not applied: an admin edits the counts or items in place and approves the batch.",
           inputSchema: z.object({
             changes: z
               .array(
                 z.discriminatedUnion('kind', [
-                  z.object({
-                    kind: z.literal('inventory.count'),
-                    itemId: z.string().uuid().describe('The item id from get_inventory.'),
-                    inStock: z
-                      .number()
-                      .min(0)
-                      .max(100000)
-                      .describe(
-                        'Stock on hand as the note gives it ("3 left" is 3; "out of" is 0). Resolve "used two" or "ten more came in" against the stock get_inventory returned.'
-                      ),
-                    shiftNoteId: z.string().uuid().optional().describe('The note id from get_shift_notes.'),
-                    rationale: z.string().min(1).max(600).describe('What the note said, briefly.'),
-                  }),
+                  z
+                    .object({
+                      kind: z.literal('inventory.count'),
+                      itemId: z.string().uuid().describe('The item id from get_inventory.'),
+                      inStock: z
+                        .number()
+                        .min(0)
+                        .max(100000)
+                        .optional()
+                        .describe(
+                          'A set: stock on hand as the note gives it ("3 left" is 3; "out of" is 0), even when it matches the stock on record. Omit when the note gives a change.'
+                        ),
+                      change: z
+                        .number()
+                        .min(-100000)
+                        .max(100000)
+                        .refine((n) => n !== 0, 'A change of 0 is no change; send inStock for a count.')
+                        .optional()
+                        .describe(
+                          'A change: how much the stock moved, signed ("used 52" is -52, "10 more came in" is 10), applied to the stock on record at approval. Omit when the note gives the number on hand.'
+                        ),
+                      shiftNoteId: z.string().uuid().optional().describe('The note id from get_shift_notes.'),
+                      rationale: z.string().min(1).max(600).describe('What the note said, briefly.'),
+                    })
+                    .refine((c) => (c.inStock === undefined) !== (c.change === undefined), {
+                      message: 'Give inStock (the number on hand) or change (how much it moved), not both.',
+                    }),
                   z.object({
                     kind: z.literal('inventory.create'),
                     name: z

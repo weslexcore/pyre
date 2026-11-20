@@ -170,6 +170,18 @@ describe('save_suggestions input', () => {
       }).success
     ).toBe(false);
   });
+
+  it('takes a signed change instead of a number on hand, but not both or neither', () => {
+    const one = (payload: Record<string, unknown>) =>
+      saveSuggestionsInput.safeParse({
+        suggestions: [{ kind: 'inventory.count', rationale: 'x', payload: { itemId: NOTE, ...payload } }],
+      }).success;
+    expect(one({ change: -52 })).toBe(true);
+    expect(one({ change: 1 })).toBe(true);
+    expect(one({ change: 0 })).toBe(false);
+    expect(one({ inStock: 2, change: -1 })).toBe(false);
+    expect(one({})).toBe(false);
+  });
 });
 
 describe('save_suggestions inventory.create', () => {
