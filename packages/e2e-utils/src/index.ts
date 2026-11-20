@@ -30,7 +30,7 @@ export {
   type RecordedRequest,
   runMockServer,
 } from './mock-server';
-export { stubJson, stubMailchimpJsonp, stubTurnstile } from './routes';
+export { stubJson, stubMailchimpJsonp, stubTurnstile, TURNSTILE_SOLVED } from './routes';
 export {
   type AuthUserInput,
   emailLinks,

@@ -281,6 +281,11 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
       return turnstileScriptPromise;
     }
 
+    // Events only a person at a device produces (scripts that fill and submit a
+    // form fire none of them). Keyboard and touch are here so visitors who
+    // never use a mouse aren't dropped as bots.
+    const HUMAN_INPUT_EVENTS = ['mousemove', 'pointerdown', 'touchstart', 'keydown'] as const;
+
     function initSignupForms() {
       if (cleanup) {
         cleanup();
@@ -301,7 +306,9 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
         const formStartTime = Date.now();
         let hasInteracted = false;
-        let mouseMoved = false;
+        // Any real input device counts: a mouse, a finger, or a key press. A
+        // keyboard-only or touch-only visitor never fires mousemove.
+        let humanInput = false;
         let turnstileToken = '';
         let turnstileRequested = false;
 
@@ -370,16 +377,20 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         turnstileObserver.observe(form);
         cleanupFns.push(() => turnstileObserver.disconnect());
 
-        const handleMouseMove = () => { mouseMoved = true; };
+        const handleHumanInput = () => { humanInput = true; };
         const handleFocusIn = () => { hasInteracted = true; };
         const handleInput = () => { hasInteracted = true; };
 
         if (antiSpamConfig.trackInteractions) {
-          document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+          for (const type of HUMAN_INPUT_EVENTS) {
+            document.addEventListener(type, handleHumanInput, { once: true, passive: true });
+          }
           form.addEventListener('focusin', handleFocusIn, { passive: true });
           form.addEventListener('input', handleInput, { passive: true });
           cleanupFns.push(() => {
-            document.removeEventListener('mousemove', handleMouseMove);
+            for (const type of HUMAN_INPUT_EVENTS) {
+              document.removeEventListener(type, handleHumanInput);
+            }
             form.removeEventListener('focusin', handleFocusIn);
             form.removeEventListener('input', handleInput);
           });
@@ -435,7 +446,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             }
           }
 
-          if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
+          if (antiSpamConfig.trackInteractions && (!hasInteracted || !humanInput)) {
             return;
           }
 

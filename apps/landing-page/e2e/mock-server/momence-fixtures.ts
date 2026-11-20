@@ -3,8 +3,10 @@
 //
 // The set is chosen to exercise the events pipeline: three category tags (so
 // the type filter renders), one full session (waitlist CTA), three sessions
-// the public pipeline must drop (volunteer, cancelled, past), and a special
-// event sold as overlapping 1hr/2hr sessions that share an hourly capacity.
+// the public pipeline must drop (volunteer, cancelled, past), an Open Hours
+// entry slot sold with longer sessions at the same start (the pooled booking
+// most visits go through), and a special event sold as overlapping 1hr/2hr
+// sessions that share an hourly capacity.
 
 import { daysFromNow } from '@pyre/e2e-utils/server';
 import type { MomenceEvent, MomenceTeacher } from '../../src/lib/momence-types';
@@ -50,6 +52,26 @@ export const SHARED_CAPACITY_EVENT = {
   twoHour: { id: 900009, booked: 12 },
   secondHour: { id: 900010, booked: 5 },
   expected: { firstHourLeft: 18, secondHourLeft: 23 },
+} as const;
+
+/**
+ * Open Hours, as Pyre sells it: a 1hr entry slot plus longer sessions at the
+ * same start, all on the shared floor (each at or under the 20-person cap).
+ * The schedule shows only the 1hr row; its details offer every duration,
+ * shortest first, each going to its own Momence checkout. The 3hr is listed
+ * before the 2hr here so the specs prove the sort, and it is sold out by its
+ * own Momence capacity while the floor still has room, so the specs see an
+ * available option beside a sold-out one.
+ *
+ * The exact spots left are the capacity model's business (unit-tested in
+ * src/lib); the specs only check which options are bookable.
+ */
+export const OPEN_HOURS = {
+  title: 'E2E Open Hours',
+  // Momence drop-in prices; the modal shows them as credits ($25 a credit).
+  entry: { id: 900011, minutes: 60, price: 25, credits: 1, capacity: 20, booked: 2 },
+  twoHour: { id: 900012, minutes: 120, price: 50, credits: 2, capacity: 20, booked: 1 },
+  threeHour: { id: 900013, minutes: 180, price: 75, credits: 3, capacity: 2, booked: 2 },
 } as const;
 
 function event(
@@ -103,7 +125,27 @@ export function momenceEvents(now = new Date()): MomenceEvent[] {
     event({ ...e.cancelled, dateTime: daysFromNow(3, 20, 0, now), isCancelled: true }),
     event({ ...e.past, dateTime: daysFromNow(-3, 18, 0, now), tags: ['Guided'] }),
     ...sharedCapacityEvents(now),
+    ...openHoursEvents(now),
   ];
+}
+
+function openHoursEvents(now: Date): MomenceEvent[] {
+  const o = OPEN_HOURS;
+  // 3pm UTC: 10am in Richmond, clear of every other fixture's hours.
+  const start = daysFromNow(7, 15, 0, now);
+  return [o.entry, o.threeHour, o.twoHour].map(({ id, minutes, price, capacity, booked }) =>
+    event({
+      id,
+      title: o.title,
+      dateTime: start,
+      duration: minutes,
+      fixedPrice: price,
+      capacity,
+      spotsRemaining: capacity - booked,
+      ticketsSold: booked,
+      tags: ['Open Hours'],
+    })
+  );
 }
 
 function sharedCapacityEvents(now: Date): MomenceEvent[] {

@@ -40,6 +40,9 @@ export const accountConfig = {
     emptyStateAction: 'Book Your Next Session',
     cancelButton: 'Cancel',
     cancelConfirm: 'Are you sure you want to cancel this booking?',
+    cancelFailed: 'We couldn’t cancel this booking. Please try again.',
+    sessionExpired: 'Your sign-in has expired. Sign in again to manage your bookings.',
+    signInAgainButton: 'Sign In Again',
     viewAllButton: 'View All Sessions',
   },
   attendedSessions: {

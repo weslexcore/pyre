@@ -6,9 +6,10 @@ import { allowConsole, DESKTOP_ONLY_TAG, stubJson } from '@pyre/e2e-utils';
 import {
   FIXTURE_EVENTS as E,
   momenceEvents,
+  OPEN_HOURS as OH,
   SHARED_CAPACITY_EVENT as SC,
 } from './mock-server/momence-fixtures';
-import { expect, expectNoSidewaysScroll, test } from './test';
+import { clickAfterScroll, expect, expectNoSidewaysScroll, test } from './test';
 
 /** The fixture's start-end range as Pyre writes it, in Richmond time. */
 function richmondTimeRange(id: number): string {
@@ -72,6 +73,7 @@ test.describe('schedule', () => {
       'Special Event',
       'Yoga',
       'Breathwork',
+      'Open Hours',
     ]);
 
     await filters.getByRole('button', { name: 'Yoga' }).click();
@@ -96,7 +98,7 @@ test.describe('schedule', () => {
 
   test('a row opens the session details, which close again', async ({ page }) => {
     await page.goto('/events');
-    await row(page, E.guided.title).click();
+    await clickAfterScroll(row(page, E.guided.title));
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -111,7 +113,7 @@ test.describe('schedule', () => {
 
   test('the session title in the details links to its event page', async ({ page }) => {
     await page.goto('/events');
-    await row(page, E.guided.title).click();
+    await clickAfterScroll(row(page, E.guided.title));
 
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('link', { name: E.guided.title, exact: true }).click();
@@ -128,7 +130,7 @@ test.describe('schedule', () => {
 
   test('Escape closes the session details', async ({ page }) => {
     await page.goto('/events');
-    await row(page, E.guided.title).click();
+    await clickAfterScroll(row(page, E.guided.title));
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
@@ -141,7 +143,7 @@ test.describe('schedule', () => {
     await expect(row(page, E.guided.title)).toBeVisible();
     await expectNoSidewaysScroll(page);
 
-    await row(page, E.guided.title).click();
+    await clickAfterScroll(row(page, E.guided.title));
     await expect(page.getByRole('dialog')).toBeVisible();
     await expectNoSidewaysScroll(page);
   });
@@ -196,6 +198,79 @@ test.describe('schedule', () => {
   });
 });
 
+// Open Hours is sold as a 1hr entry slot plus longer sessions at the same
+// start (mock-server/momence-fixtures.ts OPEN_HOURS). The visitor sees one row
+// and picks a duration in its details, each going to that session's checkout.
+test.describe('Open Hours: one entry slot, a choice of durations', () => {
+  const checkout = (id: number) => `https://momence.com/s/${id}?skipPreview=true`;
+
+  // Open the entry slot's details. Through ?event= rather than a tap: the
+  // slot is the schedule's last row, and on a phone the sticky chrome (the
+  // filters, the date header, the offer bar) can leave it no tappable spot.
+  async function openEntrySlot(page: import('@playwright/test').Page) {
+    await page.goto(`/events?event=${OH.entry.id}`);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('#event-detail-title')).toHaveText(OH.title);
+    return dialog;
+  }
+
+  test('the longer sessions are folded into the entry slot, not listed', async ({ page }) => {
+    await page.goto('/events');
+
+    const rows = row(page, OH.title);
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText(richmondTimeRange(OH.entry.id));
+    for (const longer of [OH.twoHour, OH.threeHour]) {
+      await expect(rows.filter({ hasText: richmondTimeRange(longer.id) })).toHaveCount(0);
+    }
+  });
+
+  test('the details offer each duration, shortest first, at its own price', async ({ page }) => {
+    const dialog = await openEntrySlot(page);
+    const options = dialog.locator('[data-booking-option]');
+    await expect(options).toHaveCount(3);
+    await expect(options.locator(':scope > span:nth-child(1)')).toHaveText([
+      '1 Hour',
+      '2 Hours',
+      '3 Hours',
+    ]);
+    await expect(options.locator(':scope > span:nth-child(2)')).toHaveText([
+      `${OH.entry.credits} Credit`,
+      `${OH.twoHour.credits} Credits`,
+      `${OH.threeHour.credits} Credits`,
+    ]);
+  });
+
+  test('each available duration books its own Momence session', async ({ page }) => {
+    const dialog = await openEntrySlot(page);
+    for (const [label, session] of [
+      ['Book 1 hour', OH.entry],
+      ['Book 2 hours', OH.twoHour],
+    ] as const) {
+      const book = dialog.getByRole('link', { name: `${label} — ${OH.title}` });
+      await expect(book).toHaveAttribute('href', checkout(session.id));
+      await expect(book).toHaveAttribute('target', '_blank');
+      await expect(book).toHaveText(/Book Now/);
+    }
+  });
+
+  test('a sold-out duration sits beside the bookable ones, with no checkout', async ({ page }) => {
+    const dialog = await openEntrySlot(page);
+    const soldOut = dialog.locator(`[data-booking-option="${OH.threeHour.minutes}"]`);
+    await expect(soldOut).toContainText('Sold Out');
+    await expect(soldOut.getByRole('link')).toHaveCount(0);
+    await expect(soldOut.locator('[aria-disabled="true"]')).toHaveText('Sold Out');
+    // Nothing anywhere in the details points at the sold-out session.
+    await expect(dialog.locator(`a[href*="/s/${OH.threeHour.id}"]`)).toHaveCount(0);
+
+    for (const open of [OH.entry, OH.twoHour]) {
+      const option = dialog.locator(`[data-booking-option="${open.minutes}"]`);
+      await expect(option).toContainText(/\d+ left/);
+      await expect(option).not.toContainText('Sold Out');
+    }
+  });
+});
+
 // Overlapping sessions of one special event (a 1hr and a 2hr at the same start,
 // another 1hr after) are separate Momence sessions with their own capacities,
 // but the space holds the event's capacity per hour between them.
@@ -215,7 +290,7 @@ test.describe('a special event sold in overlapping 1hr and 2hr sessions', () => 
 
   test('both durations share the hourly capacity', async ({ page }) => {
     await page.goto('/events');
-    await slot(page, SC.firstHour.id).click();
+    await clickAfterScroll(slot(page, SC.firstHour.id));
 
     const dialog = page.getByRole('dialog');
     const left = `${SC.expected.firstHourLeft} left`;

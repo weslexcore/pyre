@@ -4,7 +4,10 @@
 // every page `newPage()` opens (another person signed in during the test):
 //   1. Storage seeding: localStorage values written before any page script
 //      runs, e.g. to pre-dismiss a promo popup that would otherwise cover the
-//      page in every test.
+//      page in every test. The suite's values are the default of the
+//      `seedLocalStorage` option, so a file or describe block that needs
+//      different storage replaces them with `test.use({ seedLocalStorage })`
+//      instead of racing the seeding with an init script of its own.
 //   2. External blocking: browser requests to hosts outside the allowlist are
 //      aborted, so a test can never reach a real third party by accident. A
 //      test that needs one stubs it with page.route (see routes.ts); routes
@@ -58,6 +61,12 @@ function matches(text: string, patterns: ConsolePattern[]): boolean {
 }
 
 interface PyreFixtures {
+  /**
+   * localStorage written before every document loads. Defaults to the suite's
+   * `CreateTestOptions.localStorage`; `test.use({ seedLocalStorage: {} })`
+   * turns the seeding off, and any other value replaces it.
+   */
+  seedLocalStorage: Record<string, string>;
   /** Per-test or per-file additions to the suite's console allowlist. */
   consoleAllowlist: ConsolePattern[];
   /** Errors the guard has collected so far; a test can inspect it. */
@@ -81,8 +90,8 @@ export function createTest(options: CreateTestOptions = {}) {
   ];
 
   /** Storage seeding and external blocking, for every page a test opens. */
-  const preparePage = async (page: Page) => {
-      if (options.localStorage && Object.keys(options.localStorage).length > 0) {
+  const preparePage = async (page: Page, seedLocalStorage: Record<string, string>) => {
+      if (Object.keys(seedLocalStorage).length > 0) {
         await page.addInitScript((entries) => {
           for (const [key, value] of Object.entries(entries)) {
             try {
@@ -91,7 +100,7 @@ export function createTest(options: CreateTestOptions = {}) {
               // Opaque origins (about:blank) have no storage; nothing to seed.
             }
           }
-        }, options.localStorage);
+        }, seedLocalStorage);
       }
 
       await page.route(
@@ -115,10 +124,11 @@ export function createTest(options: CreateTestOptions = {}) {
   };
 
   return base.extend<PyreFixtures>({
+    seedLocalStorage: [options.localStorage ?? {}, { option: true }],
     consoleAllowlist: [[], { option: true }],
 
-    page: async ({ page }, use) => {
-      await preparePage(page);
+    page: async ({ page, seedLocalStorage }, use) => {
+      await preparePage(page, seedLocalStorage);
       await use(page);
     },
 
@@ -133,6 +143,7 @@ export function createTest(options: CreateTestOptions = {}) {
         browser,
         browserErrors,
         consoleAllowlist,
+        seedLocalStorage,
         baseURL,
         viewport,
         userAgent,
@@ -161,7 +172,7 @@ export function createTest(options: CreateTestOptions = {}) {
         });
         contexts.push(context);
         const page = await context.newPage();
-        await preparePage(page);
+        await preparePage(page, seedLocalStorage);
         // Errors land in the test's own list, so the guard below covers them.
         watchErrors(
           page,

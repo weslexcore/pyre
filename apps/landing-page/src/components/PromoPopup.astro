@@ -490,13 +490,17 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
         if (timestampInput) timestampInput.value = formStartTime.toString();
 
         let hasInteracted = false;
-        let mouseMoved = false;
+        // A mouse, a finger or a key press: keyboard-only and touch-only
+        // visitors never fire mousemove, and mustn't be dropped as bots.
+        let humanInput = false;
 
-        const handleMouseMove = () => { mouseMoved = true; };
+        const handleHumanInput = () => { humanInput = true; };
         const handleFocusIn = () => { hasInteracted = true; };
 
         if (antiSpamConfig.trackInteractions) {
-          document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+          for (const type of ['mousemove', 'pointerdown', 'touchstart', 'keydown']) {
+            document.addEventListener(type, handleHumanInput, { once: true, passive: true });
+          }
           popupForm.addEventListener('focusin', handleFocusIn, { passive: true });
         }
 
@@ -536,7 +540,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
           }
 
           // Interaction check
-          if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) return;
+          if (antiSpamConfig.trackInteractions && (!hasInteracted || !humanInput)) return;
 
           const submitBtn = popupForm.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (submitBtn) submitBtn.disabled = true;
