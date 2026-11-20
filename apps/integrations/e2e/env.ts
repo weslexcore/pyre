@@ -27,6 +27,7 @@ export const SECRETS = {
   momenceBackfill: 'e2e-momence-backfill-secret',
   mailchimpWebhook: 'e2e-mailchimp-webhook-secret',
   mailchimpSigning: 'e2e-mailchimp-signing-secret',
+  boardIntake: 'e2e-board-intake-secret',
   // Svix format: whsec_ + base64 of the signing key.
   resendWebhook: `whsec_${Buffer.from('e2e-resend-signing-key').toString('base64')}`,
 } as const;
@@ -140,6 +141,7 @@ export const APP_ENV: Record<string, string> = {
   MAILCHIMP_WEBHOOK_SECRET: SECRETS.mailchimpWebhook,
   MAILCHIMP_WEBHOOK_SIGNING_SECRET: SECRETS.mailchimpSigning,
   RESEND_WEBHOOK_SECRET: SECRETS.resendWebhook,
+  BOARD_INTAKE_SECRET: SECRETS.boardIntake,
 
   // The tag a referrer's reward rides on (left blank, the app would look up a
   // tag named "").

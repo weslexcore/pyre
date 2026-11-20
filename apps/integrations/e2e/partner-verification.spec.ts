@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SECRETS } from './env';
 import { momence } from './momence';
 import { PARTNER, PARTNER_OFF } from './partners';
+import { ADMIN, STAFF } from './roles';
 import { expect, test } from './test';
 import { emailsTo, upstreamRequests } from './upstream';
 
@@ -248,6 +249,121 @@ test.describe('partner verification', { tag: DESKTOP_ONLY_TAG }, () => {
       expect((await momence.member(Number(row.momence_member_id)))?.tags).toEqual([
         PARTNER.tagName,
       ]);
+    });
+  });
+
+  // /admin/partners: the queue staff work when a partner's desk is slow.
+  test.describe('the admin queue', () => {
+    const act = (admin: APIRequestContext, id: string, action: string) =>
+      admin.post('/api/admin/partner-requests', { data: { id, action } });
+
+    test('an admin finds a request and confirms it for the partner', async ({
+      request,
+      as,
+      db,
+    }, testInfo) => {
+      const customer = customerFor(testInfo);
+      expect((await submit(request, customer)).status()).toBe(200);
+      const admin = await as(ADMIN);
+
+      const list = await admin.get(
+        `/api/admin/partner-requests?status=pending&q=${encodeURIComponent(customer.email)}`
+      );
+      expect(list.status()).toBe(200);
+      const { requests, counts } = (await list.json()) as {
+        requests: { id: string; customer_email: string; status: string }[];
+        counts: Record<string, number>;
+      };
+      expect(requests.map((r) => [r.customer_email, r.status])).toEqual([
+        [customer.email, 'pending'],
+      ]);
+      expect(counts.pending).toBeGreaterThanOrEqual(1);
+
+      const confirmed = await act(admin, requests[0].id, 'confirm');
+      expect(confirmed.status(), await confirmed.text()).toBe(200);
+      expect(await confirmed.json()).toEqual({ ok: true, outcome: 'confirmed' });
+      const { data, error } = await db
+        .from('partner_verifications')
+        .select('status, decided_by, momence_member_id')
+        .eq('id', requests[0].id)
+        .single();
+      expect(error).toBeNull();
+      // On the record as the admin's decision, not the partner's.
+      expect(data).toMatchObject({ status: 'confirmed', decided_by: ADMIN.email });
+      expect((await momence.member(Number(data?.momence_member_id)))?.tags).toEqual([
+        PARTNER.tagName,
+      ]);
+      expect(await emailsTo(customer.email, 'partner-verified')).toHaveLength(1);
+
+      // A second decision, or the partner's own link afterwards, changes nothing.
+      expect((await act(admin, requests[0].id, 'deny')).status()).toBe(409);
+      const { confirm } = await deskLinks(customer);
+      expect(await (await request.get(confirm)).text()).toContain('Already handled');
+      expect(await emailsTo(customer.email, 'partner-denied')).toEqual([]);
+    });
+
+    test('re-sending to the partner is throttled, then goes out with the same request', async ({
+      request,
+      as,
+      db,
+    }, testInfo) => {
+      const customer = customerFor(testInfo);
+      expect((await submit(request, customer)).status()).toBe(200);
+      const [{ id }] = await requestsFor(db, customer.email);
+      const admin = await as(ADMIN);
+
+      // Just sent: a double click can't spam the partner.
+      const tooSoon = await act(admin, id, 'resend');
+      expect(tooSoon.status()).toBe(429);
+      expect((await tooSoon.json()).retryAfterSeconds).toBeGreaterThan(0);
+
+      // Ten minutes on, it goes out again.
+      const { error } = await db
+        .from('partner_verifications')
+        .update({ last_notified_at: new Date(Date.now() - 10 * 60_000).toISOString() })
+        .eq('id', id);
+      expect(error).toBeNull();
+      const resent = await act(admin, id, 'resend');
+      expect(resent.status(), await resent.text()).toBe(200);
+      const desk = (await emailsTo(PARTNER.contact, 'partner-verification-request')).filter((e) =>
+        e.html.includes(customer.email)
+      );
+      expect(desk).toHaveLength(2);
+      // Still one request, still pending; either email's links decide it.
+      expect(await requestsFor(db, customer.email)).toEqual([
+        expect.objectContaining({ id, status: 'pending', notified_count: 1 }),
+      ]);
+    });
+
+    test('an admin can deny; a decided request cannot be re-sent', async ({
+      request,
+      as,
+      db,
+    }, testInfo) => {
+      const customer = customerFor(testInfo);
+      expect((await submit(request, customer)).status()).toBe(200);
+      const [{ id }] = await requestsFor(db, customer.email);
+      const admin = await as(ADMIN);
+
+      expect(await (await act(admin, id, 'deny')).json()).toEqual({ ok: true, outcome: 'denied' });
+      expect(await emailsTo(customer.email, 'partner-denied')).toHaveLength(1);
+      expect((await act(admin, id, 'resend')).status()).toBe(409);
+      expect((await act(admin, id, 'archive')).status()).toBe(400);
+    });
+
+    test('staff without the partners page can neither read nor act on the queue', async ({
+      request,
+      as,
+      db,
+    }, testInfo) => {
+      const customer = customerFor(testInfo);
+      expect((await submit(request, customer)).status()).toBe(200);
+      const [{ id }] = await requestsFor(db, customer.email);
+      const staff = await as(STAFF);
+
+      expect((await staff.get('/api/admin/partner-requests')).status()).toBe(403);
+      expect((await act(staff, id, 'confirm')).status()).toBe(403);
+      expect((await requestsFor(db, customer.email))[0].status).toBe('pending');
     });
   });
 });
