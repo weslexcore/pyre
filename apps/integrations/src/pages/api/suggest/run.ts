@@ -4,7 +4,7 @@
 // picks up the run and starts the pyre-agents suggester on it; the agent's
 // work then happens there, and ends with it posting to /api/agent/suggestions.
 //
-//   POST { sourceType, sourceId, trigger, runId? } → 200 { state } | 200 { skipped }
+//   POST { sourceType, sourceId, trigger, runId?, afterReply? } → 200 { state } | 200 { skipped }
 //                                   503 when the agents app could not be reached
 //
 // Auth: Bearer CRON_SECRET, forwarded by QStash (same as the cron tick).
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Malformed jobs will never parse; a 4xx would only be retried, so ack.
     return json({ skipped: 'invalid body' });
   }
-  const { sourceType, sourceId, trigger, runId } = body;
+  const { sourceType, sourceId, trigger, runId, afterReply } = body;
   if (
     !isSuggestionSourceType(sourceType) ||
     !isUuid(sourceId) ||
@@ -45,7 +45,13 @@ export const POST: APIRoute = async ({ request }) => {
   const retries = Number(request.headers.get('Upstash-Retried') ?? '0');
   const outcome = await runSuggestJob(
     db,
-    { sourceType, sourceId, trigger, ...(runId ? { runId } : {}) },
+    {
+      sourceType,
+      sourceId,
+      trigger,
+      ...(runId ? { runId } : {}),
+      ...(afterReply === true ? { afterReply: true } : {}),
+    },
     { retried: retries > 0, finalAttempt: retries >= SUGGEST_RETRIES }
   );
 

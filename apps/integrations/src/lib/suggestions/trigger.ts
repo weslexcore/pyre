@@ -1,6 +1,7 @@
-// When a classification should start a suggestion run on its own. Called
-// from the classifier's after-hook (lib/classify/activity) once a record's
-// signals are saved; the rules are ./eligibility.
+// When a suggestion run starts on its own: after a classification (called
+// from the classifier's after-hook, lib/classify/activity, once a record's
+// signals are saved), and after someone replies on a shift note (the
+// replies route). The rules are ./eligibility.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dispatchSuggestion } from './dispatch';
@@ -26,6 +27,29 @@ export async function maybeSuggestAfterClassification(
     if (check.ok) await dispatchSuggestion({ sourceType, sourceId, trigger: 'auto' });
   } catch (error) {
     console.error(`[suggestions] auto check for ${sourceType} ${sourceId} failed:`, error);
+  }
+}
+
+/**
+ * After someone wrote or edited a reply on a record: queue an automatic run
+ * over the record and its thread, if the rules in ./eligibility allow one —
+ * so a reply that answers the note ("we have 2 left, order a case") turns
+ * into suggestions the same way the note would have. Best-effort; never
+ * throws, since the reply it follows has already been saved.
+ */
+export async function maybeSuggestAfterReply(
+  db: SupabaseClient,
+  sourceType: SuggestionSourceType,
+  sourceId: string
+): Promise<void> {
+  if (!(await autoSuggestEnabled())) return;
+  try {
+    const check = await autoSuggestCheck(db, sourceType, sourceId, null, { afterReply: true });
+    if (check.ok) {
+      await dispatchSuggestion({ sourceType, sourceId, trigger: 'auto', afterReply: true });
+    }
+  } catch (error) {
+    console.error(`[suggestions] reply check for ${sourceType} ${sourceId} failed:`, error);
   }
 }
 

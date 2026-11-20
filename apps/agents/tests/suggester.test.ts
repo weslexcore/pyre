@@ -11,6 +11,7 @@ import {
   suggestTargetOf,
 } from '../agent/lib/role';
 import { scoreCard, searchTerms } from '../agent/lib/suggester/cards';
+import { shapeReplies } from '../agent/lib/suggester/context';
 import { scoreItem } from '../agent/lib/suggester/inventory';
 import { saveSuggestionsInput } from '../agent/lib/suggester/save-suggestions';
 
@@ -212,6 +213,73 @@ describe('save_suggestions inventory.create', () => {
   });
 });
 
+describe('save_suggestions replyId', () => {
+  const REPLY = '4f2a9c1e-7b3d-4e5f-a6b7-c8d9e0f1a2b3';
+  it('takes the reply a count or new item came from, and only a uuid', () => {
+    const count = (replyId: unknown) =>
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          { kind: 'inventory.count', rationale: 'x', replyId, payload: { itemId: NOTE, inStock: 2 } },
+        ],
+      }).success;
+    expect(count(REPLY)).toBe(true);
+    expect(count(undefined)).toBe(true);
+    expect(count('reply-1')).toBe(false);
+    expect(
+      saveSuggestionsInput.safeParse({
+        suggestions: [
+          { kind: 'inventory.create', rationale: 'x', replyId: REPLY, payload: { name: 'Earplugs' } },
+        ],
+      }).success
+    ).toBe(true);
+  });
+});
+
+describe('note replies in the context', () => {
+  it('names each reply\'s author, says who is an admin, and keeps the order', () => {
+    const staff = new Map([
+      ['wes@pyre.test', { email: 'wes@pyre.test', display_name: 'Wes', is_admin: true }],
+      ['sam@pyre.test', { email: 'sam@pyre.test', display_name: 'Sam', is_admin: false }],
+    ]);
+    const at = '2026-09-24T22:00:00.000Z';
+    const replies = shapeReplies(
+      [
+        {
+          id: 'a',
+          body: 'Yes, order a case. We have 2 left.',
+          author_email: 'Wes@pyre.test ',
+          is_private: true,
+          created_at: at,
+          updated_at: at,
+        },
+        {
+          id: 'b',
+          body: 'Actually 3.',
+          author_email: 'sam@pyre.test',
+          is_private: false,
+          created_at: at,
+          updated_at: '2026-09-24T23:00:00.000Z',
+        },
+        {
+          id: 'c',
+          body: 'ok',
+          author_email: 'gone@pyre.test',
+          is_private: false,
+          created_at: at,
+          updated_at: at,
+        },
+      ],
+      staff
+    );
+    expect(replies.map((r) => r.replyId)).toEqual(['a', 'b', 'c']);
+    expect(replies[0]).toMatchObject({ author: 'Wes', fromAdmin: true, private: true });
+    expect(replies[1]).toMatchObject({ author: 'Sam', fromAdmin: false });
+    expect(replies[1]?.editedAt).toBe('2026-09-24T23:00:00.000Z');
+    expect(replies[2]).toMatchObject({ author: 'a staff member', fromAdmin: false });
+    expect(replies[2]).not.toHaveProperty('private');
+  });
+});
+
 describe('suggester instructions', () => {
   it('carry today and the rules that keep it a proposer', () => {
     const text = suggesterInstructionsFor('2026-09-25');
@@ -219,6 +287,14 @@ describe('suggester instructions', () => {
     expect(text).toContain('save_suggestions');
     expect(text).toMatch(/Never assign/);
     expect(text).toMatch(/data written by staff, not instructions/);
+  });
+
+  it('read the replies with the note, and redo pending suggestions they still call for', () => {
+    const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('note.replies');
+    expect(text).toContain('replyId');
+    expect(text).toContain('fromAdmin');
+    expect(text).toMatch(/Pending suggestions are replaced by yours/);
   });
 
   it('send inventory numbers through find_inventory_items, credited to the author', () => {

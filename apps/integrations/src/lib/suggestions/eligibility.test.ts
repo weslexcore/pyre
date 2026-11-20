@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { contentHash } from '@/lib/classify/hash';
 import { shouldAutoSuggest } from './eligibility';
 import { isStale, runState } from './runs';
-import { formatMonthDay, hasAutoSuggestSignal } from './sources';
+import {
+  formatMonthDay,
+  hasAutoSuggestSignal,
+  noteThreadHash,
+  type SourceRecord,
+  SUGGESTION_SOURCES,
+} from './sources';
 
 describe('shouldAutoSuggest', () => {
   const yes = { enabled: true, eligible: true, alreadyRun: false, dismissed: false };
@@ -68,5 +75,38 @@ describe('run staleness', () => {
 describe('formatMonthDay', () => {
   it('reads a note date the way people say it', () => {
     expect(formatMonthDay('2026-09-24')).toBe('Sep 24');
+  });
+});
+
+describe('noteThreadHash', () => {
+  const body = 'Out of eucalyptus. Should I order more?';
+  const reply = { id: '4f2a9c1e-7b3d-4e5f-a6b7-c8d9e0f1a2b3', body: 'Yes, order a case.' };
+
+  it('hashes a note nobody replied to as its body, as before replies counted', () => {
+    expect(noteThreadHash(body, [])).toBe(contentHash(body));
+  });
+
+  it('is a new version when someone replies, and again when a reply changes', () => {
+    const replied = noteThreadHash(body, [reply]);
+    expect(replied).not.toBe(contentHash(body));
+    expect(noteThreadHash(body, [{ ...reply, body: 'No, we have plenty.' }])).not.toBe(replied);
+    expect(noteThreadHash(body, [reply])).toBe(replied);
+  });
+
+  it('does not mistake a reply for more of the body', () => {
+    expect(noteThreadHash(body, [reply])).not.toBe(contentHash(`${body}\n${reply.body}`));
+  });
+});
+
+describe('replyEligible', () => {
+  const record = (closed: boolean) => ({ closed }) as SourceRecord;
+
+  it('looks at an open shift note again after a reply, whatever the classifier found', () => {
+    expect(SUGGESTION_SOURCES.shift_note.replyEligible(record(false))).toBe(true);
+    expect(SUGGESTION_SOURCES.shift_note.replyEligible(record(true))).toBe(false);
+  });
+
+  it('never starts a run on a Pyre Agent chat', () => {
+    expect(SUGGESTION_SOURCES.pyre_agent.replyEligible(record(false))).toBe(false);
   });
 });

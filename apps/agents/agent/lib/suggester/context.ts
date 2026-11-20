@@ -1,5 +1,5 @@
 // What the suggester reads before proposing anything: the record itself (a
-// shift note), what the classifier found in it, what has already been
+// shift note) and the replies in its thread, what the classifier found in it, what has already been
 // suggested for it and what the admins did with that, and the boards it can
 // file work on. Read-only.
 
@@ -22,13 +22,59 @@ interface NoteRow {
   status: string;
 }
 
-async function authorName(email: string): Promise<string | null> {
+interface ReplyRow {
+  id: string;
+  body: string;
+  author_email: string | null;
+  is_private: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface StaffRow {
+  email: string | null;
+  display_name: string | null;
+  is_admin: boolean | null;
+}
+
+/** Names (and whether each is an admin) for the note's author and everyone who replied. */
+async function staffByEmail(emails: string[]): Promise<Map<string, StaffRow>> {
+  const wanted = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  const out = new Map<string, StaffRow>();
+  if (wanted.length === 0) return out;
   const { data } = await getDb()
     .from('staff')
-    .select('display_name')
-    .ilike('email', email.trim())
-    .maybeSingle();
-  return (data as { display_name: string | null } | null)?.display_name ?? null;
+    .select('email, display_name, is_admin')
+    .in('email', wanted);
+  for (const row of (data ?? []) as StaffRow[]) {
+    if (row.email) out.set(row.email.trim().toLowerCase(), row);
+  }
+  return out;
+}
+
+/**
+ * The thread under a note, as the suggester reads it: the comments people
+ * wrote, oldest first — an admin answering a question the note asked, the
+ * author adding a number they forgot. The app's own events (status changes,
+ * edits, the classifier's reads) are history, not something anyone said, and
+ * stay out. Private replies are in: they are admin-only, and so is every
+ * suggestion.
+ */
+export function shapeReplies(rows: readonly ReplyRow[], staff: Map<string, StaffRow>) {
+  return rows.map((row) => {
+    const email = (row.author_email ?? '').trim().toLowerCase();
+    const person = staff.get(email);
+    return {
+      replyId: row.id,
+      author: person?.display_name ?? 'a staff member',
+      authorEmail: email,
+      fromAdmin: person?.is_admin === true,
+      at: row.created_at,
+      ...(row.updated_at !== row.created_at ? { editedAt: row.updated_at } : {}),
+      ...(row.is_private ? { private: true } : {}),
+      text: row.body,
+    };
+  });
 }
 
 /** A prior suggestion, as the agent needs to see it: what it was, and what happened to it. */
@@ -75,8 +121,13 @@ export async function getSuggestionContext(source: Source) {
     return { found: false as const, error: 'The shift note no longer exists. Save an empty list.' };
   }
 
-  const [author, classification, prior, boards, columns, fields, inventory] = await Promise.all([
-    authorName(note.author_email),
+  const [replies, classification, prior, boards, columns, fields, inventory] = await Promise.all([
+    db
+      .from('shift_note_replies')
+      .select('id, body, author_email, is_private, created_at, updated_at')
+      .eq('note_id', note.id)
+      .eq('kind', 'comment')
+      .order('created_at', { ascending: true }),
     db
       .from('content_classifications')
       .select('signals')
@@ -113,6 +164,13 @@ export async function getSuggestionContext(source: Source) {
     })),
   ]);
 
+  const replyRows = (replies.data ?? []) as ReplyRow[];
+  const staff = await staffByEmail([
+    note.author_email,
+    ...replyRows.map((r) => r.author_email ?? ''),
+  ]);
+  const author = staff.get(note.author_email.trim().toLowerCase())?.display_name ?? null;
+
   const boardRows = (boards.data ?? []) as {
     id: string;
     slug: string;
@@ -140,6 +198,9 @@ export async function getSuggestionContext(source: Source) {
       status: note.status,
       text: note.body,
       url: siteUrl(`/admin/shift-notes#note-${note.id}`),
+      // The conversation under the note, oldest first. Read it with the note:
+      // a reply can answer what the note asked, or correct what it said.
+      replies: shapeReplies(replyRows, staff),
     },
     classifierFound: (classification.data as { signals: unknown } | null)?.signals ?? [],
     priorSuggestions: ((prior.data ?? []) as Parameters<typeof priorSummary>[0][]).map(

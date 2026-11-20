@@ -17,6 +17,8 @@ export interface SuggestJob {
   trigger: 'auto' | 'manual';
   /** A manual run, filed by the admin route before the job was queued. */
   runId?: string;
+  /** An auto run because someone replied on the record (see ./eligibility). */
+  afterReply?: boolean;
 }
 
 export type SuggestJobOutcome =
@@ -79,7 +81,8 @@ export async function runSuggestJob(
       db,
       job.sourceType,
       job.sourceId,
-      (data as { signals: unknown } | null)?.signals
+      (data as { signals: unknown } | null)?.signals,
+      { afterReply: job.afterReply === true }
     );
     run = check.ok
       ? await claimAutoRun(db, source)

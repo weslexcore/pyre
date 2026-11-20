@@ -14,11 +14,19 @@
 // its thread, e.g. once the classifier's answer (and any triage it led to)
 // has landed.
 //
+// Writing or editing a reply also has the suggestion agent look at the note
+// again, thread and all (lib/suggestions/trigger maybeSuggestAfterReply), when
+// automatic suggestions are on and the note is still open: a reply that
+// answers the note — "we have 2 left, order a case", "yes, stay until 9" —
+// becomes suggestions the way the note itself would have. That runs after
+// the response has gone out.
+//
 //   GET    ?noteId=<uuid>               → { note, replies, people }
 //   POST   { noteId, body, isPrivate? } → { reply, people }
 //   PATCH  { id, body?, isPrivate? }    → { reply, people }
 //   DELETE ?id=<uuid>                   → { ok: true }
 
+import { waitUntil } from '@vercel/functions';
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
@@ -30,6 +38,7 @@ import { notifyShiftNoteReply, notifyShiftNoteReplyEdited } from '@/lib/notifica
 import { canReply, canSeeNote, canSeeReply, canTouchReply } from '@/lib/shift-notes/access';
 import { normalizeReplyBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
+import { maybeSuggestAfterReply } from '@/lib/suggestions/trigger';
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -154,6 +163,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const reply = data as ShiftNoteReplyRow;
   await notifyShiftNoteReply(db, note, reply);
+  waitUntil(maybeSuggestAfterReply(db, 'shift_note', noteId));
   return json({ reply, people: await peopleFor(reply) }, 201);
 };
 
@@ -200,6 +210,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (!(note instanceof Response)) {
       await notifyShiftNoteReplyEdited(db, note, reply, existing.body, email);
     }
+    waitUntil(maybeSuggestAfterReply(db, 'shift_note', reply.note_id));
   }
   return json({ reply, people: await peopleFor(reply) });
 };
