@@ -10,7 +10,7 @@ import { ensureAuthUser, expect, supabaseAdmin, supabaseSessionCookies } from '@
 import { SESSION_COOKIE } from '../src/lib/supabase/server';
 import { APP_URL, SUPABASE } from './env';
 import { LIVE_TEMPLATES, PARTNER, PARTNER_OFF, REFERRAL_TIER } from './partners';
-import { PASSWORD, ROLES } from './roles';
+import { OFF_SHIFT_DUTY, PASSWORD, ROLES } from './roles';
 
 setup('seed the staff roster and sign each role in', async () => {
   const db = supabaseAdmin(SUPABASE);
@@ -58,6 +58,21 @@ setup('seed the staff roster and sign each role in', async () => {
     { onConflict: 'key' }
   );
   expect(toggles.error, 'schedule request toggles').toBeNull();
+
+  // An off-shift duty (one person a day, outside any shift), so schedule
+  // drafts can hand one out (pyre-agent-schedule.spec.ts). The duty catalog
+  // is cached ~30s, so it is in place before any spec runs.
+  const duty = await db.from('shift_duties').upsert(
+    {
+      key: OFF_SHIFT_DUTY.key,
+      label: OFF_SHIFT_DUTY.label,
+      phase: 'off_shift',
+      sort_order: 900,
+      updated_by: 'e2e',
+    },
+    { onConflict: 'key' }
+  );
+  expect(duty.error, 'off-shift duty').toBeNull();
 
   // Partners, the referral tier and the template gate are cached ~30s too.
   // Reconciliation stays off: its quarterly email would go out on every

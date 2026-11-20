@@ -32,6 +32,11 @@ export default definePyreConfig({
       name: 'mock upstreams',
       command: 'yarn tsx e2e/mock-server/server.ts',
       url: `http://localhost:${MOCK_PORT}/__health`,
+      // The mock Eve app writes the Pyre Agent audit log, as pyre-agents does.
+      env: {
+        SUPABASE_URL: APP_ENV.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: APP_ENV.SUPABASE_SERVICE_ROLE_KEY,
+      },
     },
     {
       name: 'integrations',

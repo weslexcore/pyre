@@ -10,6 +10,8 @@
 //   /site/*             the landing site's events and blog feeds
 //   /resend/*           Resend: records every email; specs read them back
 //                       through mockServerClient(MOCK_URL).requests()
+//   /agents/*           pyre-agents (the Eve app): sessions the app opens,
+//                       scripted by specs (eve.ts, driven by e2e/eve.ts)
 //
 // Every route is explicit. A request nothing here answers gets a 404 and is
 // recorded as unexpected; the run fails on any (e2e/global-teardown.ts), so a
@@ -25,6 +27,7 @@
 
 import { type MockRequest, type MockResponse, runMockServer } from '@pyre/e2e-utils/server';
 import { MOCK_PORT } from '../ports';
+import { eveRoutes } from './eve';
 import { mailchimpRoutes } from './mailchimp';
 import { momenceEvents } from './momence-fixtures';
 import { ACCESS_TOKEN, momenceWorld } from './momence-world';
@@ -98,6 +101,8 @@ await runMockServer({
     ...momenceWorld(),
     // -- Mailchimp -----------------------------------------------------------
     ...mailchimpRoutes(),
+    // -- pyre-agents (Eve) ---------------------------------------------------
+    ...eveRoutes(),
     // -- The landing site (PUBLIC_SITE_URL) ---------------------------------
     { path: '/site/api/events', handler: () => ({ json: [] }) },
     { path: '/site/api/blog-posts.json', handler: () => ({ json: { posts: [] } }) },

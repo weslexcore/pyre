@@ -14,7 +14,11 @@
 
 import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { hasInventoryManage, type PageAccess } from '@/components/admin/adminTools';
+import {
+  hasInventoryManage,
+  hasScheduleManage,
+  type PageAccess,
+} from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { columnKeyOf } from '@/lib/boards/columns';
 import { listAssignable } from '@/lib/boards/people';
@@ -39,6 +43,7 @@ import {
   inventoryItemHref,
 } from '@/lib/inventory/types';
 import { cardHref } from '@/lib/suggestions/types';
+import { checkScheduleReview, replayScheduleReview, SCHEDULE_REVIEW_API } from './schedule';
 import type { ActionKind, ActionRequest, ActionView, ApplyStep } from './types';
 import { boardHref } from './workspace';
 
@@ -748,7 +753,22 @@ const PROPOSERS: Record<
   'goal_kpi.measure': proposeKpiMeasure,
   'inventory.update': proposeInventoryUpdate,
   'inventory.create': proposeInventoryCreate,
+  'schedule.review': proposeScheduleReview,
 };
+
+/** Confirm or drop parts of a week's open schedule draft (lib/pyre-agent/schedule). */
+async function proposeScheduleReview(
+  db: SupabaseClient,
+  access: PageAccess,
+  input: Record<string, unknown>
+): Promise<Checked> {
+  if (!hasScheduleManage(access)) {
+    return fail('This person cannot manage the schedule, so they cannot confirm a draft');
+  }
+  const checked = await checkScheduleReview(db, input);
+  if (!checked.ok) return checked;
+  return { ok: true, proposal: { kind: 'schedule.review', ...checked.proposal } };
+}
 
 export function actionView(row: PyreAgentActionRow): ActionView {
   return {
@@ -812,6 +832,7 @@ const ALLOWED_STEPS = new Set([
   'PATCH /api/admin/goal-kpis',
   `POST ${INVENTORY_API}`,
   `PATCH ${INVENTORY_API}`,
+  `POST ${SCHEDULE_REVIEW_API}`,
 ]);
 
 function isQuery(value: unknown): value is Record<string, string> | undefined {
@@ -824,7 +845,7 @@ function isQuery(value: unknown): value is Record<string, string> | undefined {
   );
 }
 
-/** The stored request, re-checked: only the board and inventory routes, only as recorded. */
+/** The stored request, re-checked: only the board, inventory and draft-review routes, only as recorded. */
 export function readRequest(
   row: Pick<PyreAgentActionRow, 'request'>
 ): (ActionRequest & { target?: { label: string; href: string } }) | null {
@@ -868,6 +889,25 @@ export async function replayAction(
 > {
   const request = readRequest(row);
   if (!request) return fail('This proposal is malformed and cannot be applied');
+
+  // A schedule draft review runs every confirmation in it and says how many
+  // did not go, instead of stopping at the first.
+  if (row.kind === 'schedule.review') {
+    if (!request.steps.every((s) => s.path === SCHEDULE_REVIEW_API)) {
+      return fail('This proposal is malformed and cannot be applied');
+    }
+    const outcome = await replayScheduleReview(db, request.steps, run);
+    if (!outcome.ok) return outcome;
+    return {
+      ok: true,
+      label: request.target?.label ?? row.summary,
+      href: request.target?.href ?? null,
+      warning:
+        outcome.failed > 0
+          ? `${outcome.failed} of ${outcome.total} could not be applied (already decided on the board, or no longer in the draft)`
+          : null,
+    };
+  }
 
   const [first, ...rest] = request.steps;
   const head = await run(first);

@@ -1,6 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { proposalIdsOf, RoutineBanner, relativizeDashboardLinks, turnFromHistory } from './SopAsk';
+import {
+  draftWeeksByTurn,
+  proposalIdsOf,
+  RoutineBanner,
+  relativizeDashboardLinks,
+  turnFromHistory,
+} from './SopAsk';
 
 describe('turnFromHistory', () => {
   const base = {
@@ -159,5 +165,32 @@ describe('turnFromHistory across sessions', () => {
     };
     expect(turnFromHistory({ ...base, continuesConversation: true }).continued).toBe(true);
     expect(turnFromHistory(base).continued).toBeUndefined();
+  });
+});
+
+describe('draftWeeksByTurn', () => {
+  const step = (tool: string, weekStart: string, output: string) => ({
+    kind: 'tool' as const,
+    callId: `${tool}-${weekStart}`,
+    tool,
+    input: { weekStart },
+    status: 'completed' as const,
+    output,
+  });
+
+  it('puts each week under the latest turn that started or revised it', () => {
+    const byTurn = draftWeeksByTurn([
+      { id: 't1', trail: [step('draft_schedule', '2026-11-30', '{"started": true}')] },
+      { id: 't2', trail: [step('get_schedule_draft', '2026-11-30', '{}')] },
+      {
+        id: 't3',
+        trail: [
+          step('revise_schedule_draft', '2026-11-30', '{"started": true}'),
+          step('draft_schedule', '2026-12-07', '{"error": "busy"}'),
+        ],
+      },
+    ]);
+    expect(byTurn.get('t1')).toBeUndefined();
+    expect(byTurn.get('t3')).toEqual(['2026-11-30']);
   });
 });

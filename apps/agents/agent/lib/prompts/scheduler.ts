@@ -250,7 +250,7 @@ export function schedulerInstructionsWith(standing: string): string {
 The admin keeps a set of standing instructions on the schedule board: the
 requirements that hold every week, rather than the steer for one draft. They
 are below, and they apply to every schedule you draft — first drafts,
-refinements, and the weekly cron run alike.
+refinements, and drafts asked for from Pyre Agent alike.
 
 - They outrank everything in "Judgment guidelines": history patterns, hour
   and shift balance, and duty habits all bend to them.

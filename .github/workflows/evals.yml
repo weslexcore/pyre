@@ -1,0 +1,171 @@
+# Agent evals: every eval in apps/agents/evals, run by `eve eval --strict`
+# against a local stack (apps/integrations/e2e/agent-evals.ts): the e2e
+# Supabase stack in Docker, the integrations app under `astro dev` with mock
+# upstreams, and `eve dev` with AGENT_FORCE_DRY_RUN=1. Nothing is written
+# anywhere real; only the model and judge calls leave the runner.
+#
+# Runs on PRs that touch the agents or what they call, on pushes to master,
+# nightly (models and the judge change without a commit), and by hand.
+#
+# Needs the AI_GATEWAY_API_KEY repository secret (Settings -> Secrets and
+# variables -> Actions). PRs from forks get no secrets: the evals are skipped
+# with a warning there rather than failed.
+#
+# The status check to require on PRs is `Evals` (the `result` job at the end).
+
+name: Evals
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    # 07:17 UTC (early morning US Eastern), off the hour.
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      agents: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.agents == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: dorny/paths-filter@v3
+        with:
+          # The agents themselves, the packages they import, the schema they
+          # read, and the integrations routes that validate what they save
+          # (with the code those routes call). Anything else is caught by the
+          # nightly run.
+          filters: |
+            agents:
+              - 'apps/agents/**'
+              - 'packages/schedule-core/**'
+              - 'packages/jev/**'
+              - 'packages/e2e-utils/**'
+              - 'apps/supabase/migrations/**'
+              - 'apps/supabase/config.toml'
+              - 'apps/integrations/src/pages/api/agent/**'
+              - 'apps/integrations/src/lib/agent/**'
+              - 'apps/integrations/src/lib/schedule/**'
+              - 'apps/integrations/src/lib/suggestions/**'
+              - 'apps/integrations/src/lib/pyre-agent/**'
+              - 'apps/integrations/e2e/agent-evals.ts'
+              - 'apps/integrations/e2e/env.ts'
+              - 'apps/integrations/e2e/supabase.ts'
+              - 'apps/integrations/e2e/mock-server/**'
+              - 'package.json'
+              - '.yarnrc.yml'
+              - '.github/workflows/evals.yml'
+
+  evals:
+    needs: changes
+    if: ${{ needs.changes.outputs.agents == 'true' }}
+    runs-on: ubuntu-latest
+    # A cold runner pulls Supabase's images and replays every migration
+    # (a few minutes) before the evals start.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # pyre-agents (eve) needs Node 24; the integrations app runs on it too.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Check for the AI Gateway key
+        id: key
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        run: |
+          if [ -n "$AI_GATEWAY_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::AI_GATEWAY_API_KEY is not available to this run (a fork PR, or the secret is unset), so the agent evals were skipped."
+          fi
+
+      - name: Get Yarn cache directory
+        if: steps.key.outputs.present == 'true'
+        id: yarn-cache
+        run: echo "dir=$(yarn config get cacheFolder)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          path: ${{ steps.yarn-cache.outputs.dir }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: yarn install --immutable
+
+      - name: Run evals
+        id: evals
+        if: steps.key.outputs.present == 'true'
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+        run: yarn workspace @pyre/integrations test:agent-evals
+
+      - name: Upload eval artifacts
+        if: ${{ !cancelled() && steps.evals.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-evals
+          path: |
+            apps/agents/.eve/evals/
+            apps/agents/.eve/junit.xml
+            apps/integrations/test-results/agent-evals/
+          retention-days: 14
+
+      - name: Summarize
+        if: ${{ !cancelled() && steps.evals.outcome != 'skipped' }}
+        run: node apps/agents/scripts/eval-summary.mjs apps/agents/.eve/junit.xml >> "$GITHUB_STEP_SUMMARY"
+
+      # On a missing key the run would otherwise be green while testing
+      # nothing. Only PRs (where forks never get secrets) are let through.
+      - name: Fail without a key outside PRs
+        if: ${{ steps.key.outputs.present != 'true' && github.event_name != 'pull_request' }}
+        run: |
+          echo "::error::AI_GATEWAY_API_KEY is not set; add it as a repository secret."
+          exit 1
+
+  # One check that always reports, whether or not the evals ran. Require this
+  # one in branch protection, not `evals`, which doesn't exist on a PR that
+  # touches nothing the agents depend on.
+  result:
+    name: Evals
+    needs: [changes, evals]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the evals passed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          EVALS: ${{ needs.evals.result }}
+        run: |
+          echo "changes: $CHANGES, evals: $EVALS"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::Could not work out whether the agents changed."
+            exit 1
+          fi
+          if [ "$EVALS" != "success" ] && [ "$EVALS" != "skipped" ]; then
+            echo "::error::Agent evals did not pass ($EVALS)."
+            exit 1
+          fi

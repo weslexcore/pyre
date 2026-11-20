@@ -40,6 +40,9 @@ export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
 // the log: only admins read everyone's notes, everyone else reads their own.
 export const SHIFT_NOTES_HREF = '/admin/shift-notes';
 
+// Pyre Agent's page; whoever may open it also gets the chat dock on every page.
+export const ASK_HREF = '/admin/ask';
+
 // Pages every dashboard user gets, whatever their grants: the inbox the
 // header bell opens, and the messages the admins write to the team. Not
 // tools — they are never offered as checkboxes on /admin/users, never
@@ -191,7 +194,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     keywords: ['procedures', 'checklists', 'guides', 'docs', 'library'],
   },
   {
-    href: '/admin/ask',
+    href: ASK_HREF,
     title: 'Pyre Agent',
     navLabel: 'Pyre Agent',
     keywords: [

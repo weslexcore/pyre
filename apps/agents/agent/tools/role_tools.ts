@@ -2,7 +2,10 @@
 // scheduler sessions get the drafting tools, knowledge sessions (Pyre Agent)
 // get the read-only knowledge-base tools plus the goals-and-boards and
 // inventory reads and propose_* tools — which only store a proposal the
-// person applies from the chat (lib/knowledge/boards.ts) — and the
+// person applies from the chat (lib/knowledge/boards.ts) — the schedule-draft
+// tools for schedule managers (which start a separate scheduler session to do
+// the drafting, and only propose confirmations; lib/knowledge/schedule-drafts.ts),
+// and the
 // suggest_* tools, which file an SOP or message change in the shift-note
 // suggestion pipeline for an admin to approve (lib/knowledge/suggest.ts) — suggester
 // sessions get their record's context plus save_suggestions, and none sees
@@ -38,6 +41,12 @@ import { findCards, getGoalsAndBoards, propose, readBoard } from '../lib/knowled
 import { getInventory } from '../lib/knowledge/inventory';
 import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs';
 import { getShifts } from '../lib/knowledge/schedule';
+import {
+  getScheduleDraft,
+  proposeScheduleReview,
+  reviseScheduleDraft,
+  startScheduleDraft,
+} from '../lib/knowledge/schedule-drafts';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
 import { readSop, sopTableOfContents } from '../lib/knowledge/sops';
 import { getMessages, readMessage, suggest, suggestInventory } from '../lib/knowledge/suggest';
@@ -276,6 +285,69 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return getShifts(scopeOf(ctx), input);
+          },
+        }),
+        get_schedule_draft: defineTool({
+          description:
+            "The open schedule draft for one week (/admin/schedule): every draft item with its ref (assignment:…, shift:…, duty:…), day, shift, hours, person and duties as one line; the draft's rationale, uncovered-shift count and warnings; and inProgress when a draft or revision someone asked for is still being worked on. When there is no open draft, `last` says how the week's latest one ended (approved, discarded). Read it before describing a draft or proposing a confirmation. Only for people who manage the schedule.",
+          inputSchema: z.object({
+            weekStart: dateString.describe('Monday of the week.'),
+          }),
+          execute(input, ctx) {
+            return getScheduleDraft(scopeOf(ctx), input.weekStart);
+          },
+        }),
+        draft_schedule: defineTool({
+          description:
+            "Start a fresh staffing draft for one week — what the Draft schedule button on the board does: Momence coverage is synced, then the scheduling agent fills the shifts still short of people under every scheduling rule and the standing instructions, and saves a draft nobody else can see. It takes a few minutes; this returns as soon as it has started. A new draft replaces the week's open one (anything already confirmed stays). `note` carries the person's steer for this run (\"give Sarah a shift to lead\"). Only for people who manage the schedule.",
+          inputSchema: z.object({
+            weekStart: dateString.describe('Monday of the week to draft.'),
+            note: z
+              .string()
+              .max(1000)
+              .optional()
+              .describe("The person's instructions for this draft, in their words; omit for a plain draft."),
+          }),
+          execute(input, ctx) {
+            return startScheduleDraft(scopeOf(ctx), ctx.session?.id ?? null, input);
+          },
+        }),
+        revise_schedule_draft: defineTool({
+          description:
+            "Ask the scheduling agent to change the week's open draft (\"move Sarah to Tuesday evening\", \"no doubles on Saturday\", \"give Wes fewer hours\") — what the board's Revise button does. It keeps the rest of the draft and replaces it with the revised one in a minute or two. Pass the person's request as the note, plainly and completely; you do not edit the draft yourself. Only for people who manage the schedule.",
+          inputSchema: z.object({
+            weekStart: dateString.describe('Monday of the week whose draft to revise.'),
+            note: z.string().min(1).max(1000).describe('The change the person wants.'),
+          }),
+          execute(input, ctx) {
+            return reviseScheduleDraft(scopeOf(ctx), ctx.session?.id ?? null, input);
+          },
+        }),
+        propose_schedule_review: defineTool({
+          description:
+            "Propose confirming (making live) or dropping parts of the week's open draft: acceptAll for the whole draft, acceptDays for every item on some days, accept and reject for single items by the refs get_schedule_draft returned. It is shown with Apply and Dismiss; nothing goes live and nobody is told until the person presses Apply, and then each person hears about their shifts as if it were confirmed on the board. Read the draft with get_schedule_draft first. Only for people who manage the schedule.",
+          inputSchema: z.object({
+            weekStart: dateString.describe('Monday of the week.'),
+            acceptAll: z.boolean().optional().describe('Confirm the whole draft at once.'),
+            acceptDays: z
+              .array(dateString)
+              .max(7)
+              .optional()
+              .describe('Confirm every draft item on these days.'),
+            accept: z
+              .array(z.string().max(60))
+              .max(100)
+              .optional()
+              .describe('Item refs to confirm, from get_schedule_draft.'),
+            reject: z
+              .array(z.string().max(60))
+              .max(100)
+              .optional()
+              .describe('Item refs to drop from the draft, from get_schedule_draft.'),
+            rationale: z.string().max(600).describe('One line on what this confirms, for the person deciding.'),
+          }),
+          execute(input, ctx) {
+            return proposeScheduleReview(scopeOf(ctx), ctx.session?.id ?? null, input);
           },
         }),
         read_incident: defineTool({

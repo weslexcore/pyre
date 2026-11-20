@@ -6,7 +6,12 @@
 // (adminTools), and the "everyone reads their own" split on shift notes and
 // incident reports. Server-only (role resolution reads the staff table).
 
-import { canViewPage, hasIncidentsManage, SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
+import {
+  canViewPage,
+  hasIncidentsManage,
+  hasScheduleManage,
+  SHIFT_NOTES_HREF,
+} from '@/components/admin/adminTools';
 import type { AdminGate } from '@/lib/auth/admin';
 import { canViewBoardsTool } from '@/lib/boards/access';
 import { INVENTORY_HREF } from '@/lib/inventory/types';
@@ -22,6 +27,12 @@ export interface KnowledgeScope {
   water: boolean;
   /** The staff schedule: shifts, crews, and hours — the board shows all of it to anyone with the page. */
   schedule: boolean;
+  /**
+   * Whether they manage the schedule (schedule:manage, or admin): may ask the
+   * agent to draft or revise a week and propose confirming parts of a draft.
+   * /api/agent/pyre checks it again on every call.
+   */
+  scheduleManage: boolean;
   /**
    * Goals and boards: whether they hold the Boards tool or any single board.
    * Which boards, and whether they may create one, is resolved per call by
@@ -74,6 +85,7 @@ export async function knowledgeScopeForAccess(
     // it (names only — emails and pay stay on the manage/admin side, and the
     // agent never reads them), so the tool needs no all/mine split.
     schedule: canViewPage(access, '/admin/schedule'),
+    scheduleManage: hasScheduleManage(access),
     boards: canViewBoardsTool(access),
     inventory: canViewPage(access, INVENTORY_HREF),
   };

@@ -337,6 +337,7 @@ export function WeekHoursSheet({
           type="button"
           onClick={() => setOpen(true)}
           aria-haspopup="dialog"
+          data-dock-lift="below-lg"
           className="fixed right-4 bottom-4 z-30 flex items-center gap-2 rounded-full border border-[var(--pyre-gold)]/50 bg-[var(--pyre-black)] px-4 py-2 font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)] shadow-lg hover:border-[var(--pyre-gold)]"
         >
           Hours

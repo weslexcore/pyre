@@ -552,7 +552,8 @@ export interface PyreAgentActionRow {
     | 'board_card.comment'
     | 'goal_kpi.measure'
     | 'inventory.update'
-    | 'inventory.create';
+    | 'inventory.create'
+    | 'schedule.review';
   summary: string;
   details: string[];
   rationale: string;
