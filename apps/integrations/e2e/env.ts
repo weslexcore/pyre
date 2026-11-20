@@ -7,6 +7,7 @@
 // Every variable the app reads is listed: blank means "not configured", which
 // also stops a value in a developer's shell from reaching a real service.
 
+import { AGENT_API_SECRET, AGENTS_PATH, EVE_CHANNEL_SECRET } from './agent-secrets';
 import { APP_PORT, APP_URL, MOCK_URL } from './ports';
 import { supabaseStack } from './supabase';
 
@@ -28,6 +29,7 @@ export const SECRETS = {
   mailchimpWebhook: 'e2e-mailchimp-webhook-secret',
   mailchimpSigning: 'e2e-mailchimp-signing-secret',
   boardIntake: 'e2e-board-intake-secret',
+  agentApi: AGENT_API_SECRET,
   // Svix format: whsec_ + base64 of the signing key.
   resendWebhook: `whsec_${Buffer.from('e2e-resend-signing-key').toString('base64')}`,
 } as const;
@@ -127,6 +129,12 @@ export const APP_ENV: Record<string, string> = {
   MAILCHIMP_API_BASE: `${MOCK_URL}/mailchimp/3.0`,
   MAILCHIMP_API_KEY: 'e2e-key-us1',
   MAILCHIMP_AUDIENCE_ID: 'e2e-audience',
+
+  // pyre-agents -> the mock Eve app (mock-server/eve.ts), which calls back
+  // through /api/agent/* with the agent API secret.
+  AGENTS_BASE_URL: `${MOCK_URL}${AGENTS_PATH}`,
+  EVE_CHANNEL_SECRET,
+  AGENT_API_SECRET,
 
   // Shared secrets.
   CRON_SECRET: SECRETS.cron,
