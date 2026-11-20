@@ -40,6 +40,18 @@ test.describe('reading a message', () => {
     await expect(page).toHaveURL(new RegExp(`/admin/messages/${message.id}$`));
     await expect(page.getByText('Fold towels in thirds from today.')).toBeVisible();
 
+    // Opening the message marked its notice read, before anything else could
+    // (acknowledging marks it read too).
+    const { data: read, error: readError } = await db
+      .from('staff_notifications')
+      .select('read_at')
+      .eq('recipient_email', STAFF.email)
+      .eq('source_id', message.id)
+      .eq('kind', 'admin_message')
+      .single();
+    expect(readError).toBeNull();
+    expect(Date.parse(read?.read_at ?? ''), 'read_at is a timestamp').not.toBeNaN();
+
     await page.getByRole('button', { name: "I've read this" }).click();
     await expect(page.getByText('Acknowledged.')).toBeVisible();
 
@@ -54,17 +66,6 @@ test.describe('reading a message', () => {
     await expect(box).toHaveValue(new RegExp(`@${STAFF_2.email}`));
     await page.getByRole('button', { name: 'Reply', exact: true }).click();
     await expect(page.getByText('Got it,')).toBeVisible();
-
-    // Opening the message marked its notice read.
-    const { data: read, error: readError } = await db
-      .from('staff_notifications')
-      .select('read_at')
-      .eq('recipient_email', STAFF.email)
-      .eq('source_id', message.id)
-      .eq('kind', 'admin_message')
-      .single();
-    expect(readError).toBeNull();
-    expect(Date.parse(read?.read_at ?? ''), 'read_at is a timestamp').not.toBeNaN();
 
     const { data: acks, error: acksError } = await db
       .from('admin_message_acks')

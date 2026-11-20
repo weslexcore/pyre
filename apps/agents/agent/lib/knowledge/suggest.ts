@@ -52,7 +52,10 @@ export type InventoryChange =
   | {
       kind: 'inventory.count';
       itemId: string;
-      inStock: number;
+      /** A set: the number on hand. */
+      inStock?: number;
+      /** A change: how much it moved, signed ("used 52" is -52). */
+      change?: number;
       shiftNoteId?: string;
       rationale: string;
     }

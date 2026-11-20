@@ -5,6 +5,7 @@ import {
   describeSuggestion,
   parsePayload,
   sourceHref,
+  stockAfterChange,
 } from './types';
 
 const UUID = '0b6c1f8e-2f9a-4c1e-9a55-6a1d2b3c4d5e';
@@ -112,12 +113,50 @@ describe('helpers', () => {
 });
 
 describe('parsePayload inventory.count', () => {
+  it('reads a signed change, with a total from the stock that rode along', () => {
+    const used = parsePayload('inventory.count', {
+      itemId: UUID,
+      change: -52,
+      previousInStock: 145,
+    });
+    expect(used.ok && used.value).toMatchObject({ change: -52, inStock: 93 });
+    const received = parsePayload('inventory.count', {
+      itemId: UUID,
+      change: '1',
+      previousInStock: 2,
+    });
+    expect(received.ok && received.value).toMatchObject({ change: 1, inStock: 3 });
+    // A set keeps change null, even when it matches the record.
+    const same = parsePayload('inventory.count', { itemId: UUID, inStock: 2, previousInStock: 2 });
+    expect(same.ok && same.value).toMatchObject({ change: null, inStock: 2 });
+  });
+
+  it('refuses a change of zero or past the limit', () => {
+    expect(parsePayload('inventory.count', { itemId: UUID, change: 0 }).ok).toBe(false);
+    expect(parsePayload('inventory.count', { itemId: UUID, change: 'lots' }).ok).toBe(false);
+    expect(parsePayload('inventory.count', { itemId: UUID, change: -200000 }).ok).toBe(false);
+  });
+
+  it('works out what a change leaves, refusing to go below zero', () => {
+    expect(stockAfterChange(2, -1)).toBe(1);
+    expect(stockAfterChange(2, 1)).toBe(3);
+    expect(stockAfterChange(2.5, -0.5)).toBe(2);
+    expect(stockAfterChange(1, -2)).toBeNull();
+  });
+
+  it('describes a change with its sign', () => {
+    expect(
+      describeSuggestion('inventory.count', { itemName: 'Bath Towels', inStock: 93, change: -52 })
+    ).toBe('Inventory count: Bath Towels, 93 in stock (−52)');
+  });
+
   it('reads the item and the number, with the display fields blank until checked', () => {
     expect(parsePayload('inventory.count', { itemId: UUID, inStock: 3 })).toEqual({
       ok: true,
       value: {
         itemId: UUID,
         inStock: 3,
+        change: null,
         itemName: '',
         previousInStock: null,
         reorderAt: null,

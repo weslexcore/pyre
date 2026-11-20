@@ -202,8 +202,20 @@ export interface ShiftTimesPayload {
  */
 export interface InventoryCountPayload {
   itemId: string;
-  /** Stock on hand, as the note gives it. */
+  /**
+   * Stock on hand once this is applied. For a set ("2 left") it is the note's
+   * number; for a change it is the stock on record plus `change`, resolved
+   * again against the item as it stands each time the payload is checked.
+   */
   inStock: number;
+  /**
+   * How much the note says the stock moved, signed: "used 52" is -52, "got
+   * 10 in" is +10. Null for a set, where the note gives the number on hand.
+   * Approving applies the change to the stock at approval time, so a count
+   * approved in between is not overwritten. An admin who types a number into
+   * the box turns it into a set.
+   */
+  change: number | null;
   itemName: string;
   /** The item's stock when this was last checked: what it changes from. */
   previousInStock: number | null;
@@ -450,18 +462,46 @@ function parseShiftTimesPayload(raw: unknown): ParseResult<ShiftTimesPayload> {
   };
 }
 
+/** A signed stock change ("used 52" is -52): nonzero, within the quantity limit. */
+export function parseStockChange(raw: unknown): number | null {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN;
+  if (!Number.isFinite(n) || n === 0 || Math.abs(n) > 100000) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * The stock a change leaves on `base` (the stock on record), or null when
+ * it would go below zero — the record is wrong, and a person should count.
+ */
+export function stockAfterChange(base: number, change: number): number | null {
+  const next = Math.round((base + change) * 100) / 100;
+  return next < 0 ? null : next;
+}
+
 function parseInventoryCountPayload(raw: unknown): ParseResult<InventoryCountPayload> {
   const o = asObject(raw);
   if (!o) return fail('payload must be an object');
   if (!isUuid(o.itemId)) {
     return fail('itemId must be the UUID of an inventory item from find_inventory_items');
   }
-  const inStock = parseQuantity(o.inStock);
-  if (inStock === null) return fail('inStock must be a number from 0 to 100000');
   const quantity = (value: unknown): number | null => {
     if (value === undefined || value === null || value === '') return null;
     return parseQuantity(value);
   };
+  const hasChange = o.change !== undefined && o.change !== null && o.change !== '';
+  const change = hasChange ? parseStockChange(o.change) : null;
+  if (hasChange && change === null) {
+    return fail('change must be a number from -100000 to 100000 other than 0');
+  }
+  const previousInStock = quantity(o.previousInStock);
+  // A change with no total yet (the agent sends only the change) is
+  // resolved here when the stock on record rides along, and by the
+  // handler's validate() against the item otherwise.
+  const inStock =
+    o.inStock === undefined && change !== null
+      ? Math.max(0, (previousInStock ?? 0) + change)
+      : parseQuantity(o.inStock);
+  if (inStock === null) return fail('inStock must be a number from 0 to 100000');
   const stamp = (value: unknown): string | null =>
     typeof value === 'string' && value.trim() && !Number.isNaN(Date.parse(value))
       ? value.trim()
@@ -475,8 +515,9 @@ function parseInventoryCountPayload(raw: unknown): ParseResult<InventoryCountPay
     value: {
       itemId: o.itemId,
       inStock,
+      change,
       itemName: str(o.itemName),
-      previousInStock: quantity(o.previousInStock),
+      previousInStock,
       reorderAt: quantity(o.reorderAt),
       lastCountedAt: stamp(o.lastCountedAt),
       lastCountedBy: email(o.lastCountedBy),
@@ -663,7 +704,10 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
       );
     case 'inventory.count': {
       const count = parseQuantity(o.inStock);
-      return `Inventory count: ${str(o.itemName) || 'an item'}, ${count === null ? '?' : formatQuantity(count)} in stock`;
+      const change = parseStockChange(o.change);
+      const moved =
+        change === null ? '' : ` (${change > 0 ? '+' : '−'}${formatQuantity(Math.abs(change))})`;
+      return `Inventory count: ${str(o.itemName) || 'an item'}, ${count === null ? '?' : formatQuantity(count)} in stock${moved}`;
     }
     case 'inventory.create': {
       const count = o.inStock === null || o.inStock === undefined ? null : parseQuantity(o.inStock);

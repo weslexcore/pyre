@@ -125,16 +125,33 @@ export const saveSuggestionsInput = z.object({
         z.object({
           kind: z.literal('inventory.count'),
           ...common,
-          payload: z.object({
-            itemId: z.string().uuid().describe("The item's itemId from the inventory list in get_suggestion_context."),
-            inStock: z
-              .number()
-              .min(0)
-              .max(100000)
-              .describe(
-                'Stock on hand as the note gives it: the number left ("3 rolls left" is 3; "out of" is 0). Resolve "used two" or "got ten more" against the inStock on the inventory list.'
-              ),
-          }),
+          payload: z
+            .object({
+              itemId: z
+                .string()
+                .uuid()
+                .describe("The item's itemId from the inventory list in get_suggestion_context."),
+              inStock: z
+                .number()
+                .min(0)
+                .max(100000)
+                .optional()
+                .describe(
+                  'A set: the number on hand as the note gives it ("3 rolls left" is 3; "out of" is 0). Send it even when it matches the stock on record: that is still a count. Omit when the note gives a change instead.'
+                ),
+              change: z
+                .number()
+                .min(-100000)
+                .max(100000)
+                .refine((n) => n !== 0, 'A change of 0 is no change; send inStock for a count.')
+                .optional()
+                .describe(
+                  'A change: how much the stock moved, signed. "Used 52" is -52, "got 10 in" is 10. Applied to the stock on record when an admin approves. Omit when the note gives the number on hand.'
+                ),
+            })
+            .refine((p) => (p.inStock === undefined) !== (p.change === undefined), {
+              message: 'Give inStock (the number on hand) or change (how much it moved), not both.',
+            }),
         }),
         z.object({
           kind: z.literal('inventory.create'),

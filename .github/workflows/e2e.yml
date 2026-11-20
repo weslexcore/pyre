@@ -13,8 +13,10 @@
 # so without these runs each PR's first run would start from nothing.
 #
 # Adding an app: give it a `test:e2e` script (see packages/e2e-utils/README.md),
-# then add a filter below named after its directory under apps/, and add the
-# name to ALL_APPS. The filter name is the matrix value, and the workspace is
+# then add a filter below named after its directory under apps/ (its own
+# directory, the workspace packages it depends on, and the toolchain files the
+# others list), and add the name to ALL_APPS. Every filter name becomes a
+# matrix value, so the filters list only apps. The filter name is the matrix value, and the workspace is
 # @pyre/<name>.
 
 name: E2E
@@ -53,12 +55,21 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' }}
         uses: dorny/paths-filter@v3
         with:
+          # Each app's suite runs only when the app, a workspace package it
+          # depends on, or the shared toolchain changes. yarn.lock is left out
+          # on purpose: a dependency an app adds or bumps changes that app's
+          # package.json, which its own filter already covers, so a lockfile
+          # change on its own (another workspace's dependencies, or an
+          # indirect bump) runs nothing. Run the workflow by hand to test
+          # one anyway.
           filters: |
             landing-page:
               - 'apps/landing-page/**'
               - 'packages/webhook-core/**'
               - 'packages/e2e-utils/**'
-              - 'yarn.lock'
+              - 'package.json'
+              - '.nvmrc'
+              - '.yarnrc.yml'
               - '.github/workflows/e2e.yml'
             integrations:
               - 'apps/integrations/**'
@@ -70,7 +81,9 @@ jobs:
               - 'packages/jev/**'
               - 'packages/schedule-core/**'
               - 'packages/signals-core/**'
-              - 'yarn.lock'
+              - 'package.json'
+              - '.nvmrc'
+              - '.yarnrc.yml'
               - '.github/workflows/e2e.yml'
 
   e2e:

@@ -43,7 +43,11 @@ import type {
   SuggestionKind,
   SuggestionResultLink,
 } from '@/lib/suggestions/types';
-import { INVENTORY_ITEM_LIMITS, SUGGESTION_LIMITS } from '@/lib/suggestions/types';
+import {
+  INVENTORY_ITEM_LIMITS,
+  SUGGESTION_LIMITS,
+  stockAfterChange,
+} from '@/lib/suggestions/types';
 import { AssigneePicker } from '../boards/CardMeta';
 import { FieldRow } from '../guestUi';
 import { textareaClass } from '../ShiftNoteComposer';
@@ -546,6 +550,12 @@ export function recountOn(
 ): InventoryCountPayload {
   return {
     ...value,
+    // A change moves the new item's stock instead ("used 52" of whichever
+    // item it is on); a set keeps its number.
+    inStock:
+      value.change === null
+        ? value.inStock
+        : (stockAfterChange(item.in_stock, value.change) ?? value.inStock),
     itemId: item.id,
     itemName: item.name,
     previousInStock: item.in_stock,
@@ -658,11 +668,15 @@ function InventoryCountEditor({
             onChange={(e) => {
               setText(e.target.value);
               const next = parseQuantity(e.target.value);
-              if (next !== null) onChange({ ...value, inStock: next });
+              // A typed number is what is on hand: a set, not a change.
+              if (next !== null) onChange({ ...value, inStock: next, change: null });
             }}
           />
         </div>
         {delta && <span className="pb-1.5 font-mono text-xs text-white/60">{delta}</span>}
+        {!delta && parsed !== null && parsed === value.previousInStock && (
+          <span className="pb-1.5 font-mono text-xs text-white/40">same, recounted</span>
+        )}
       </div>
       <p className="font-mono text-[10px] text-white/40">
         <a
