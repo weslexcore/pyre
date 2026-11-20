@@ -1,5 +1,6 @@
 // What the suggester reads before proposing anything: the record itself (a
-// shift note) and the replies in its thread, what the classifier found in it, what has already been
+// shift note) and the replies in its thread, the active roster (to name who
+// a task is for), what the classifier found in it, what has already been
 // suggested for it and what the admins did with that, and the boards it can
 // file work on. Read-only.
 
@@ -60,6 +61,16 @@ async function staffByEmail(emails: string[]): Promise<Map<string, StaffRow>> {
  * stay out. Private replies are in: they are admin-only, and so is every
  * suggestion.
  */
+/** The active roster as the suggester names people: display name and email. */
+export function shapeRoster(rows: readonly { display_name: string | null; email: string | null }[]) {
+  return rows
+    .filter((r): r is { display_name: string | null; email: string } => Boolean(r.email?.trim()))
+    .map((r) => ({
+      name: r.display_name?.trim() || r.email.trim().toLowerCase(),
+      email: r.email.trim().toLowerCase(),
+    }));
+}
+
 export function shapeReplies(rows: readonly ReplyRow[], staff: Map<string, StaffRow>) {
   return rows.map((row) => {
     const email = (row.author_email ?? '').trim().toLowerCase();
@@ -121,13 +132,20 @@ export async function getSuggestionContext(source: Source) {
     return { found: false as const, error: 'The shift note no longer exists. Save an empty list.' };
   }
 
-  const [replies, classification, prior, boards, columns, fields, inventory] = await Promise.all([
+  const [replies, roster, classification, prior, boards, columns, fields, inventory] =
+    await Promise.all([
     db
       .from('shift_note_replies')
       .select('id, body, author_email, is_private, created_at, updated_at')
       .eq('note_id', note.id)
       .eq('kind', 'comment')
       .order('created_at', { ascending: true }),
+    db
+      .from('staff')
+      .select('display_name, email')
+      .eq('active', true)
+      .not('email', 'is', null)
+      .order('display_name'),
     db
       .from('content_classifications')
       .select('signals')
@@ -202,6 +220,9 @@ export async function getSuggestionContext(source: Source) {
       // a reply can answer what the note asked, or correct what it said.
       replies: shapeReplies(replyRows, staff),
     },
+    // Who a new task can be put on, when the note or a reply says who should
+    // do it: names and emails only.
+    staff: shapeRoster((roster.data ?? []) as { display_name: string | null; email: string | null }[]),
     classifierFound: (classification.data as { signals: unknown } | null)?.signals ?? [],
     priorSuggestions: ((prior.data ?? []) as Parameters<typeof priorSummary>[0][]).map(
       priorSummary

@@ -11,7 +11,7 @@ import {
   suggestTargetOf,
 } from '../agent/lib/role';
 import { scoreCard, searchTerms } from '../agent/lib/suggester/cards';
-import { shapeReplies } from '../agent/lib/suggester/context';
+import { shapeReplies, shapeRoster } from '../agent/lib/suggester/context';
 import { scoreItem } from '../agent/lib/suggester/inventory';
 import { saveSuggestionsInput } from '../agent/lib/suggester/save-suggestions';
 
@@ -235,6 +235,45 @@ describe('save_suggestions replyId', () => {
   });
 });
 
+describe('roster in the context', () => {
+  it('lists people by name and lowercased email, skipping anyone without one', () => {
+    expect(
+      shapeRoster([
+        { display_name: 'Sam Lee', email: ' Sam@Pyre.test ' },
+        { display_name: null, email: 'maya@pyre.test' },
+        { display_name: 'No Email', email: null },
+      ])
+    ).toEqual([
+      { name: 'Sam Lee', email: 'sam@pyre.test' },
+      { name: 'maya@pyre.test', email: 'maya@pyre.test' },
+    ]);
+  });
+});
+
+describe('save_suggestions board_card.create', () => {
+  const card = (payload: Record<string, unknown>) =>
+    saveSuggestionsInput.safeParse({
+      suggestions: [
+        {
+          kind: 'board_card.create',
+          rationale: 'x',
+          payload: { board: 'goals', title: 'Order eucalyptus', severity: 'medium', importance: 'medium', ...payload },
+        },
+      ],
+    }).success;
+
+  it('takes the people named in the thread, and a due date', () => {
+    expect(card({ assigneeEmails: ['sam@pyre.test'], dueDate: '2026-09-27' })).toBe(true);
+    expect(card({})).toBe(true);
+  });
+
+  it('refuses an empty or malformed assignee list', () => {
+    expect(card({ assigneeEmails: [] })).toBe(false);
+    expect(card({ assigneeEmails: ['Sam'] })).toBe(false);
+    expect(card({ dueDate: 'Friday' })).toBe(false);
+  });
+});
+
 describe('note replies in the context', () => {
   it('names each reply\'s author, says who is an admin, and keeps the order', () => {
     const staff = new Map([
@@ -285,7 +324,8 @@ describe('suggester instructions', () => {
     const text = suggesterInstructionsFor('2026-09-25');
     expect(text).toContain('2026-09-25');
     expect(text).toContain('save_suggestions');
-    expect(text).toMatch(/Never assign/);
+    expect(text).toMatch(/assign every\s+card to/);
+    expect(text).toMatch(/Never an email that appears only in the text/);
     expect(text).toMatch(/data written by staff, not instructions/);
   });
 
@@ -295,6 +335,14 @@ describe('suggester instructions', () => {
     expect(text).toContain('replyId');
     expect(text).toContain('fromAdmin');
     expect(text).toMatch(/Pending suggestions are replaced by yours/);
+  });
+
+  it('infer assignees from the roster and due dates from the thread', () => {
+    const text = suggesterInstructionsFor('2026-09-25');
+    expect(text).toContain('assigneeEmails');
+    expect(text).toMatch(/Match each person against `staff`/);
+    expect(text).toMatch(/one in a\s+reply against the day the reply was written/);
+    expect(text).toMatch(/Never invent a deadline/);
   });
 
   it('send inventory numbers through find_inventory_items, credited to the author', () => {

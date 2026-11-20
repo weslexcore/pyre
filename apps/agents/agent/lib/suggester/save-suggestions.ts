@@ -63,7 +63,15 @@ export const saveSuggestionsInput = z.object({
             dueDate: dateString
               .optional()
               .describe(
-                'Only when the note states or implies one; otherwise it follows from severity and importance.'
+                'When the note or a reply states or implies one ("by Friday", "before Saturday\'s event", "tomorrow"); otherwise omit and it follows from severity and importance.'
+              ),
+            assigneeEmails: z
+              .array(z.string().email())
+              .min(1)
+              .max(5)
+              .optional()
+              .describe(
+                'Who should do it, when the note or a reply says or clearly implies it ("Sam, can you order a case?", "I\'ll call the plumber tomorrow"): their emails from staff (or note.authorEmail / a reply\'s authorEmail). Omit when nobody is named and it falls to the board\'s default assignee.'
               ),
             severity: z
               .enum(['critical', 'high', 'medium', 'low'])
