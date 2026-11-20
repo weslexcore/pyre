@@ -9,6 +9,13 @@ import { defineConfig, devices, type PlaywrightTestConfig, type Project } from '
 const CI = Boolean(process.env.CI);
 
 /**
+ * Where CI's JSON report goes, relative to the app. Inside the output
+ * directory, which Playwright empties when a run starts (not when it ends),
+ * so it's uploaded with the run's traces and never a stale one.
+ */
+export const JSON_REPORT_FILE = 'test-results/results.json';
+
+/**
  * Tag a test with this to run it on the phone projects only: behaviour that
  * doesn't exist at desktop widths, like the hamburger menu. Every untagged
  * test runs on all three projects.
@@ -102,8 +109,14 @@ export function definePyreConfig(options: PyreConfigOptions): PlaywrightTestConf
     // Dev servers compile on first request; two workers keep CI runners from
     // timing out while still parallelising.
     workers: CI ? 2 : undefined,
+    // CI also writes a JSON report: .github/workflows/e2e.yml reads it to
+    // flag tests that only passed on a retry (see scripts/report-flaky.mjs).
     reporter: CI
-      ? [['github'], ['html', { open: 'never' }]]
+      ? [
+          ['github'],
+          ['html', { open: 'never' }],
+          ['json', { outputFile: JSON_REPORT_FILE }],
+        ]
       : [['list'], ['html', { open: 'never' }]],
     expect: { timeout: 10_000 },
     use: {

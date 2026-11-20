@@ -10,9 +10,11 @@ function getConfig() {
   if (!apiKey) throw new Error('MAILCHIMP_API_KEY not configured');
   if (!audienceId) throw new Error('MAILCHIMP_AUDIENCE_ID not configured');
 
-  // API key format: "key-dc" (e.g., "abc123-us18")
+  // API key format: "key-dc" (e.g., "abc123-us18"). MAILCHIMP_API_BASE
+  // replaces the datacenter URL (the integrations E2E suite's mock server).
   const dc = apiKey.split('-').pop();
-  const baseUrl = `https://${dc}.api.mailchimp.com/3.0`;
+  const baseUrl =
+    import.meta.env.MAILCHIMP_API_BASE || `https://${dc}.api.mailchimp.com/3.0`;
 
   const headers = {
     Authorization: `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`,

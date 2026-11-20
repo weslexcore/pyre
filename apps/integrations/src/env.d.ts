@@ -21,6 +21,8 @@ interface ImportMetaEnv {
   // Mailchimp
   readonly MAILCHIMP_API_KEY?: string;
   readonly MAILCHIMP_AUDIENCE_ID?: string;
+  /** Replaces the Mailchimp datacenter URL (E2E mock server). */
+  readonly MAILCHIMP_API_BASE?: string;
   // Upstash Redis (shared with landing-page admin dashboard)
   readonly KV_REST_API_URL?: string;
   readonly KV_REST_API_TOKEN?: string;

@@ -171,7 +171,10 @@ function BookingRow({
   action: BookingRowAction;
 }) {
   return (
-    <div className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0">
+    <div
+      data-booking-option={minutes}
+      className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0"
+    >
       <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
         {durationRowLabel(minutes, fallbackLabel)}
       </span>
@@ -425,12 +428,17 @@ export default function EventDetailModal({
               className="pointer-events-none absolute inset-x-0 -top-2 h-5 rounded-[2rem] bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-sage)] opacity-30 blur-2xl"
             />
 
-            {/* Title */}
+            {/* Title — links to the event's own page */}
             <h2
               id="event-detail-title"
               className="font-mono-bold text-xl sm:text-2xl uppercase tracking-wide text-[var(--pyre-creme)] pr-8"
             >
-              {event.title}
+              <a
+                href={eventPath(event)}
+                className="underline decoration-[var(--pyre-gold)]/40 underline-offset-4 hover:decoration-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50 rounded-sm"
+              >
+                {event.title}
+              </a>
             </h2>
 
             {/* Details grid */}

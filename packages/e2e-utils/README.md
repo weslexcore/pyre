@@ -13,9 +13,9 @@ Supabase stack). Start from whichever is closer to the new app.
 | `definePyreConfig` | `@pyre/e2e-utils` | Playwright config with shared defaults: retries and `forbidOnly` in CI, trace on first retry, webServer defaults, the browser in Richmond's timezone (`America/New_York`, `en-US`), and three projects. Every test runs on `chromium` (Desktop Chrome), `mobile-chrome` (Pixel 7) and `mobile-safari` (iPhone 15 on WebKit, the engine behind every iOS browser). `setup: { testMatch }` adds a `setup` project the three depend on, e.g. to seed users and save signed-in `storageState` |
 | `MOBILE_ONLY_TAG` | `@pyre/e2e-utils` | Tag a test or `describe` with `{ tag: MOBILE_ONLY_TAG }` to run it on the phone projects only, for behaviour that doesn't exist on desktop (the hamburger menu). Where desktop and phone differ inside one test, branch on the `isMobile` fixture |
 | `DESKTOP_ONLY_TAG` | `@pyre/e2e-utils` | Tag tests that never open a page (they use the `request` fixture for a status, redirect or body) so they run once, on `chromium`, not three times |
-| `createTest` | `@pyre/e2e-utils` | The base `test`. It seeds localStorage before page scripts run, blocks browser requests to third-party hosts, and fails a test on any page error or `console.error`. Known noise is allowed by default: Chrome's blocked-request message, and WebKit's report of same-origin loads cancelled by a navigation |
+| `createTest` | `@pyre/e2e-utils` | The base `test`. It seeds localStorage before page scripts run, blocks browser requests to third-party hosts, and fails a test on any page error or `console.error`. Known noise is allowed by default: Chrome's blocked-request message, and WebKit's report of same-origin loads cancelled by a navigation. The seeding is the default of the `seedLocalStorage` option: `test.use({ seedLocalStorage: {} })` turns it off for a file or block (the landing page's popup spec does), rather than racing it with an init script |
 | `allowConsole` | `@pyre/e2e-utils` | `test.use({ consoleAllowlist: allowConsole(/status of 404/) })` for expected errors. Use it rather than a bare array, which Playwright reads as a fixture tuple |
-| `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered |
+| `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered. `stubMailchimpJsonp` takes a list to answer successive submissions differently (an error, then a successful retry). The fake Turnstile widget solves again when the page resets it, as the real one does after a failed submission, and marks its container `TURNSTILE_SOLVED` once the page has a token |
 | `waitForMinFillTime`, `fillByName` | `@pyre/e2e-utils` | The forms' anti-bot `form_timestamp` wait, and filling fields by `name` |
 | `waitForHydration` | `@pyre/e2e-utils` | Wait until every Astro island has mounted. Typing into a React form before then is lost when React takes over the input |
 | `expectNoSidewaysScroll` | `@pyre/e2e-utils` | Fail if the page is wider than the screen (on a phone, it scrolls sideways). Call it once the content under test has rendered |
@@ -24,12 +24,21 @@ Supabase stack). Start from whichever is closer to the new app.
 | `supabaseAdmin`, `ensureAuthUser`, `supabaseSessionCookies` | both | A service-role client for seeding and checking rows; an idempotent confirmed Auth user; a user's session as @supabase/ssr cookies, for someone the app's own sign-in would refuse |
 | `mailpitClient`, `emailLinks` | both | Read the stack's mail catcher: sign-in links and codes |
 | `REFERRAL`, `REFERRAL_UNKNOWN` | both | Shared contracts (`src/contracts/`): what one app's API answers, which another app's suite mocks. The owning app's suite checks its real endpoint against the same value, so the mock can't drift |
-| `createMockServer`, `runMockServer`, `mockServerClient` | `@pyre/e2e-utils/server` | A small HTTP server that plays the app's upstream APIs for its server-side code, plus a control API (`/__override`, `/__reset`, `/__requests`) |
+| `createMockServer`, `runMockServer`, `mockServerClient` | `@pyre/e2e-utils/server` | A small HTTP server that plays the app's upstream APIs for its server-side code, plus a control API (`/__override`, `/__reset`, `/__requests`, `/__unexpected`) |
 | `daysFromNow` | `@pyre/e2e-utils/server` | Fixture dates relative to now, so fixtures never go stale |
 
 Code that runs in a plain Node process, such as the mock server and its
 fixtures, imports from `@pyre/e2e-utils/server`. That entry doesn't load
 Playwright.
+
+## CI reports and flaky tests
+
+In CI the shared config also writes a JSON report (`test-results/results.json`).
+`.github/workflows/e2e.yml` uploads the HTML report and `test-results/` after
+every run, pass or fail, and `scripts/report-flaky.mjs` turns the JSON report
+into a warning annotation per flaky test (failed, then passed on a retry) and a
+table in the job summary. A flaky test never fails the job, but it no longer
+goes unnoticed, and its first-retry trace is in the uploaded report.
 
 ## Two stubbing layers
 
@@ -40,7 +49,11 @@ Playwright.
 - **Server-side calls** (SSR pages, API routes that proxy a third party) never
   pass through the browser. Point the app's upstream base URLs at the app's
   mock server through env vars instead, so the app's own server code runs for
-  real against fixtures. The env passed to the app's webServer must also blank
+  real against fixtures. Prefer this for the app's own form handlers too:
+  stubbing an app's `/api/*` in the browser skips its validation, bot checks
+  and upstream call, and a handler that silently drops a bot answers just like
+  a success. Check the mock's request log (`mockServerClient(url).requests()`)
+  to prove the upstream call happened. The env passed to the app's webServer must also blank
   every credential (`KV_REST_API_URL: ''`, …), because variables set in the
   process take priority over `.env` files.
 
@@ -71,14 +84,28 @@ running app must see should be seeded in the setup project. To start clean:
 `resetLocalSupabase(...)` (integrations: `yarn workspace @pyre/integrations
 e2e:supabase:reset`).
 
-### Mock server overrides are global
+### Scope mock server overrides
 
-`mockServerClient(url).override(...)` changes the answer for **every** worker,
-not just the calling test: the app's server calls carry nothing that ties them
-to a test. Keep overriding specs in their own file with
-`test.describe.configure({ mode: 'serial' })` and a `reset()` in `afterEach`,
-and only override upstream paths that no other spec depends on. Where that's
-not possible, use a distinct fixture id that only the overriding spec asks for.
+`mockServerClient(url).override(...)` is seen by **every** worker: the app's
+server calls carry nothing that ties them to a test. So scope an override to
+the calling test's own request with `bodyIncludes` (a string only its request
+contains: its unique email, or an entity id in the path) and/or `times` (answer
+that many requests, then stand down). `override` resolves to an id; remove it
+with `removeOverride(id)` when the test ends. An unscoped override answers
+every request on that route, so keep those for specs that run alone.
+
+### Unexpected upstream requests
+
+A request no route or override answers gets a 404 and is kept in
+`/__unexpected` (`mockServerClient(url).unexpected()`). A suite should fail
+the run when that list isn't empty (integrations does it in its global
+teardown), so a mock can't quietly answer an endpoint the app calls wrongly.
+
+### A second person in the same test
+
+`newPage({ storageState })` opens a page in its own browser context, on the
+project's device, with the same external-request blocking and browser-error
+guard as `page`. Use it rather than `browser.newContext()`.
 
 ## Adding a suite for another app
 

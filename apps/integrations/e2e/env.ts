@@ -27,6 +27,7 @@ export const SECRETS = {
   momenceBackfill: 'e2e-momence-backfill-secret',
   mailchimpWebhook: 'e2e-mailchimp-webhook-secret',
   mailchimpSigning: 'e2e-mailchimp-signing-secret',
+  boardIntake: 'e2e-board-intake-secret',
   // Svix format: whsec_ + base64 of the signing key.
   resendWebhook: `whsec_${Buffer.from('e2e-resend-signing-key').toString('base64')}`,
 } as const;
@@ -43,6 +44,7 @@ const BLANK = Object.fromEntries(
     'MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS',
     'MAILCHIMP_API_KEY',
     'MAILCHIMP_AUDIENCE_ID',
+    'MAILCHIMP_API_BASE',
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
     'POSTHOG_API_KEY',
@@ -92,7 +94,9 @@ export const APP_ENV: Record<string, string> = {
   // Read by astro.config.mjs: no .env files, no dev toolbar.
   E2E: '1',
   ASTRO_TELEMETRY_DISABLED: '1',
-  PUBLIC_SITE_URL: APP_URL,
+  // The public landing site (booking, referral and short links, its events
+  // and blog feeds) -> mock server.
+  PUBLIC_SITE_URL: `${MOCK_URL}/site`,
   // Email images from this app's own public/email, not the production deployment.
   PUBLIC_EMAIL_ASSET_BASE: `${APP_URL}/email`,
 
@@ -119,6 +123,11 @@ export const APP_ENV: Record<string, string> = {
   RESEND_API_KEY: 're_e2e',
   RESEND_FROM: 'Pyre E2E <e2e@pyresauna.com>',
 
+  // Mailchimp -> mock server: the suppression mirror and subscriber sync.
+  MAILCHIMP_API_BASE: `${MOCK_URL}/mailchimp/3.0`,
+  MAILCHIMP_API_KEY: 'e2e-key-us1',
+  MAILCHIMP_AUDIENCE_ID: 'e2e-audience',
+
   // Shared secrets.
   CRON_SECRET: SECRETS.cron,
   UNSUBSCRIBE_SECRET: SECRETS.unsubscribe,
@@ -132,6 +141,11 @@ export const APP_ENV: Record<string, string> = {
   MAILCHIMP_WEBHOOK_SECRET: SECRETS.mailchimpWebhook,
   MAILCHIMP_WEBHOOK_SIGNING_SECRET: SECRETS.mailchimpSigning,
   RESEND_WEBHOOK_SECRET: SECRETS.resendWebhook,
+  BOARD_INTAKE_SECRET: SECRETS.boardIntake,
+
+  // The tag a referrer's reward rides on (left blank, the app would look up a
+  // tag named "").
+  REFERRAL_REWARD_TAG_NAME: 'referral-reward',
 
   VERCEL_PROJECT_PRODUCTION_URL: `localhost:${APP_PORT}`,
 };

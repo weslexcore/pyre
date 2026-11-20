@@ -1,11 +1,22 @@
 // React hook for fetching member sessions
 // Includes cancel functionality
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MemberSession } from '@/lib/momence-member-types';
 
 interface UseMemberSessionsOptions {
   type?: 'upcoming' | 'attended';
+}
+
+/**
+ * Why the last cancel failed. Kept apart from the list's load `error`, so a
+ * failed cancel leaves the bookings on screen. `not_authenticated` means the
+ * sign-in expired; otherwise `message` is the server's explanation, if any.
+ */
+export interface CancelError {
+  bookingId: number;
+  reason: 'not_authenticated' | 'failed';
+  message?: string;
 }
 
 interface UseMemberSessionsResult {
@@ -15,6 +26,7 @@ interface UseMemberSessionsResult {
   refetch: () => Promise<void>;
   cancelSession: (bookingId: number) => Promise<boolean>;
   cancelling: number | null; // bookingId being cancelled
+  cancelError: CancelError | null;
 }
 
 export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMemberSessionsResult {
@@ -23,6 +35,7 @@ export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  const [cancelError, setCancelError] = useState<CancelError | null>(null);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -51,18 +64,32 @@ export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMe
     }
   }, [type]);
 
+  // A ref, not state: two clicks in one frame both see the state from before
+  // either re-render, so state alone can't stop a double submit.
+  const cancelInFlight = useRef(false);
+
   const cancelSession = useCallback(async (bookingId: number): Promise<boolean> => {
+    if (cancelInFlight.current) return false;
+    cancelInFlight.current = true;
     setCancelling(bookingId);
+    setCancelError(null);
 
     try {
       const response = await fetch(`/api/member/sessions/${bookingId}`, {
         method: 'DELETE',
       });
 
-      const data = await response.json();
+      if (response.status === 401) {
+        setCancelError({ bookingId, reason: 'not_authenticated' });
+        return false;
+      }
 
-      if (!data.success) {
-        throw new Error(data.message || 'Cancel failed');
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        console.error('[useMemberSessions] Cancel failed:', response.status, data.error);
+        setCancelError({ bookingId, reason: 'failed', message: data.message });
+        return false;
       }
 
       // Remove the cancelled session from local state
@@ -71,9 +98,10 @@ export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMe
       return true;
     } catch (err) {
       console.error('[useMemberSessions] Cancel error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to cancel');
+      setCancelError({ bookingId, reason: 'failed' });
       return false;
     } finally {
+      cancelInFlight.current = false;
       setCancelling(null);
     }
   }, []);
@@ -89,5 +117,6 @@ export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMe
     refetch: fetchSessions,
     cancelSession,
     cancelling,
+    cancelError,
   };
 }

@@ -5,7 +5,8 @@
 // by the 3hr session's bookings), the Open Hours 1hr/2hr pair, an Open Hours
 // slot selling 1/2/3/4 hours (every full-length session surfaces as an option,
 // sorted by duration), the sold-out 2-hour fallback on a partner-less Open
-// Hours slot, and a legacy high-capacity social that bypasses the pool.
+// Hours slot, a legacy high-capacity social that bypasses the pool, and a
+// special event whose 1hr/2hr sessions share their own 30-per-hour pool.
 
 import { buildPooledBookingModel } from '../src/lib/booking-model';
 import { MAX_OCCUPANCY } from '../src/lib/capacity';
@@ -142,16 +143,17 @@ const events: EventItem[] = [
     spotsRemaining: MAX * 2 - 15,
     priceUsd: 40,
   }),
-  // Special event (group-only): 1hr + 2hr at 3pm, 1hr at 4pm, a lone special
-  // event at 6pm. Capacity under the cap, so only group-only keeps them out of
-  // the pool.
+  // Special event (own pool), shaped like Blues // Tea // Sauna: 1hr + 2hr at
+  // 3pm and a 1hr at 4pm, each created at capacity 30 = 30 people per hour.
+  // Booked: 10 (1hr 3pm), 12 (2hr 3pm), 5 (1hr 4pm), so the 3pm hour holds 22
+  // and the 4pm hour 17. Plus a lone special event at 6pm overlapping nothing.
   makeEvent({
     id: 'se-1hr-3pm',
     tags: ['Special Event'],
     isoDate: '2026-08-15T19:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: MAX - 2,
-    spotsRemaining: MAX - 3,
+    totalSpots: 30,
+    spotsRemaining: 20,
     priceUsd: 25,
   }),
   makeEvent({
@@ -159,8 +161,8 @@ const events: EventItem[] = [
     tags: ['Special Event'],
     isoDate: '2026-08-15T19:00:00.000Z',
     durationMinutes: 120,
-    totalSpots: MAX - 2,
-    spotsRemaining: MAX - 16,
+    totalSpots: 30,
+    spotsRemaining: 18,
     priceUsd: 45,
   }),
   makeEvent({
@@ -168,8 +170,8 @@ const events: EventItem[] = [
     tags: ['Special Event'],
     isoDate: '2026-08-15T20:00:00.000Z',
     durationMinutes: 60,
-    totalSpots: MAX - 2,
-    spotsRemaining: MAX - 6,
+    totalSpots: 30,
+    spotsRemaining: 25,
     priceUsd: 25,
   }),
   makeEvent({
@@ -275,15 +277,19 @@ check('high-capacity social not hidden', model.hiddenIds.has('social-bypass'), f
 check('high-capacity social sells own capacity', opts('social-bypass')?.[0].spotsLeft, MAX * 2 - 15);
 check('guided session gets no options', opts('guided-7pm'), undefined);
 
-console.log('Special events group without joining the pool');
+console.log('Special events share their own hourly pool, apart from the floor pool');
 check('2hr special session is hidden', model.hiddenIds.has('se-2hr-3pm'), true);
 check('3pm special slot offers 1hr + 2hr', opts('se-1hr-3pm')?.map((o) => o.minutes), [60, 120]);
-check('special options sell own Momence spots', opts('se-1hr-3pm')?.map((o) => o.spotsLeft), [
-  MAX - 3,
-  MAX - 16,
+// 1hr: 30 - 22 at 3pm = 8. 2hr: tightest of 3pm (8) and 4pm (30 - 17 = 13) = 8.
+check('special options share the 30/hour cap', opts('se-1hr-3pm')?.map((o) => o.spotsLeft), [
+  8, 8,
 ]);
 check('2hr special option credits (from $45)', opts('se-1hr-3pm')?.[1].credits, 2);
-check('unpaired 4pm special slot keeps its ordinary row', opts('se-1hr-4pm'), undefined);
+check(
+  '4pm special slot counts the 2hr bookings',
+  opts('se-1hr-4pm')?.map((o) => o.spotsLeft),
+  [13]
+);
 check('lone special event keeps its ordinary row', opts('se-lone-6pm'), undefined);
 check('lone special event not hidden', model.hiddenIds.has('se-lone-6pm'), false);
 check('Open Hours ignores special-event bookings', opts('oh-1hr-4pm-se-day')?.[0].spotsLeft, MAX);

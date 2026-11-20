@@ -2,13 +2,16 @@
 // Displays user's upcoming booked sessions with cancel functionality
 
 import { useCallback, useState } from 'react';
-import { useMemberSessions } from '@/hooks/useMemberSessions';
+import { useAuth } from '@/hooks/useAuth';
+import { type CancelError, useMemberSessions } from '@/hooks/useMemberSessions';
 import { accountConfig } from '@/lib/account-config';
 import type { MemberSession } from '@/lib/momence-member-types';
 
 export function SessionsList() {
-  const { sessions, loading, error, cancelSession, cancelling } = useMemberSessions();
+  const { sessions, loading, error, cancelSession, cancelling, cancelError } = useMemberSessions();
+  const { login } = useAuth();
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null);
+  const signInAgain = useCallback(() => login({ returnUrl: '/account' }), [login]);
 
   const handleCancelClick = useCallback((bookingId: number) => {
     setConfirmCancel(bookingId);
@@ -43,8 +46,14 @@ export function SessionsList() {
     );
   }
 
-  // Error state (ignore auth errors - handled at page level)
-  if (error && error !== 'not_authenticated') {
+  // The page thought we were signed in, but the member API says the sign-in
+  // has expired: say so, rather than showing an empty list.
+  if (error === 'not_authenticated') {
+    return <SessionExpired onSignIn={signInAgain} />;
+  }
+
+  // Error state
+  if (error) {
     return (
       <div className="p-4 rounded-lg bg-[var(--pyre-red)]/10 text-[var(--pyre-red)] text-sm">
         Failed to load sessions. Please try again.
@@ -78,6 +87,8 @@ export function SessionsList() {
           onDismissCancel={handleCancelDismiss}
           isConfirming={confirmCancel === session.bookingId}
           isCancelling={cancelling === session.bookingId}
+          cancelError={cancelError?.bookingId === session.bookingId ? cancelError : null}
+          onSignIn={signInAgain}
         />
       ))}
     </div>
@@ -91,6 +102,23 @@ interface SessionCardProps {
   onDismissCancel: () => void;
   isConfirming: boolean;
   isCancelling: boolean;
+  cancelError: CancelError | null;
+  onSignIn: () => void;
+}
+
+function SessionExpired({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div role="alert" className="text-center py-4">
+      <p className="text-[var(--pyre-creme)]/70">{accountConfig.sessions.sessionExpired}</p>
+      <button
+        type="button"
+        onClick={onSignIn}
+        className="inline-flex items-center justify-center mt-4 px-6 py-2.5 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
+      >
+        {accountConfig.sessions.signInAgainButton}
+      </button>
+    </div>
+  );
 }
 
 function SessionCard({
@@ -100,6 +128,8 @@ function SessionCard({
   onDismissCancel,
   isConfirming,
   isCancelling,
+  cancelError,
+  onSignIn,
 }: SessionCardProps) {
   const date = new Date(session.dateTime);
   const formattedTime = date.toLocaleTimeString('en-US', {
@@ -110,7 +140,10 @@ function SessionCard({
   });
 
   return (
-    <div className="flex items-start gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <div
+      data-member-booking={session.bookingId}
+      className="flex items-start gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--pyre-black)] text-[var(--pyre-creme)]"
+    >
       {/* Date badge */}
       <div className="flex-shrink-0 w-14 text-center">
         <div className="text-xs font-mono-bold uppercase text-[var(--muted-foreground)]">
@@ -132,6 +165,20 @@ function SessionCard({
         </p>
         {session.teacherName && (
           <p className="text-sm text-[var(--muted-foreground)]">with {session.teacherName}</p>
+        )}
+        {cancelError && (
+          <p role="alert" className="mt-2 text-sm text-[var(--pyre-red)]">
+            {cancelError.reason === 'not_authenticated' ? (
+              <>
+                {accountConfig.sessions.sessionExpired}{' '}
+                <button type="button" onClick={onSignIn} className="underline hover:no-underline">
+                  {accountConfig.sessions.signInAgainButton}
+                </button>
+              </>
+            ) : (
+              (cancelError.message ?? accountConfig.sessions.cancelFailed)
+            )}
+          </p>
         )}
       </div>
 

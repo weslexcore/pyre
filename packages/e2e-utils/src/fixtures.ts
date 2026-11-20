@@ -1,9 +1,13 @@
 // The base `test` every app's specs import (via the app's own e2e/test.ts).
 //
-// It adds three things to Playwright's built-in fixtures:
+// It adds three things to Playwright's built-in fixtures, to `page` and to
+// every page `newPage()` opens (another person signed in during the test):
 //   1. Storage seeding: localStorage values written before any page script
 //      runs, e.g. to pre-dismiss a promo popup that would otherwise cover the
-//      page in every test.
+//      page in every test. The suite's values are the default of the
+//      `seedLocalStorage` option, so a file or describe block that needs
+//      different storage replaces them with `test.use({ seedLocalStorage })`
+//      instead of racing the seeding with an init script of its own.
 //   2. External blocking: browser requests to hosts outside the allowlist are
 //      aborted, so a test can never reach a real third party by accident. A
 //      test that needs one stubs it with page.route (see routes.ts); routes
@@ -12,7 +16,7 @@
 //      the test, unless it matches the allowlist. Add to it per file or
 //      describe block with `test.use({ consoleAllowlist: allowConsole(...) })`.
 
-import { test as base, expect } from '@playwright/test';
+import { type BrowserContextOptions, test as base, expect, type Page } from '@playwright/test';
 
 export type ConsolePattern = string | RegExp;
 
@@ -57,11 +61,24 @@ function matches(text: string, patterns: ConsolePattern[]): boolean {
 }
 
 interface PyreFixtures {
+  /**
+   * localStorage written before every document loads. Defaults to the suite's
+   * `CreateTestOptions.localStorage`; `test.use({ seedLocalStorage: {} })`
+   * turns the seeding off, and any other value replaces it.
+   */
+  seedLocalStorage: Record<string, string>;
   /** Per-test or per-file additions to the suite's console allowlist. */
   consoleAllowlist: ConsolePattern[];
   /** Errors the guard has collected so far; a test can inspect it. */
   browserErrors: string[];
   _browserErrorGuard: void;
+  /**
+   * A page in a browser context of its own (another person signed in beside
+   * the test's own `page`), on the same device as the project, with the same
+   * external blocking and browser-error guard as `page`. Pass the context
+   * options that differ, usually `storageState`. Closed when the test ends.
+   */
+  newPage: (options?: BrowserContextOptions) => Promise<Page>;
 }
 
 export function createTest(options: CreateTestOptions = {}) {
@@ -72,11 +89,9 @@ export function createTest(options: CreateTestOptions = {}) {
     ...(options.consoleAllowlist ?? []),
   ];
 
-  return base.extend<PyreFixtures>({
-    consoleAllowlist: [[], { option: true }],
-
-    page: async ({ page }, use) => {
-      if (options.localStorage && Object.keys(options.localStorage).length > 0) {
+  /** Storage seeding and external blocking, for every page a test opens. */
+  const preparePage = async (page: Page, seedLocalStorage: Record<string, string>) => {
+      if (Object.keys(seedLocalStorage).length > 0) {
         await page.addInitScript((entries) => {
           for (const [key, value] of Object.entries(entries)) {
             try {
@@ -85,33 +100,89 @@ export function createTest(options: CreateTestOptions = {}) {
               // Opaque origins (about:blank) have no storage; nothing to seed.
             }
           }
-        }, options.localStorage);
+        }, seedLocalStorage);
       }
 
       await page.route(
         (url) => url.protocol.startsWith('http') && !allowHosts.has(url.hostname),
         (route) => route.abort('blockedbyclient')
       );
+  };
 
+  /** Collect a page's uncaught errors and console.errors into `errors`. */
+  const watchErrors = (page: Page, allowlist: ConsolePattern[], errors: string[], label = '') => {
+    page.on('pageerror', (error) => {
+      const text = `${label}pageerror: ${error.message}`;
+      if (!matches(text, allowlist)) errors.push(text);
+    });
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const location = message.location();
+      const text = `${label}console.error: ${message.text()}${location.url ? ` (${location.url})` : ''}`;
+      if (!matches(text, allowlist)) errors.push(text);
+    });
+  };
+
+  return base.extend<PyreFixtures>({
+    seedLocalStorage: [options.localStorage ?? {}, { option: true }],
+    consoleAllowlist: [[], { option: true }],
+
+    page: async ({ page, seedLocalStorage }, use) => {
+      await preparePage(page, seedLocalStorage);
       await use(page);
     },
 
     browserErrors: async ({ page, consoleAllowlist }, use) => {
       const errors: string[] = [];
-      const allowlist = [...suiteAllowlist, ...consoleAllowlist];
-
-      page.on('pageerror', (error) => {
-        const text = `pageerror: ${error.message}`;
-        if (!matches(text, allowlist)) errors.push(text);
-      });
-      page.on('console', (message) => {
-        if (message.type() !== 'error') return;
-        const location = message.location();
-        const text = `console.error: ${message.text()}${location.url ? ` (${location.url})` : ''}`;
-        if (!matches(text, allowlist)) errors.push(text);
-      });
-
+      watchErrors(page, [...suiteAllowlist, ...consoleAllowlist], errors);
       await use(errors);
+    },
+
+    newPage: async (
+      {
+        browser,
+        browserErrors,
+        consoleAllowlist,
+        seedLocalStorage,
+        baseURL,
+        viewport,
+        userAgent,
+        isMobile,
+        hasTouch,
+        deviceScaleFactor,
+        locale,
+        timezoneId,
+        reducedMotion,
+      },
+      use
+    ) => {
+      const contexts: Awaited<ReturnType<typeof browser.newContext>>[] = [];
+      await use(async (contextOptions = {}) => {
+        const context = await browser.newContext({
+          baseURL,
+          viewport,
+          userAgent,
+          isMobile,
+          hasTouch,
+          deviceScaleFactor,
+          locale,
+          timezoneId,
+          reducedMotion,
+          ...contextOptions,
+        });
+        contexts.push(context);
+        const page = await context.newPage();
+        await preparePage(page, seedLocalStorage);
+        // Errors land in the test's own list, so the guard below covers them.
+        watchErrors(
+          page,
+          [...suiteAllowlist, ...consoleAllowlist],
+          browserErrors,
+          `[context ${contexts.length + 1}] `
+        );
+        return page;
+      });
+      await Promise.all(contexts.map((context) => context.close()));
     },
 
     _browserErrorGuard: [

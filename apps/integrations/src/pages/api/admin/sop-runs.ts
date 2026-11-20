@@ -46,6 +46,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
+import { isUniqueViolation } from '@/lib/http/json';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { countTasks, forbiddenSkips, parseChecklist } from '@/lib/sops/checklist';
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
@@ -370,8 +371,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     existing = null;
   }
 
-  if (existing) {
-    const run = existing;
+  // Join the run that's open: the one found above, or the one another tap
+  // opened a moment ago (the unique index below lets only one open at a time).
+  const joinRun = async (run: SopRunRow): Promise<Response> => {
     // The run's own snapshot, needed to expand checkAll and to know which
     // items that snapshot marks required. Skipped nothing and checking
     // nothing wholesale? Then it isn't read at all.
@@ -415,7 +417,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       resumed: true,
       people: await getPeopleNames(runActors(full.run, runChecks)),
     });
-  }
+  };
+  if (existing) return joinRun(existing);
 
   // A fresh run pins the current version, so the current text is the one its
   // required items come from.
@@ -434,7 +437,21 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (createError) return dbError(createError);
+  if (createError) {
+    // Two people tapped the first item at the same moment and the other one's
+    // run won (sop_runs_one_open_per_sop): join it rather than fail or fork.
+    if (isUniqueViolation(createError)) {
+      const { data: open, error: openError } = await db
+        .from('sop_runs')
+        .select('*')
+        .eq('sop_id', sopId)
+        .eq('status', 'in_progress')
+        .maybeSingle();
+      if (openError) return dbError(openError);
+      if (open) return joinRun(open as SopRunRow);
+    }
+    return dbError(createError);
+  }
 
   const newRun = created as SopRunRow;
   let newChecks: SopRunCheckRow[] = [];

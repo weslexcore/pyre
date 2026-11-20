@@ -5,6 +5,7 @@ import { DESKTOP_ONLY_TAG, uniqueEmail } from '@pyre/e2e-utils';
 import { signString } from '../src/lib/http/signed-token';
 import { SECRETS } from './env';
 import { expect, test } from './test';
+import { expectUnsubscribeMirrored, upstreamRequests } from './upstream';
 
 const tokenFor = (email: string) =>
   signString(email.toLowerCase(), { secret: () => SECRETS.unsubscribe }) as string;
@@ -17,6 +18,7 @@ test('a genuine link unsubscribes the address', async ({ page, db }, testInfo) =
 
   const { data } = await db.from('email_suppressions').select('reason, source').eq('email', email);
   expect(data).toEqual([{ reason: 'unsubscribe', source: 'unsubscribe-link' }]);
+  await expectUnsubscribeMirrored(email);
 });
 
 test('a forged link is refused', { tag: DESKTOP_ONLY_TAG }, async ({ request, db }, testInfo) => {
@@ -27,4 +29,5 @@ test('a forged link is refused', { tag: DESKTOP_ONLY_TAG }, async ({ request, db
   expect((await request.post(`/api/unsubscribe?token=${forged}`)).status()).toBe(400);
   const { data } = await db.from('email_suppressions').select('id').eq('email', email);
   expect(data).toEqual([]);
+  expect(await upstreamRequests('PATCH', `/resend/contacts/${email}`)).toEqual([]);
 });

@@ -11,11 +11,11 @@ import {
   resetLocalSupabase,
   stopLocalSupabase,
 } from '@pyre/e2e-utils/server';
-import { APP_PORT } from './ports';
+import { SUPABASE_APP_PORT } from './ports';
 
 const options: LocalSupabaseOptions = {
   supabaseDir: fileURLToPath(new URL('../../supabase', import.meta.url)),
-  appOrigin: `http://localhost:${APP_PORT}`,
+  appOrigin: `http://localhost:${SUPABASE_APP_PORT}`,
 };
 
 /** Start or reuse the stack, migrated, and return its URLs and keys. */
