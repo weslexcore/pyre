@@ -15,12 +15,18 @@
 import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSetting } from '@/lib/settings/store';
-import { applyHunks } from '@/lib/sops/sop-edit';
+import { applyHunks, sectionHunk } from '@/lib/sops/sop-edit';
 import { checkPayload } from './approve';
 import { dueDateFor, isImportance, isSeverity } from './priority';
 import type { SourceRecord } from './sources';
 import type { NewSuggestion } from './store';
-import { checkRunSize, isSuggestionKind, MAX_RATIONALE, type SuggestionKind } from './types';
+import {
+  checkRunSize,
+  isSuggestionKind,
+  MAX_RATIONALE,
+  type SopHunk,
+  type SuggestionKind,
+} from './types';
 
 export type IntakeResult =
   | { ok: true; suggestions: NewSuggestion[] }
@@ -34,8 +40,10 @@ function asObject(raw: unknown): Record<string, unknown> | null {
 
 /**
  * The agent names an SOP by slug and describes the change as hunks against
- * the current version; the stored payload is the whole document with the
- * hunks applied, plus the hunks themselves for a later rebase.
+ * the current version — exact find-and-replace text, or a whole new section
+ * (its markdown, and the heading it goes before, or the end); the stored
+ * payload is the whole document with the hunks applied, plus the hunks
+ * themselves for a later rebase.
  */
 async function expandSopEdit(
   db: SupabaseClient,
@@ -68,17 +76,43 @@ async function expandSopEdit(
     };
   }
   const edits = Array.isArray(raw.edits) ? raw.edits : [];
-  if (edits.length === 0)
-    return { ok: false, status: 422, error: 'edits must list at least one { find, replace }' };
-  const hunks = edits.map((e) => asObject(e) ?? {});
-  if (!hunks.every((h) => typeof h.find === 'string' && typeof h.replace === 'string')) {
-    return { ok: false, status: 422, error: 'each edit must be { find, replace } text' };
+  if (edits.length === 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: 'edits must list at least one { find, replace } or { section, before? }',
+    };
   }
-  const applied = applyHunks(
-    sop.content_md,
-    hunks.map((h) => ({ find: h.find as string, replace: h.replace as string }))
-  );
-  if (!applied.ok) return { ok: false, status: 422, error: applied.error };
+  // Each edit is checked against the document as the ones before it leave
+  // it, so a new section can go before a heading an earlier edit renamed.
+  const hunks: SopHunk[] = [];
+  let content = sop.content_md;
+  for (const [i, entry] of edits.entries()) {
+    const e = asObject(entry) ?? {};
+    let hunk: SopHunk;
+    if (typeof e.section === 'string') {
+      const made = sectionHunk(content, {
+        section: e.section,
+        before: typeof e.before === 'string' ? e.before : null,
+      });
+      if (!made.ok) return { ok: false, status: 422, error: `edits[${i}]: ${made.error}` };
+      hunk = made.hunk;
+    } else if (typeof e.find === 'string' && typeof e.replace === 'string') {
+      hunk = { find: e.find, replace: e.replace };
+    } else {
+      return {
+        ok: false,
+        status: 422,
+        error: `edits[${i}] must be { find, replace } or { section, before? } text`,
+      };
+    }
+    const applied = applyHunks(content, [hunk]);
+    if (!applied.ok) {
+      return { ok: false, status: 422, error: applied.error.replace('edits[0]', `edits[${i}]`) };
+    }
+    content = applied.content;
+    hunks.push(hunk);
+  }
   return {
     ok: true,
     payload: {
@@ -86,7 +120,7 @@ async function expandSopEdit(
       slug: sop.slug,
       baseVersion: sop.current_version,
       title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : sop.title,
-      contentMd: applied.content,
+      contentMd: content,
       changeNote: typeof raw.changeNote === 'string' ? raw.changeNote : '',
       edits: hunks,
     },

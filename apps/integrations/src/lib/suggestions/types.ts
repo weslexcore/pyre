@@ -23,7 +23,7 @@ import type {
 import { isUuid } from '@/lib/http/json';
 import { formatQuantity, parseQuantity } from '@/lib/inventory/rules';
 import { BODY_MAX, parseAudience, TITLE_MAX } from '@/lib/messages/validate';
-import type { SopRole } from '@/lib/sops/levels';
+import { isSopRole, SLUG_RE, SOP_ROLES, type SopRole, slugify } from '@/lib/sops/levels';
 import { type Importance, isImportance, isSeverity, type Severity } from './priority';
 
 export type SuggestionKind = AgentSuggestionKind;
@@ -34,6 +34,7 @@ export const SUGGESTION_KINDS: readonly SuggestionKind[] = [
   'board_card.create',
   'board_card.comment',
   'sop.edit',
+  'sop.create',
   'shift_assignment.update',
   'inventory.count',
   'inventory.create',
@@ -70,6 +71,7 @@ export const KIND_LABELS: Record<SuggestionKind, string> = {
   'board_card.create': 'New task',
   'board_card.comment': 'Comment on task',
   'sop.edit': 'SOP edit',
+  'sop.create': 'New SOP',
   'shift_assignment.update': 'Hours change',
   'inventory.count': 'Inventory count',
   'inventory.create': 'New inventory item',
@@ -112,6 +114,7 @@ export const SUGGESTION_LIMITS = {
   notes: 10_000,
   comment: 4000,
   sopTitle: 200,
+  sopCategory: 60,
   sopContent: 100_000,
   changeNote: 300,
   hunks: 20,
@@ -149,9 +152,25 @@ export interface CardCommentPayload {
 }
 
 /** One exact find-and-replace in an SOP, as the agent proposed it. */
-export interface SopHunk {
+export interface SopReplaceHunk {
   find: string;
   replace: string;
+}
+
+/** Text added at the end of an SOP: a new last section. */
+export interface SopAppendHunk {
+  append: string;
+}
+
+/**
+ * One change to an SOP. A new section placed before an existing heading is
+ * a replace hunk (the heading becomes the section, then the heading), so it
+ * replays on a newer version as long as that heading is still there.
+ */
+export type SopHunk = SopReplaceHunk | SopAppendHunk;
+
+export function isAppendHunk(hunk: SopHunk): hunk is SopAppendHunk {
+  return 'append' in hunk;
 }
 
 /** A new version of an SOP. */
@@ -169,6 +188,25 @@ export interface SopEditPayload {
    * when the SOP changes before anyone approves (./sop-edit rebaseSopEdit).
    */
   edits: SopHunk[];
+}
+
+/**
+ * A whole new SOP, for knowledge that belongs in no existing document (a
+ * procedure explained in a shift note, a policy settled in a chat).
+ * Approving creates it as the approving admin — creating documents is
+ * admin-only — filed under `category`, a section of the library.
+ */
+export interface SopCreatePayload {
+  title: string;
+  /** Lowercase letters, digits and hyphens; unique in the library. */
+  slug: string;
+  /** The library section it is filed under; a new name makes a new section. */
+  category: string;
+  contentMd: string;
+  /** Who may read it; every role by default, like the New SOP form. */
+  viewRoles: SopRole[];
+  /** Who may edit it besides admins; admins by default. */
+  editRoles: SopRole[];
 }
 
 /**
@@ -287,6 +325,7 @@ export interface PayloadByKind {
   'board_card.create': CardCreatePayload;
   'board_card.comment': CardCommentPayload;
   'sop.edit': SopEditPayload;
+  'sop.create': SopCreatePayload;
   'shift_assignment.update': ShiftTimesPayload;
   'inventory.count': InventoryCountPayload;
   'inventory.create': InventoryCreatePayload;
@@ -379,15 +418,20 @@ function parseCardCommentPayload(raw: unknown): ParseResult<CardCommentPayload> 
 
 function parseHunks(raw: unknown): ParseResult<SopHunk[]> {
   if (raw === undefined || raw === null) return { ok: true, value: [] };
-  if (!Array.isArray(raw)) return fail('edits must be a list of { find, replace }');
+  if (!Array.isArray(raw)) return fail('edits must be a list of { find, replace } or { append }');
   if (raw.length > SUGGESTION_LIMITS.hunks) {
     return fail(`at most ${SUGGESTION_LIMITS.hunks} edits per SOP`);
   }
   const hunks: SopHunk[] = [];
   for (const [i, entry] of raw.entries()) {
     const o = asObject(entry);
+    if (o && typeof o.append === 'string' && o.find === undefined) {
+      if (!o.append.trim()) return fail(`edits[${i}].append must not be empty`);
+      hunks.push({ append: o.append });
+      continue;
+    }
     if (!o || typeof o.find !== 'string' || typeof o.replace !== 'string') {
-      return fail(`edits[${i}] must be { find, replace } text`);
+      return fail(`edits[${i}] must be { find, replace } or { append } text`);
     }
     if (!o.find) return fail(`edits[${i}].find must not be empty`);
     hunks.push({ find: o.find, replace: o.replace });
@@ -425,6 +469,45 @@ function parseSopEditPayload(raw: unknown): ParseResult<SopEditPayload> {
       changeNote,
       edits: edits.value,
     },
+  };
+}
+
+function roleList(raw: unknown, fallback: readonly SopRole[]): SopRole[] | null {
+  if (raw === undefined || raw === null) return [...fallback];
+  if (!Array.isArray(raw) || !raw.every(isSopRole)) return null;
+  return [...new Set(raw)];
+}
+
+function parseSopCreatePayload(raw: unknown): ParseResult<SopCreatePayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  const title = str(o.title);
+  if (!title || title.length > SUGGESTION_LIMITS.sopTitle) {
+    return fail(`title must be 1–${SUGGESTION_LIMITS.sopTitle} characters`);
+  }
+  const slug = str(o.slug) || slugify(title);
+  if (!SLUG_RE.test(slug)) return fail('slug must be lowercase letters, digits and hyphens');
+  const category = str(o.category) || 'General';
+  if (category.length > SUGGESTION_LIMITS.sopCategory) {
+    return fail(`category must be at most ${SUGGESTION_LIMITS.sopCategory} characters`);
+  }
+  const contentMd = typeof o.contentMd === 'string' ? o.contentMd.trim() : '';
+  if (!contentMd || contentMd.length > SUGGESTION_LIMITS.sopContent) {
+    return fail(`contentMd must be 1–${SUGGESTION_LIMITS.sopContent} characters of markdown`);
+  }
+  const viewRoles = roleList(o.viewRoles, SOP_ROLES);
+  if (!viewRoles || viewRoles.length === 0) {
+    return fail('viewRoles must list at least one of staff, shift_lead, admin');
+  }
+  const editRoles = roleList(o.editRoles, ['admin']);
+  if (!editRoles) return fail('editRoles must list staff, shift_lead or admin');
+  // Admins can always read and edit; keep them on both lists so the grant
+  // reads the same as one made on the New SOP form.
+  if (!viewRoles.includes('admin')) viewRoles.push('admin');
+  if (!editRoles.includes('admin')) editRoles.push('admin');
+  return {
+    ok: true,
+    value: { title, slug, category, contentMd: `${contentMd}\n`, viewRoles, editRoles },
   };
 }
 
@@ -666,6 +749,7 @@ export const PAYLOAD_PARSERS: {
   'board_card.create': parseCardCreatePayload,
   'board_card.comment': parseCardCommentPayload,
   'sop.edit': parseSopEditPayload,
+  'sop.create': parseSopCreatePayload,
   'shift_assignment.update': parseShiftTimesPayload,
   'inventory.count': parseInventoryCountPayload,
   'inventory.create': parseInventoryCreatePayload,
@@ -697,6 +781,8 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
       return `Comment on a task: ${str(o.note).slice(0, 80)}`;
     case 'sop.edit':
       return `Edit SOP: ${str(o.title) || str(o.slug) || 'untitled'}`;
+    case 'sop.create':
+      return `New SOP: ${str(o.title) || 'untitled'}${str(o.category) ? ` (${str(o.category)})` : ''}`;
     case 'shift_assignment.update':
       return `Hours change: ${str(o.staffName) || 'someone'} ${str(o.shiftDate)} ${str(o.startsAt)}–${str(o.endsAt)}`.replace(
         /\s+/g,

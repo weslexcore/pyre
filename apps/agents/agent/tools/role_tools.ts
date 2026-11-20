@@ -130,7 +130,7 @@ export default defineDynamic({
           }),
           read_sop_for_edit: defineTool({
             description:
-              "One SOP's full markdown, exactly as stored, and its current version. Read before proposing an sop.edit: copy each edit's find text from here character for character, and pass version as baseVersion.",
+              "One SOP's full markdown, exactly as stored, and its current version. Read before proposing an sop.edit: copy each edit's find text (and each new section's before heading) from here character for character, and pass version as baseVersion.",
             inputSchema: z.object({
               slug: z.string().min(1).max(120).describe('The document slug from list_sops.'),
             }),
@@ -544,16 +544,30 @@ export default defineDynamic({
         }),
         suggest_sop_edit: defineTool({
           description:
-            'Suggest a change to an SOP: exact find-and-replace edits against the document as read_sop returned it. It is filed for review the same way shift-note suggestions are — shown in the chat as an editable diff, approved by an admin (or the person, if they decide suggestions) — and saved as a new version only when approved. Read the whole document with read_sop first; copy each find text from it character for character, long enough to match exactly one place, and pass its version as baseVersion.',
+            'Suggest a change to an existing SOP against the document as read_sop returned it: exact find-and-replace edits, and/or whole new sections (a section is its own markdown heading plus its text, placed before an existing heading or at the end). It is filed for review the same way shift-note suggestions are — shown in the chat as an editable diff, approved by an admin (or the person, if they decide suggestions) — and saved as a new version only when approved. Read the whole document with read_sop first; copy each find text (and each before heading) from it character for character, and pass its version as baseVersion.',
           inputSchema: z.object({
             slug: z.string().min(1).max(120).describe('The document slug.'),
             baseVersion: z.number().int().min(1).describe('The version read_sop returned.'),
             edits: z
               .array(
-                z.object({
-                  find: z.string().min(1).describe('Exact text from the document, matching one place.'),
-                  replace: z.string().describe('What it becomes; empty to delete it.'),
-                })
+                z.union([
+                  z.object({
+                    find: z.string().min(1).describe('Exact text from the document, matching one place.'),
+                    replace: z.string().describe('What it becomes; empty to delete it.'),
+                  }),
+                  z.object({
+                    section: z
+                      .string()
+                      .min(1)
+                      .max(20000)
+                      .describe('A whole new section in markdown, starting with its own heading at the level of its neighbours (e.g. "## Late arrivals\n\n- Offer the next slot…").'),
+                    before: z
+                      .string()
+                      .max(200)
+                      .optional()
+                      .describe('The existing heading line it goes before, exactly as in the document (e.g. "## Closing"); omit to add it at the end.'),
+                  }),
+                ])
               )
               .min(1)
               .max(20),
@@ -563,6 +577,43 @@ export default defineDynamic({
           }),
           execute(input, ctx) {
             return suggest(scopeOf(ctx), ctx.session?.id ?? null, 'sop.edit', input);
+          },
+        }),
+        suggest_new_sop: defineTool({
+          description:
+            'Suggest a whole new SOP for knowledge that belongs in no existing document — a procedure, policy, or how-to the person explained, or that you found in shift notes or messages, and that the team should be able to look up. Filed for review like a shift-note suggestion; an admin approves it, and only then is it added to the library (where you and everyone it is shared with can find it). Check list_sops and search first: when an existing document covers the topic, suggest_sop_edit (a new section) instead.',
+          inputSchema: z.object({
+            title: z.string().min(1).max(200).describe('A plain title in the library\'s style, e.g. "Late arrivals".'),
+            category: z
+              .string()
+              .min(1)
+              .max(60)
+              .describe('The library section to file it under: one list_sops already uses when one fits; a new name makes a new section.'),
+            contentMd: z
+              .string()
+              .min(1)
+              .max(100000)
+              .describe('The whole document in markdown: a one-line purpose, then ## sections; steps as lists ("- [ ]" for a checklist to run on shift). Only what the source actually says.'),
+            slug: z
+              .string()
+              .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+              .max(80)
+              .optional()
+              .describe('Its address; omit to derive it from the title.'),
+            viewRoles: z
+              .array(z.enum(['staff', 'shift_lead', 'admin']))
+              .min(1)
+              .max(3)
+              .optional()
+              .describe('Who may read it; omit for everyone. Narrow it only for leads- or admin-only material.'),
+            rationale: z
+              .string()
+              .min(1)
+              .max(600)
+              .describe('Where the knowledge came from (the chat, which shift notes or messages) and why it needs its own document.'),
+          }),
+          execute(input, ctx) {
+            return suggest(scopeOf(ctx), ctx.session?.id ?? null, 'sop.create', input);
           },
         }),
         suggest_message: defineTool({

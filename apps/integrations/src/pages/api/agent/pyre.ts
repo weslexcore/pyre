@@ -16,7 +16,8 @@
 //     op 'propose'   → { kind, ...the change, rationale } → { proposal } | 422 { error }
 //     op 'messages'  → { query?, limit?, includeArchived? } the admin messages they can open
 //     op 'message'   → { id } one message in full
-//     op 'suggest'   → { kind: sop.edit | message.create | message.edit, payload, rationale }
+//     op 'suggest'   → { kind: sop.edit | sop.create | message.create | message.edit,
+//                        payload, rationale }
 //                      → { suggestion, reviewer } | 4xx { error }
 //     op 'suggest_inventory' → { changes: [{ kind: inventory.count | inventory.create,
 //                                ...payload, shiftNoteId?, rationale }] }

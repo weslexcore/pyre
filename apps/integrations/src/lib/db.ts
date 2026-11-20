@@ -504,6 +504,7 @@ export type AgentSuggestionKind =
   | 'board_card.create'
   | 'board_card.comment'
   | 'sop.edit'
+  | 'sop.create'
   | 'shift_assignment.update'
   | 'inventory.count'
   | 'inventory.create'
@@ -595,6 +596,7 @@ export interface AgentSuggestionRow {
   result_type:
     | 'board_card'
     | 'board_event'
+    | 'sop'
     | 'sop_version'
     | 'shift_assignment'
     | 'inventory_item'
