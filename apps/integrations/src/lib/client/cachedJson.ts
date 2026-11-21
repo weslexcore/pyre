@@ -27,7 +27,7 @@
 // visitor's own browser and are keyed by full URL, so two different queries
 // can never collide.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 interface Entry {
   data: unknown;
@@ -296,12 +296,24 @@ export function useCachedJson<T>(
     freshMs = FRESH_MS,
   } = options;
 
-  const [data, setDataState] = useState<T | null>(() => (url ? readCache<T>(url, maxAgeMs) : null));
+  // The first render is the server's: no data, loading. The server never
+  // holds a cached entry, so rendering one here would make the island's
+  // first client render differ from the HTML it hydrates (a ClientRouter
+  // navigation to a page whose read was warmed, or to the page just left),
+  // and React would throw the tree away and re-render it, logging a
+  // hydration error. The cached entry goes in from a layout effect instead,
+  // which runs before the browser paints, so it still shows at once.
+  const [data, setDataState] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Start pending only when the first paint has nothing to show.
-  const [pending, setPending] = useState<boolean>(() =>
-    url ? readCache<T>(url, maxAgeMs) === null : false
-  );
+  const [pending, setPending] = useState<boolean>(url !== null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the first paint only; the effect below follows url changes
+  useLayoutEffect(() => {
+    if (!url) return;
+    const cached = readCache<T>(url, maxAgeMs);
+    if (cached === null) return;
+    setDataState(cached);
+    setPending(false);
+  }, []);
 
   // Guards against out-of-order responses: only the newest request may write.
   const requestId = useRef(0);

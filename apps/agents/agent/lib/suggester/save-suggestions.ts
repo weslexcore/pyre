@@ -1,5 +1,6 @@
 // Save the suggester's proposals for admin review via the integrations app,
-// which checks each against the live boards, cards and SOPs and files them as
+// which checks each against the live boards, cards and SOPs (edits, new
+// sections and new documents) and files them as
 // pending. Validation errors come back verbatim (with the index of the
 // suggestion to fix) so the model can correct and resubmit. The run and the
 // record come from the session's auth, never from the model. A session with
@@ -110,17 +111,62 @@ export const saveSuggestionsInput = z.object({
               .describe('The version read_sop_for_edit returned.'),
             edits: z
               .array(
-                z.object({
-                  find: z
-                    .string()
-                    .min(1)
-                    .describe('Exact text from the document, long enough to match one place.'),
-                  replace: z.string().describe('What it becomes; empty to delete it.'),
-                })
+                z.union([
+                  z.object({
+                    find: z
+                      .string()
+                      .min(1)
+                      .describe('Exact text from the document, long enough to match one place.'),
+                    replace: z.string().describe('What it becomes; empty to delete it.'),
+                  }),
+                  z.object({
+                    section: z
+                      .string()
+                      .min(1)
+                      .max(20000)
+                      .describe(
+                        'A whole new section in markdown, starting with its own heading at the level of its neighbours ("## Late arrivals\n\n- …").'
+                      ),
+                    before: z
+                      .string()
+                      .max(200)
+                      .optional()
+                      .describe(
+                        'The existing heading line it goes before, exactly as read_sop_for_edit shows it; omit to add it at the end.'
+                      ),
+                  }),
+                ])
               )
               .min(1)
               .max(20),
             changeNote: z.string().min(1).max(300).describe('The change, in plain words.'),
+          }),
+        }),
+        z.object({
+          kind: z.literal('sop.create'),
+          ...common,
+          payload: z.object({
+            title: z.string().min(1).max(200).describe('A plain title in the library\'s style.'),
+            category: z
+              .string()
+              .min(1)
+              .max(60)
+              .describe(
+                'The library section to file it under: one list_sops already uses when one fits.'
+              ),
+            contentMd: z
+              .string()
+              .min(1)
+              .max(100000)
+              .describe(
+                'The whole document in markdown: a one-line purpose, then ## sections. Only what the note and its replies actually say.'
+              ),
+            viewRoles: z
+              .array(z.enum(['staff', 'shift_lead', 'admin']))
+              .min(1)
+              .max(3)
+              .optional()
+              .describe('Who may read it; omit for everyone.'),
           }),
         }),
         z.object({
@@ -220,7 +266,7 @@ export const saveSuggestionsInput = z.object({
       message: 'At most 8 suggestions besides inventory changes.',
     })
     .describe(
-      'Everything you propose for this record; empty when it needs nothing. Up to 8 tasks, comments, SOP edits and hours changes, plus one inventory suggestion for every supply the note counts (up to 50).'
+      'Everything you propose for this record; empty when it needs nothing. Up to 8 tasks, comments, SOP edits, new SOPs and hours changes, plus one inventory suggestion for every supply the note counts (up to 50).'
     ),
 });
 

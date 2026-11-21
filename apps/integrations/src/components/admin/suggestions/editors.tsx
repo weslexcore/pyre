@@ -2,7 +2,7 @@
 // fields the thing itself has (a card's board, assignees, title, notes, due
 // date and custom fields, plus the severity and importance its due date
 // follows; a comment's words; an SOP's text, shown as a diff against
-// the document as it is now; an assignment's hours, next to what was
+// the document as it is now; a new SOP's title, section, text and access; an assignment's hours, next to what was
 // scheduled; an inventory count, next to the stock on record, on an item
 // that can be swapped for another; a new inventory item's name, place and
 // starting count). The Record
@@ -39,6 +39,7 @@ import type {
   MessageEditPayload,
   PayloadByKind,
   ShiftTimesPayload,
+  SopCreatePayload,
   SopEditPayload,
   SuggestionKind,
   SuggestionResultLink,
@@ -432,6 +433,103 @@ function SopEditEditor({ value, onChange, target, disabled }: EditorProps<'sop.e
           onChange={(e) => set({ changeNote: e.target.value })}
         />
       </label>
+    </div>
+  );
+}
+
+/** A whole new SOP: what it is called, where it is filed, its text, and who may read and edit it. */
+function SopCreateEditor({ value, onChange, disabled, idPrefix }: EditorProps<'sop.create'>) {
+  const set = (patch: Partial<SopCreatePayload>) => onChange({ ...value, ...patch });
+  const toggle = (key: 'viewRoles' | 'editRoles', role: (typeof SOP_ROLES)[number]) => {
+    // Admins always read and edit everything; their box stays on.
+    if (role === 'admin') return;
+    const list = value[key];
+    set({ [key]: list.includes(role) ? list.filter((r) => r !== role) : [...list, role] });
+  };
+  const roles = (key: 'viewRoles' | 'editRoles', legend: string) => (
+    <fieldset>
+      <legend className={labelClass}>{legend}</legend>
+      <div className="flex flex-wrap gap-3">
+        {SOP_ROLES.map((role) => (
+          <label key={role} className="flex items-center gap-1.5 text-xs text-white/70">
+            <input
+              type="checkbox"
+              checked={role === 'admin' || value[key].includes(role)}
+              disabled={disabled || role === 'admin'}
+              onChange={() => toggle(key, role)}
+            />
+            {ROLE_LABELS[role]}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor={`${idPrefix}-title`} className={labelClass}>
+            Title
+          </label>
+          <input
+            id={`${idPrefix}-title`}
+            className={`${compactInputClass} w-full`}
+            value={value.title}
+            maxLength={SUGGESTION_LIMITS.sopTitle}
+            disabled={disabled}
+            onChange={(e) => set({ title: e.target.value })}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-category`} className={labelClass}>
+            Library section
+          </label>
+          <input
+            id={`${idPrefix}-category`}
+            className={`${compactInputClass} w-full`}
+            value={value.category}
+            maxLength={SUGGESTION_LIMITS.sopCategory}
+            disabled={disabled}
+            onChange={(e) => set({ category: e.target.value })}
+          />
+        </div>
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-slug`} className={labelClass}>
+          Address
+        </label>
+        <div className="flex items-center gap-1 font-mono text-xs text-white/50">
+          <span>/admin/sops/</span>
+          <input
+            id={`${idPrefix}-slug`}
+            className={`${compactInputClass} min-w-0 flex-1`}
+            value={value.slug}
+            maxLength={80}
+            disabled={disabled}
+            onChange={(e) => set({ slug: e.target.value.toLowerCase() })}
+          />
+        </div>
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-content`} className={labelClass}>
+          Document
+        </label>
+        <LinkTextarea
+          id={`${idPrefix}-content`}
+          className={`${textareaClass} min-h-64 font-mono text-xs`}
+          value={value.contentMd}
+          maxLength={SUGGESTION_LIMITS.sopContent}
+          disabled={disabled}
+          onChange={(next) => set({ contentMd: next })}
+        />
+      </div>
+      <div className="flex flex-wrap gap-6">
+        {roles('viewRoles', 'Who can read it')}
+        {roles('editRoles', 'Who can edit it')}
+      </div>
+      <span className={hintClass}>
+        Approving adds it to the SOP library as yours. Only admins can approve a new SOP.
+      </span>
     </div>
   );
 }
@@ -1026,6 +1124,7 @@ export const SUGGESTION_EDITORS: {
   'board_card.create': CardCreateEditor,
   'board_card.comment': CardCommentEditor,
   'sop.edit': SopEditEditor,
+  'sop.create': SopCreateEditor,
   'shift_assignment.update': ShiftTimesEditor,
   'inventory.count': InventoryCountEditor,
   'inventory.create': InventoryCreateEditor,

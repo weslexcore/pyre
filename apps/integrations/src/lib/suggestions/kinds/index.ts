@@ -10,12 +10,14 @@ import { inventoryCreate } from './inventory-create';
 import { messageCreate } from './message-create';
 import { messageEdit } from './message-edit';
 import { shiftAssignmentUpdate } from './shift-assignment-update';
+import { sopCreate } from './sop-create';
 import { sopEdit } from './sop-edit';
 
 export const SUGGESTION_KIND_HANDLERS: { [K in SuggestionKind]: KindHandler<K> } = {
   'board_card.create': boardCardCreate,
   'board_card.comment': boardCardComment,
   'sop.edit': sopEdit,
+  'sop.create': sopCreate,
   'shift_assignment.update': shiftAssignmentUpdate,
   'inventory.count': inventoryCount,
   'inventory.create': inventoryCreate,

@@ -278,7 +278,7 @@ export async function dismissPending(
 /**
  * The links the review UI shows per suggestion, keyed by suggestion id:
  * `results` — where an approved one's result lives (the card it made or
- * commented on, the SOP it edited, the assignment it re-timed, the item it
+ * commented on, the SOP it edited or created, the assignment it re-timed, the item it
  * counted); `targets` — the existing card, SOP, assignment or item a pending
  * one acts on. Looked up in a few batched reads rather than stored, so a
  * card that moves boards still links to where it is now.
@@ -302,6 +302,7 @@ export async function resolveLinks(
     if (row.target_type === 'shift_assignment' && row.target_id) assignmentIds.add(row.target_id);
     if (row.target_type === 'board_card' && row.target_id) cardIds.add(row.target_id);
     if (row.target_type === 'sop' && row.target_id) sopIds.add(row.target_id);
+    if (row.result_type === 'sop' && row.result_id) sopIds.add(row.result_id);
     if (row.target_type === 'inventory_item' && row.target_id) itemIds.add(row.target_id);
     if (row.result_type === 'board_card' && row.result_id) cardIds.add(row.result_id);
   }
@@ -438,6 +439,7 @@ export async function resolveLinks(
     if (row.result_type === 'board_card') results[row.id] = cardLink(row.result_id);
     else if (row.result_type === 'board_event') results[row.id] = cardLink(row.target_id);
     else if (row.result_type === 'sop_version') results[row.id] = sopLink(row.target_id);
+    else if (row.result_type === 'sop') results[row.id] = sopLink(row.result_id);
     else if (row.result_type === 'shift_assignment')
       results[row.id] = assignmentLink(row.result_id);
     else if (row.result_type === 'inventory_item') results[row.id] = itemLink(row.result_id);

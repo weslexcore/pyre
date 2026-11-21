@@ -523,8 +523,12 @@ export function LostFoundForm() {
 
       <p className="text-xs text-white/40">
         Unclaimed, this goes to {DONATION_PARTNER} on{' '}
-        {donateOn.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.
-        {owner && ' Logged as theirs, it waits for them instead.'}
+        {donateOn.toLocaleDateString('en-US', {
+          timeZone: 'America/New_York',
+          month: 'long',
+          day: 'numeric',
+        })}
+        .{owner && ' Logged as theirs, it waits for them instead.'}
       </p>
 
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}

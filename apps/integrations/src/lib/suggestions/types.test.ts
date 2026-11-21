@@ -92,6 +92,46 @@ describe('parsePayload sop.edit', () => {
       false
     );
   });
+  it('keeps an append hunk (a new last section)', () => {
+    const parsed = parsePayload('sop.edit', { ...base, edits: [{ append: '## Late\n- x' }] });
+    expect(parsed.ok && parsed.value.edits).toEqual([{ append: '## Late\n- x' }]);
+    expect(parsePayload('sop.edit', { ...base, edits: [{ append: '  ' }] }).ok).toBe(false);
+  });
+});
+
+describe('parsePayload sop.create', () => {
+  it('fills the slug, section and access the New SOP form would', () => {
+    expect(
+      parsePayload('sop.create', { title: 'Late Arrivals', contentMd: '# Late arrivals\n' })
+    ).toEqual({
+      ok: true,
+      value: {
+        title: 'Late Arrivals',
+        slug: 'late-arrivals',
+        category: 'General',
+        contentMd: '# Late arrivals\n',
+        viewRoles: ['staff', 'shift_lead', 'admin'],
+        editRoles: ['admin'],
+      },
+    });
+  });
+
+  it('keeps admins on narrowed access and refuses bad input', () => {
+    const parsed = parsePayload('sop.create', {
+      title: 'Cash handling',
+      category: 'Policies',
+      contentMd: 'x',
+      viewRoles: ['shift_lead'],
+    });
+    expect(parsed.ok && parsed.value.viewRoles).toEqual(['shift_lead', 'admin']);
+    expect(parsePayload('sop.create', { title: 'X', contentMd: '' }).ok).toBe(false);
+    expect(parsePayload('sop.create', { title: 'X', contentMd: 'x', slug: 'Bad Slug' }).ok).toBe(
+      false
+    );
+    expect(parsePayload('sop.create', { title: 'X', contentMd: 'x', viewRoles: [] }).ok).toBe(
+      false
+    );
+  });
 });
 
 describe('helpers', () => {
@@ -105,6 +145,9 @@ describe('helpers', () => {
       'New task: Fix heater'
     );
     expect(describeSuggestion('sop.edit', { title: 'Closing' })).toBe('Edit SOP: Closing');
+    expect(describeSuggestion('sop.create', { title: 'Late arrivals', category: 'Guests' })).toBe(
+      'New SOP: Late arrivals (Guests)'
+    );
   });
 
   it('links back to a shift note', () => {

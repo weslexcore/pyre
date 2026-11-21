@@ -30,6 +30,7 @@ const KIND_TONES: Record<SuggestionKind, string> = {
     'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
   'board_card.comment': 'border-white/20 bg-white/5 text-white/70',
   'sop.edit': 'border-[var(--pyre-creme)]/40 bg-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]',
+  'sop.create': 'border-[var(--pyre-creme)]/60 bg-[var(--pyre-creme)]/15 text-[var(--pyre-creme)]',
   'shift_assignment.update':
     'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 text-[var(--pyre-blue)]',
   'inventory.count': 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300',

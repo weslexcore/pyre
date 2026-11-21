@@ -17,9 +17,9 @@ import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
-import { notifySopSaved } from '@/lib/notifications/sops';
 import { sopAssistEnabled } from '@/lib/sops/assist';
 import { countTasks } from '@/lib/sops/checklist';
+import { createSop, ensureCategory, MAX_SOP_CATEGORY } from '@/lib/sops/create';
 import { loadSop, loadSopDocument, redactGrantEmails } from '@/lib/sops/document';
 import {
   canEditSop,
@@ -43,7 +43,7 @@ import { suggestionOrigins } from '@/lib/suggestions/origins';
 
 const PAGE = '/admin/sops';
 const MAX_TITLE = MAX_SOP_TITLE;
-const MAX_CATEGORY = 60;
+const MAX_CATEGORY = MAX_SOP_CATEGORY;
 const MAX_CONTENT = MAX_SOP_CONTENT;
 // History panel cap — nobody scrolls past this, and it bounds the payload.
 const MAX_VERSIONS = 100;
@@ -106,35 +106,6 @@ function toSummary(
     task_count: countTasks(content_md),
     access_label: describeGrants(grants.roles, grants.emails),
   };
-}
-
-/**
- * Give `name` a row in `sop_categories` if it doesn't have one, placed last.
- * Filing a document under a section that was only ever implied by other
- * documents is what makes that section real and reorderable; without this a
- * category typed into the create form stays unranked and pinned to the bottom.
- * Best-effort: a failure here doesn't invalidate the document itself.
- */
-async function ensureCategory(
-  db: NonNullable<ReturnType<typeof getDb>>,
-  name: string
-): Promise<void> {
-  const { data: existing } = await db
-    .from('sop_categories')
-    .select('name')
-    .eq('name', name)
-    .maybeSingle();
-  if (existing) return;
-
-  const { data: last } = await db
-    .from('sop_categories')
-    .select('sort_order')
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  await db
-    .from('sop_categories')
-    .insert({ name, sort_order: last ? (last.sort_order as number) + 1 : 0 });
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -363,38 +334,20 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   // Always the authenticated session's email — never trusted from the body.
   const email = gate.user.email ?? '';
 
-  const { data, error } = await db
-    .from('sops')
-    .insert({
-      slug,
-      title,
-      content_md: content,
-      category,
-      view_roles: viewRoles,
-      edit_roles: editRoles,
-      view_emails: viewGrants.emails,
-      edit_emails: editGrants.emails,
-      sort_order: sortOrder,
-      created_by: email,
-      updated_by: email,
-    })
-    .select('*')
-    .single();
-  if (error) return dbError(error, `An SOP with slug "${slug}" exists`);
-  const sop = data as SopRow;
-
-  const { error: versionError } = await db.from('sop_versions').insert({
-    sop_id: sop.id,
-    version: 1,
+  const created = await createSop(db, {
+    slug,
     title,
-    content_md: content,
-    edited_by: email,
-    change_note: 'Created',
+    content,
+    category,
+    viewRoles,
+    editRoles,
+    viewEmails: viewGrants.emails ?? [],
+    editEmails: editGrants.emails ?? [],
+    sortOrder,
+    creatorEmail: email,
   });
-  if (versionError) return dbError(versionError);
-
-  await ensureCategory(db, category);
-  await notifySopSaved(db, { sop, editorEmail: email, version: 1, created: true });
+  if (!created.ok) return json({ error: created.error }, created.status);
+  const { sop } = created;
 
   return json({ sop }, 201);
 };

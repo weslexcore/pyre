@@ -18,6 +18,7 @@ import {
   minutesToTime,
   rollupHours,
   timeToMinutes,
+  todayEastern,
   type WindowInterval,
   weekStartOf,
 } from '@pyre/schedule-core';
@@ -26,14 +27,6 @@ import { buttonClass, compactInputClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { ScheduleBoardPayload } from '@/pages/api/admin/schedule-board';
 import { StaffMultiSelect } from './StaffMultiSelect';
-
-const todayLocal = (): string => {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
 
 /** Longest range one scan will cover — plenty of horizon, still instant. */
 const MAX_RANGE_DAYS = 120;
@@ -120,12 +113,12 @@ interface CreateFormState {
 }
 
 export function ScheduleFindTime() {
-  const today = todayLocal();
+  const today = todayEastern();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startTime, setStartTime] = useState('14:30');
   const [endTime, setEndTime] = useState('20:30');
-  const [searchStart, setSearchStart] = useState(() => addDays(todayLocal(), 1));
-  const [searchEnd, setSearchEnd] = useState(() => addDays(todayLocal(), DEFAULT_RANGE_DAYS));
+  const [searchStart, setSearchStart] = useState(() => addDays(todayEastern(), 1));
+  const [searchEnd, setSearchEnd] = useState(() => addDays(todayEastern(), DEFAULT_RANGE_DAYS));
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [form, setForm] = useState<CreateFormState>({ label: '', staffNeeded: '', notes: '' });
   const [busy, setBusy] = useState(false);
