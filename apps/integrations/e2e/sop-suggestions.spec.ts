@@ -100,15 +100,10 @@ async function suggest(
   email: string,
   session: string,
   kind: 'sop.create' | 'sop.edit',
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  rationale = 'From the chat: the team explained this and no SOP has it.'
 ): Promise<Filed> {
-  return (await pyreOp(
-    request,
-    email,
-    'suggest',
-    { kind, payload, rationale: 'From the chat: the team explained this and no SOP has it.' },
-    session
-  )) as Filed;
+  return (await pyreOp(request, email, 'suggest', { kind, payload, rationale }, session)) as Filed;
 }
 
 async function approve(admin: APIRequestContext, id: string, payload?: unknown) {
@@ -428,23 +423,29 @@ test.describe('reviewing a new SOP in the inbox', () => {
     const category = `E2E Water ${tag}`;
     made.categories.push(category);
     const title = `Cold plunge etiquette ${tag}`;
-    const filed = await suggest(request, SCHEDULE_VIEWER.email, session, 'sop.create', {
-      title,
-      slug,
-      category: 'General',
-      contentMd: '# Cold plunge etiquette\n\n- Shower first',
-    });
+    // The card shows the rationale as text (the title is in an input), so it finds the card.
+    const rationale = `The chat explained plunge etiquette ${tag}.`;
+    const filed = await suggest(
+      request,
+      SCHEDULE_VIEWER.email,
+      session,
+      'sop.create',
+      { title, slug, category: 'General', contentMd: '# Cold plunge etiquette\n\n- Shower first' },
+      rationale
+    );
     expect(filed.status, JSON.stringify(filed.body)).toBe(200);
 
     await open(page, '/admin/suggestions');
     await page.getByRole('combobox').filter({ hasText: 'Any kind' }).selectOption('sop.create');
-    await page.getByRole('button', { name: new RegExp(`New SOP: ${title}`) }).click();
 
-    const card = page.getByRole('article').filter({ hasText: title });
+    // The inbox shows each suggestion open, editor and all.
+    const card = page.getByRole('article').filter({ hasText: rationale });
+    await expect(card.getByLabel('Title')).toHaveValue(title);
     await expect(card.getByLabel('Document')).toHaveValue(/Shower first/);
     await card.getByLabel('Library section').fill(category);
     await card.getByRole('button', { name: 'Approve with edits' }).click();
-    await expect(card.getByRole('link', { name: title })).toHaveAttribute(
+    // Decided, the card folds to its outcome: a link to the new document.
+    await expect(page.getByRole('link', { name: title })).toHaveAttribute(
       'href',
       `/admin/sops/${slug}`
     );
