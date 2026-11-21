@@ -34,6 +34,8 @@ export interface NoteHit {
   /** Roster name for the author, resolved server-side. */
   author: string;
   snippet: string;
+  /** Roster name of whoever wrote the reply the term was found in; absent when the note matched. */
+  reply_author?: string;
 }
 
 /** One card on a board the server matched — a task, or a lead on a pipeline. */
@@ -314,6 +316,7 @@ export function buildItems(
       title: note.author,
       hint: note.note_date,
       snippet: note.snippet,
+      meta: note.reply_author ? `in a reply by ${note.reply_author}` : undefined,
     });
   }
   return items;

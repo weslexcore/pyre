@@ -1,5 +1,6 @@
 // Content half of the global search (cmd+K): the SOP documents, the matched
-// lines inside them, the shift notes containing a term, and the cards on the
+// lines inside them, the shift notes containing a term (in the note or in a
+// comment on it the caller may read), and the cards on the
 // boards whose title or notes contain it. Pages and boards match on the
 // client from the lists it already holds. Anyone with dashboard access may
 // call this; what comes back is filtered the way each tool filters its own
@@ -26,12 +27,19 @@ import { requireStaff } from '@/lib/auth/admin';
 import { canViewBoardsTool, visibleBoards } from '@/lib/boards/access';
 import { loadAllColumns, loadBoards } from '@/lib/boards/store';
 import { isFinishedKind } from '@/lib/boards/types';
-import { type BoardCardRow, getDb, type ShiftNoteRow, type SopRow } from '@/lib/db';
+import {
+  type BoardCardRow,
+  getDb,
+  type ShiftNoteReplyRow,
+  type ShiftNoteRow,
+  type SopRow,
+} from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { searchInventory } from '@/lib/inventory/search';
 import { INVENTORY_HREF, type InventoryRow } from '@/lib/inventory/types';
 import { canSeeNote, visibleNotesFilter } from '@/lib/shift-notes/access';
+import { matchNote } from '@/lib/shift-notes/search';
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { personName } from '@/lib/sops/names';
 import { type CategoryRank, sortSops } from '@/lib/sops/order';
@@ -56,6 +64,8 @@ const MAX_NOTES = 8;
 // palette, the log's filter, and the highlights all share (spaces and hyphens
 // ignored: "breakdown" finds "break down").
 const NOTE_SCAN_LIMIT = 500;
+// Notes per request when reading their threads (a short id list per query).
+const REPLY_CHUNK = 100;
 const MAX_TASKS = 10;
 // How many cards to scan across the caller's boards, open ones first and
 // the most recently touched of those at the top, so a live task always
@@ -121,21 +131,55 @@ async function searchNotes(
   if (error) return { notes: [], error: error.message };
 
   const rows = ((data ?? []) as ShiftNoteRow[]).filter((note) => canSeeNote(note, viewer));
-  const people = await getPeopleNames(rows.map((note) => note.author_email));
 
-  const notes: NoteHit[] = [];
-  for (const note of rows) {
-    const [entry] = searchEntries(note.body, q, 1).entries;
-    if (!entry) continue;
-    notes.push({
-      id: note.id,
-      note_date: note.note_date,
-      author_email: note.author_email,
-      author: personName(note.author_email, people),
-      snippet: entry.text,
-    });
-    if (notes.length >= MAX_NOTES) break;
+  // Each note's comments, so a note is found by its replies too (an answer
+  // in the thread is often what someone is looking for). Read in chunks to
+  // keep each request's id list short; private comments are dropped for a
+  // non-admin by the matcher (canSeeReply).
+  const threads = new Map<
+    string,
+    Pick<ShiftNoteReplyRow, 'body' | 'author_email' | 'is_private' | 'kind'>[]
+  >();
+  const ids = rows.map((note) => note.id);
+  for (let at = 0; at < ids.length; at += REPLY_CHUNK) {
+    const { data: replyData, error: replyError } = await db
+      .from('shift_note_replies')
+      .select('note_id, body, author_email, is_private, kind')
+      .eq('kind', 'comment')
+      .in('note_id', ids.slice(at, at + REPLY_CHUNK))
+      .order('created_at', { ascending: true });
+    if (replyError) return { notes: [], error: replyError.message };
+    for (const reply of (replyData ?? []) as (Pick<
+      ShiftNoteReplyRow,
+      'body' | 'author_email' | 'is_private' | 'kind'
+    > & { note_id: string })[]) {
+      const thread = threads.get(reply.note_id) ?? [];
+      thread.push(reply);
+      threads.set(reply.note_id, thread);
+    }
   }
+
+  const matches: { note: ShiftNoteRow; match: NonNullable<ReturnType<typeof matchNote>> }[] = [];
+  for (const note of rows) {
+    const match = matchNote(note.body, threads.get(note.id) ?? [], q, viewer);
+    if (!match) continue;
+    matches.push({ note, match });
+    if (matches.length >= MAX_NOTES) break;
+  }
+  const people = await getPeopleNames(
+    matches.flatMap(({ note, match }) =>
+      [note.author_email, match.replyAuthor ?? ''].filter(Boolean)
+    )
+  );
+
+  const notes: NoteHit[] = matches.map(({ note, match }) => ({
+    id: note.id,
+    note_date: note.note_date,
+    author_email: note.author_email,
+    author: personName(note.author_email, people),
+    snippet: match.snippet,
+    ...(match.replyAuthor ? { reply_author: personName(match.replyAuthor, people) } : {}),
+  }));
   return { notes };
 }
 
