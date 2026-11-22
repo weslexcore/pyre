@@ -31,6 +31,13 @@ describe('classifyQuestions', () => {
     });
   });
 
+  it('counts a stock report as inventory even when the work is done', () => {
+    const { criteria } = classifyQuestions('shift_note').inventory;
+    expect(criteria?.true?.examples).toEqual(
+      expect.arrayContaining(['Restocked the cooler with 12 waters from the back.'])
+    );
+  });
+
   it('hands Jev the subject context and the cleaned text', () => {
     expect(classifyState('shift_note', '  Towels low\u0007 ')).toMatchObject({
       kind: 'shift note',
@@ -45,6 +52,7 @@ describe('classifySignals', () => {
     question: 0.1,
     update: 0.05,
     hours: 0.15,
+    inventory: 0.3,
     feedback: 0.2,
     safety: 0.4,
   };

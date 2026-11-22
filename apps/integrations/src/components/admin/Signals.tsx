@@ -30,6 +30,7 @@ const SIGNAL_TONES: Partial<Record<SignalType, string>> = {
   action: 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
   question: 'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 text-[var(--pyre-blue)]',
   update: 'border-[var(--pyre-creme)]/40 bg-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]',
+  inventory: 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
   feedback: 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]',
   safety: 'border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]',
 };

@@ -38,7 +38,7 @@ describe('registries', () => {
   it('treats work owed as actionable and feedback alone as informational', () => {
     expect(hasActionableSignal([])).toBe(false);
     expect(hasActionableSignal([{ type: 'feedback' }])).toBe(false);
-    for (const type of ['action', 'question', 'update', 'safety'] as const) {
+    for (const type of ['action', 'question', 'update', 'inventory', 'safety'] as const) {
       expect(hasActionableSignal([{ type: 'feedback' }, { type }])).toBe(true);
     }
   });

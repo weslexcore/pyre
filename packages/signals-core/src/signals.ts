@@ -126,6 +126,31 @@ export const SIGNAL_DEFINITIONS = [
     actionable: true,
   },
   {
+    key: 'inventory',
+    label: 'Inventory',
+    definition:
+      'The text reports how much of a supply or product there is, or how that changed: stock used up or running low, a delivery or order received, items restocked or moved, or a count of what is on hand. The inventory list needs updating to match, even when the writer already did the physical work.',
+    examples: [
+      'Used the last two bottles of eucalyptus oil tonight.',
+      'The towel order came in, 40 bath towels on the shelf now.',
+      'Restocked the cooler with 12 waters from the back.',
+      'Only three rolls of trash bags left under the sink.',
+    ],
+    // Restocking is a completed action but not completed bookkeeping: the
+    // inventory list still has to be updated, so this signal keeps such a
+    // note open for a suggested inventory change instead of resolving it.
+    notThis: {
+      means:
+        'No supply, product or quantity on hand is mentioned. Talk about equipment working or breaking, cleaning, or the schedule is not inventory unless it also says how much of something there is or was used or received.',
+      examples: [
+        'The sauna heater is making a clicking noise again.',
+        'Deep cleaned the sauna benches before close.',
+        'Busy social tonight, great energy.',
+      ],
+    },
+    actionable: true,
+  },
+  {
     key: 'feedback',
     label: 'Feedback',
     definition:
