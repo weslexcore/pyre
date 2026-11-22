@@ -1,4 +1,4 @@
-// Pyre Agent's SOP, message and inventory suggestions, and the message reads
+// Pyre Agent's SOP (edits, new sections, new documents), message and inventory suggestions, and the message reads
 // they need.
 // A suggestion is not a proposal: it is filed in the same pipeline as the
 // shift-note suggester's (the integrations app's lib/pyre-agent/suggestions)
@@ -10,7 +10,7 @@
 import type { KnowledgeScope } from '../role';
 import { callPyre } from './boards';
 
-export type SuggestionKind = 'sop.edit' | 'message.create' | 'message.edit';
+export type SuggestionKind = 'sop.edit' | 'sop.create' | 'message.create' | 'message.edit';
 
 export function getMessages(
   scope: KnowledgeScope,

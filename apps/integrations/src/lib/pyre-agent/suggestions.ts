@@ -32,7 +32,12 @@ import {
 } from '@/lib/suggestions/types';
 
 /** The suggestion kinds Pyre Agent files; the rest are the shift-note suggester's. */
-export const PYRE_AGENT_SUGGESTION_KINDS = ['sop.edit', 'message.create', 'message.edit'] as const;
+export const PYRE_AGENT_SUGGESTION_KINDS = [
+  'sop.edit',
+  'sop.create',
+  'message.create',
+  'message.edit',
+] as const;
 export type PyreAgentSuggestionKind = (typeof PYRE_AGENT_SUGGESTION_KINDS)[number];
 
 export function isPyreAgentSuggestionKind(value: unknown): value is PyreAgentSuggestionKind {
@@ -81,7 +86,11 @@ async function conversationSource(
   };
 }
 
-/** Refuses what the asker could not see themselves: an SOP or message outside their access. */
+/**
+ * Refuses what the asker could not see themselves: an SOP or message outside
+ * their access. A new SOP acts on nothing that exists, so anyone may suggest
+ * one; only an admin can approve it.
+ */
 async function checkReach(
   db: SupabaseClient,
   viewer: SopViewer,

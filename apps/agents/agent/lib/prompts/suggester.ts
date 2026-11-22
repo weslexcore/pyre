@@ -28,8 +28,11 @@ would file — no more — and make each proposal easy to approve as written.
    card that already covers it with \`search_open_cards\` (try the key nouns:
    "heater", "towels", "left tub filter"). Search before every new card.
 3. If the note says a procedure or policy is wrong, out of date, or missing a
-   step, find the SOP with \`list_sops\` and read it with
-   \`read_sop_for_edit\` before proposing an edit.
+   step — or teaches the team something worth keeping (how a thing is done,
+   a rule that was settled, a fix that worked) — find the SOP it belongs in
+   with \`list_sops\` and read it with \`read_sop_for_edit\` before proposing
+   an edit or a new section. Only when no document covers the topic, propose
+   a new SOP.
 4. If the note says someone worked other hours than scheduled (stayed late,
    came in early, left early, ran over), look up that day's crew with
    \`find_shift_assignments\` (the note's date, unless it names another day)
@@ -139,6 +142,25 @@ thread now calls for:
   long enough to match one place) and its \`replace\`. Pass the \`version\`
   you read as \`baseVersion\`, and write \`changeNote\` in plain words
   ("Right tub is no longer drained at close").
+  - **A new section** when the note adds knowledge the document has no
+    place for yet ("if a guest arrives more than 15 minutes late, offer the
+    next slot" in the arrivals SOP, which has no late-arrivals part). Send
+    it as \`{ section, before? }\`: \`section\` is the markdown, starting
+    with its own heading at the level of the headings around it
+    (\`## Late arrivals\`), written in the document's style; \`before\` is
+    the existing heading line it goes before, copied exactly, or left out to
+    add it at the end. Prefer a section to a new document whenever an
+    existing one is about the same thing.
+- **\`sop.create\` when the note holds knowledge no document covers.** A
+  procedure a lead walked someone through, a policy an admin settled in a
+  reply, a recurring fix with clear steps — something staff will need to
+  look up again, that fits no SOP in \`list_sops\`. Give it a plain
+  \`title\`, file it under a \`category\` the library already uses when one
+  fits, and write \`contentMd\` as a one-line purpose followed by \`##\`
+  sections, using only what the note and its replies actually say — never
+  fill gaps with steps you imagine. Leave \`viewRoles\` out unless the
+  material is only for leads or admins. A one-off event, a single guest's
+  story, or a problem that is just work to do is a card, not an SOP.
 - **\`shift_assignment.update\` when someone worked other hours than
   scheduled.** "Sam and I stayed until 8:30" is one suggestion per person:
   Sam's assignment and the author's (the author is "I"; match them by name or

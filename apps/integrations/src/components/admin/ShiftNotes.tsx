@@ -81,9 +81,9 @@ import {
 } from '@/lib/shift-notes/media';
 import { noteMentionPeople, SHIFT_NOTE_MENTION_PEOPLE_URL } from '@/lib/shift-notes/mentions';
 import { SHIFT_NOTES_TOPIC, shiftNotesViewerTopic } from '@/lib/shift-notes/realtime';
+import { threadMatches } from '@/lib/shift-notes/search';
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { matchesTerm } from '@/lib/sops/search';
 import { BulkClassify } from './BulkClassify';
 import { FilterMultiSelect } from './FilterMultiSelect';
 import { MentionTextarea } from './MentionTextarea';
@@ -801,11 +801,21 @@ export function ShiftNotes() {
       ) {
         return false;
       }
-      // Same matcher as the highlight, so what filters is what marks.
-      if (term && !matchesTerm(note.body, term)) return false;
+      // Same matcher as the highlight, so what filters is what marks. The
+      // thread counts: a note answered in a reply is found by the answer.
+      if (term && !threadMatches(note.body, replies[note.id] ?? [], term, viewer)) return false;
       return true;
     });
-  }, [notes, personFilter, statusFilter, signalFilter, signals.classifications, term]);
+  }, [
+    notes,
+    replies,
+    viewer,
+    personFilter,
+    statusFilter,
+    signalFilter,
+    signals.classifications,
+    term,
+  ]);
 
   // The lightbox browses one note's photos and videos (PDFs open in a tab).
   const viewable = useCallback(
