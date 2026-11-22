@@ -302,7 +302,7 @@ export function SopMediaLibrary({
           />
         </div>
         <p className="font-mono text-[10px] text-white/40">
-          Images: JPEG, PNG, WebP or GIF, up to 20 MB. Videos: MP4, WebM or MOV, up to 500 MB.
+          Images: JPEG, PNG, WebP or GIF, up to 20 MB. Videos: MP4, WebM or MOV, up to 50 MB.
           Stored in Pyre’s own storage — nothing is shared publicly. Insert adds it at the cursor;
           add #t=1:30 to a video link to start partway through.
         </p>

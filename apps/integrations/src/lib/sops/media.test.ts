@@ -98,14 +98,14 @@ describe('upload rules', () => {
 
   it('holds each kind to its own size limit', () => {
     expect(
-      checkSopMediaFile({ name: 'a.mp4', type: 'video/mp4', size: 100 * 1024 * 1024 })
+      checkSopMediaFile({ name: 'a.mp4', type: 'video/mp4', size: 40 * 1024 * 1024 })
     ).toBeNull();
     expect(
       checkSopMediaFile({ name: 'a.jpg', type: 'image/jpeg', size: 100 * 1024 * 1024 })
     ).toMatch(/20 MB limit for images/);
     expect(
-      checkSopMediaFile({ name: 'a.mp4', type: 'video/mp4', size: 600 * 1024 * 1024 })
-    ).toMatch(/500 MB limit for videos/);
+      checkSopMediaFile({ name: 'a.mp4', type: 'video/mp4', size: 60 * 1024 * 1024 })
+    ).toMatch(/50 MB limit for videos/);
     expect(checkSopMediaFile({ name: 'a.pdf', type: 'application/pdf', size: 10 })).toMatch(/only/);
     expect(checkSopMediaFile({ name: 'a.png', type: 'image/png', size: 0 })).toMatch(/empty/);
   });

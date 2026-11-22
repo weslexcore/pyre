@@ -30,10 +30,14 @@ export const SOP_MEDIA_MIME_TYPES: Record<string, SopMediaKind> = {
   'video/quicktime': 'video',
 };
 
-/** Per-kind size ceilings; the bucket's own limit is the video one. */
+/**
+ * Per-kind size ceilings. Videos are held to the project's global upload
+ * limit (storage.file_size_limit in apps/supabase/config.toml, 50 MB on the
+ * Free plan), which sits under the bucket's own 500 MB.
+ */
 export const MAX_SOP_MEDIA_BYTES: Record<SopMediaKind, number> = {
   image: 20_971_520, // 20 MB
-  video: 524_288_000, // 500 MB
+  video: 52_428_800, // 50 MB
 };
 
 export const MAX_SOP_MEDIA_TITLE = 200;
