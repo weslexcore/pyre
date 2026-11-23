@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:agent-evals": "tsx e2e/agent-evals.ts",
     "e2e:mock": "tsx e2e/mock-server/server.ts",
     "e2e:supabase:reset": "tsx e2e/supabase.ts reset",
     "e2e:supabase:stop": "tsx e2e/supabase.ts stop"

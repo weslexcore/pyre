@@ -231,6 +231,31 @@ Point `INTEGRATIONS_BASE_URL` at a local integrations dev server. For evals
 without writing anything, set `AGENT_FORCE_DRY_RUN=1` and run
 `yarn workspace pyre-agents eval`.
 
+## Evals in CI
+
+Every eval in `evals/` runs in `.github/workflows/evals.yml` (PRs that touch
+this app or what it calls, pushes to master, nightly, and by hand), through
+one runner you can also use locally (Docker required):
+
+```bash
+AI_GATEWAY_API_KEY=… yarn workspace @pyre/integrations test:agent-evals            # all evals
+AI_GATEWAY_API_KEY=… yarn workspace @pyre/integrations test:agent-evals suggest-card --verbose
+```
+
+`apps/integrations/e2e/agent-evals.ts` starts the integrations e2e Supabase
+stack (every migration replayed, never your dev stack), seeds next week's
+shifts so the scheduler evals have a week to draft, starts the integrations
+app and its mock upstreams with the Playwright suite's environment, then runs
+`eve eval --strict --junit .eve/junit.xml` here with `AGENT_FORCE_DRY_RUN=1`.
+Every variable this app reads is set by the runner, so a local `.env` can't
+point it at staging or production. `--strict` makes a judge score below its
+`.atLeast()` bar fail the run. Results land in `.eve/evals/` (uploaded as the
+`agent-evals` artifact in CI, with a table in the job summary).
+
+CI needs the `AI_GATEWAY_API_KEY` repository secret. PRs from forks get no
+secrets, so the evals are skipped there with a warning; on master, nightly and
+manual runs a missing key fails the job. Require the `Evals` check.
+
 ## Deploy checklist
 
 1. Migrations applied (`staff_scheduling`, `staff_scheduling_import`,
