@@ -1,4 +1,4 @@
-import community from '../assets/images/community_2.webp';
+import steppingOut from '../assets/images/stepping_out.webp';
 import type { PartnerImage } from './partner';
 
 // Copy for /perks: perks Pyre members get at partner businesses, the reverse
@@ -76,7 +76,11 @@ const memberPerks: MemberPerksContent = {
     title: 'Your membership works\nbeyond our door.',
     subtitle:
       "Pyre members get perks at the studios and gyms we partner with around Richmond. Tell us where you're headed, and we'll vouch for you.",
-    image: { src: community, alt: 'Pyre members talking together after a session' },
+    image: {
+      src: steppingOut,
+      alt: 'A guest stepping out through the sauna door',
+      position: 'center 30%',
+    },
   },
   partners: {
     title: 'Where your membership counts',
