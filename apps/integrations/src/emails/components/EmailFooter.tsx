@@ -1,14 +1,16 @@
 import { Img, Link, Section, Text } from '@react-email/components';
 import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
-import { emailLink } from './utm';
+import { type EmailUtmSource, emailLink } from './utm';
 
 // Instagram stays bare: a third-party profile link where utm params are noise.
 const INSTAGRAM_URL = 'https://instagram.com/pyre_sauna';
 // The footer is shared by every template (transactional included), so it gets
-// a generic campaign rather than a per-journey one.
-const WEBSITE_URL = emailLink('https://pyresauna.com', 'email-footer', 'website-badge');
-const MAILING_ADDRESS = '1000 Westover Hills Blvd. Richmond, VA 23225 USA';
+// a generic campaign rather than a per-journey one. Its source follows the
+// email: lifecycle by default, newsletter in the newsletter.
+const websiteUrl = (source: EmailUtmSource) =>
+  emailLink('https://pyresauna.com', 'email-footer', 'website-badge', source);
+export const MAILING_ADDRESS = '1000 Westover Hills Blvd. Richmond, VA 23225 USA';
 
 const footer = {
   textAlign: 'center' as const,
@@ -56,9 +58,14 @@ const footerLink = {
 interface EmailFooterProps {
   unsubscribeUrl?: string;
   preferencesUrl?: string;
+  utmSource?: EmailUtmSource;
 }
 
-export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps) {
+export function EmailFooter({
+  unsubscribeUrl,
+  preferencesUrl,
+  utmSource = 'lifecycle',
+}: EmailFooterProps) {
   return (
     <>
       <Section role="presentation" style={treeBand} />
@@ -72,7 +79,7 @@ export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps
             style={iconBadge}
           />
         </Link>
-        <Link href={WEBSITE_URL}>
+        <Link href={websiteUrl(utmSource)}>
           <Img
             src={`${ASSET_BASE}/website-badge-creme.png`}
             width="40"

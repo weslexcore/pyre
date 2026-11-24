@@ -58,6 +58,19 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
   stepKey?: string;
 }
 
+/**
+ * The monthly newsletter (Resend broadcast). Same blocks as a journey email;
+ * unsubscribeUrl is required because the footer link is not optional here.
+ */
+export interface NewsletterEmailProps {
+  preview: string;
+  background: 'clouds' | 'trees' | 'lamps';
+  blocks: EmailBlockInput[];
+  /** utm_campaign for tracked links: the newsletter campaign's slug. */
+  campaign: string;
+  unsubscribeUrl: string;
+}
+
 // Partner verification lifecycle (all transactional — no unsubscribeUrl).
 
 export interface PartnerVerificationRequestProps {

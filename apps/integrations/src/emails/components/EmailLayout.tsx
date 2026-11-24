@@ -4,6 +4,7 @@ import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
 import { EmailFooter } from './EmailFooter';
 import { EmailHeader } from './EmailHeader';
+import type { EmailUtmSource } from './utm';
 
 // Re-exported so existing templates importing COLORS from here keep working.
 export { COLORS };
@@ -59,6 +60,8 @@ interface EmailLayoutProps {
   background?: EmailBackground;
   unsubscribeUrl?: string;
   preferencesUrl?: string;
+  /** utm_source for the footer's own links. */
+  utmSource?: EmailUtmSource;
 }
 
 export function EmailLayout({
@@ -67,6 +70,7 @@ export function EmailLayout({
   background = 'clouds',
   unsubscribeUrl,
   preferencesUrl,
+  utmSource,
 }: EmailLayoutProps) {
   return (
     <Html lang="en">
@@ -77,7 +81,11 @@ export function EmailLayout({
           <Container style={container}>
             <EmailHeader />
             <Section style={bodyInset}>{children}</Section>
-            <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
+            <EmailFooter
+              unsubscribeUrl={unsubscribeUrl}
+              preferencesUrl={preferencesUrl}
+              utmSource={utmSource}
+            />
           </Container>
         </Section>
       </Body>
