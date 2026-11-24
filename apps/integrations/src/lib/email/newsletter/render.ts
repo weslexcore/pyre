@@ -45,10 +45,12 @@ export class NewsletterContentError extends Error {
  */
 export async function renderNewsletter(
   content: BlockContent,
-  campaign: string
+  campaign: string,
+  /** The editor preview renders a draft with problems too, and lists them beside it. */
+  { allowProblems = false }: { allowProblems?: boolean } = {}
 ): Promise<NewsletterTemplate> {
   const problems = newsletterProblems(content);
-  if (problems.length > 0) throw new NewsletterContentError(problems);
+  if (problems.length > 0 && !allowProblems) throw new NewsletterContentError(problems);
 
   const body = toTemplateContent(content);
   const element = createElement(NewsletterEmail, {

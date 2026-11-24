@@ -296,6 +296,15 @@ export const ADMIN_TOOLS: AdminTool[] = [
     keywords: ['email', 'drip', 'sequence', 'automation', 'follow-up', 'win-back', 'intro'],
   },
   {
+    href: '/admin/newsletters',
+    title: 'Newsletters',
+    navLabel: 'Newsletters',
+    description:
+      'Write the monthly newsletter, preview it, send yourself a test, and send it to the mailing list.',
+    section: 'marketing',
+    keywords: ['email', 'mailing list', 'mailchimp', 'monthly', 'subscribers', 'broadcast'],
+  },
+  {
     href: '/admin/email-templates',
     title: 'Email Templates',
     navLabel: 'Templates',

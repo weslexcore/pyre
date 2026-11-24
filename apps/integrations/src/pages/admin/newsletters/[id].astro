@@ -1,0 +1,12 @@
+---
+// One newsletter: write it, preview it, send a test, then send it. Data
+// loads through /api/admin/newsletters/[id], which re-checks access.
+import { NewsletterEditor } from '@/components/admin/newsletters/NewsletterEditor';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const id = Astro.params.id ?? '';
+---
+
+<AdminLayout title="Newsletter" subtitle="Write it, check it, send it." wide>
+  <NewsletterEditor client:load newsletterId={id} />
+</AdminLayout>

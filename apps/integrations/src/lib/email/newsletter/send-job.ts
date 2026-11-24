@@ -73,22 +73,26 @@ export interface NewsletterSendSummary {
   issues: IssueSummary[];
 }
 
-export async function runNewsletterSends(ctx: CronJobContext): Promise<NewsletterSendSummary> {
+export async function runNewsletterSends(
+  ctx: CronJobContext,
+  /** Only this issue: the admin's "send now", which starts it without waiting for the tick. */
+  { onlyId }: { onlyId?: string } = {}
+): Promise<NewsletterSendSummary> {
   const summary: NewsletterSendSummary = { dryRun: ctx.dryRun, issues: [] };
   const db = getDb();
   const resend = getResend();
   if (!db) return { ...summary, skipped: 'no-db' };
   if (!resend) return { ...summary, skipped: 'resend-not-configured' };
 
-  const { data, error } = await db
+  let dueQuery = db
     .from('newsletters')
     .select(
       'id, campaign, list, content, cursor_email, sent_count, suppressed_count, failed_count, started_at'
     )
     .eq('status', 'sending')
-    .or(`send_after.is.null,send_after.lte.${new Date().toISOString()}`)
-    .order('created_at')
-    .limit(MAX_ISSUES);
+    .or(`send_after.is.null,send_after.lte.${new Date().toISOString()}`);
+  if (onlyId) dueQuery = dueQuery.eq('id', onlyId);
+  const { data, error } = await dueQuery.order('created_at').limit(MAX_ISSUES);
   if (error) throw new Error(`Could not read newsletters: ${error.message}`);
   const due = (data ?? []) as NewsletterRow[];
   if (due.length === 0) return summary;
