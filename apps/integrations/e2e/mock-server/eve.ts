@@ -24,7 +24,7 @@
 //   GET  /agents/eve/v1/session/:id/stream    the event log as NDJSON
 //                                             (?startIndex=-1: the newest event)
 //
-// Control API for specs (e2e/eve.ts):
+// Control API for specs (e2e/pyre-agent-helpers.ts):
 //   POST /agents/__scripts                    { match, turns } — a knowledge
 //                                             session whose opening message
 //                                             contains `match` plays `turns`
@@ -32,6 +32,8 @@
 //   POST /agents/__sessions/:id               { state } — park it ('waiting'),
 //                                             make it busy ('running') or end
 //                                             it ('gone')
+//   POST /agents/__sessions/:id/report-routine report completion after the
+//                                             app has stored the session id
 
 import type { MockRequest, MockResponse, MockRoute } from '@pyre/e2e-utils/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -191,14 +193,13 @@ async function audit(session: Session, turnId: string, fields: Record<string, un
       },
       { onConflict: 'session_id,turn_id' }
     );
-  if (error) console.error('[mock eve] audit failed:', error.message);
+  if (error) throw new Error(`[mock eve] audit failed: ${error.message}`);
 }
 
 /** Play the session's next scripted turn to the end, as one agent turn. */
 async function runKnowledgeTurn(session: Session, message: string): Promise<void> {
-  const turn = session.turns[session.turnCount] ?? {
-    answer: 'The mock agent has no scripted turn for this message.',
-  };
+  const turn = session.turns[session.turnCount];
+  if (!turn) throw new Error(`No scripted turn ${session.turnCount + 1} for ${session.id}`);
   session.turnCount += 1;
   const turnId = `turn-${session.turnCount}`;
   const question = questionOf(message);
@@ -246,18 +247,9 @@ async function runKnowledgeTurn(session: Session, message: string): Promise<void
   session.events.push({ type: 'session.waiting' });
   session.state = 'waiting';
 
-  // A routine's run is reported back on when its turn ends. pyre-agents
-  // reports after the app has stored the run's session (the turn outlives the
-  // request that opened it); this turn finished inside that request, so the
-  // report waits a moment for the same order.
-  const runId = session.routineRunId;
-  if (runId) {
-    setTimeout(() => {
-      void callApp('/api/agent/routines', { runId, sessionId: session.id }).catch((error) =>
-        console.error('[mock eve] routine report failed:', error)
-      );
-    }, 1000);
-  }
+  // The spec releases a routine's completion through the control API once
+  // the app has persisted its session id. Never guess that ordering with a
+  // sleep: under load it can finish the run before its conversation exists.
 }
 
 function sessionIdOf(path: string): string {
@@ -383,11 +375,27 @@ export function eveRoutes(): MockRoute[] {
   const sessionPath = new RegExp(`^${SESSION_BASE}/[^/]+$`);
   const streamPath = new RegExp(`^${SESSION_BASE}/[^/]+/stream$`);
   const controlPath = new RegExp(`^${AGENTS_PATH}/__sessions/[^/]+$`);
+  const reportPath = new RegExp(`^${AGENTS_PATH}/__sessions/[^/]+/report-routine$`);
   return [
     { method: 'POST', path: SESSION_BASE, handler: openSession },
     { method: 'POST', path: sessionPath, handler: followUp },
     { path: streamPath, handler: stream },
     // -- Control API ---------------------------------------------------------
+    {
+      method: 'POST',
+      path: reportPath,
+      handler: async ({ path }) => {
+        const session = sessions.get(decodeURIComponent(path.split('/').at(-2) ?? ''));
+        if (!session?.routineRunId || session.state !== 'waiting') {
+          return { status: 409, json: { error: 'No completed routine turn to report' } };
+        }
+        const result = await callApp('/api/agent/routines', {
+          runId: session.routineRunId,
+          sessionId: session.id,
+        });
+        return { status: result.status, json: result.body };
+      },
+    },
     {
       method: 'POST',
       path: `${AGENTS_PATH}/__scripts`,

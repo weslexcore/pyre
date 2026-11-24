@@ -119,18 +119,6 @@ export const SCHEDULE_VIEWER: Role = {
   storageState: state('schedule-viewer'),
 };
 
-/**
- * A schedule manager whose grant one test takes away mid-flow (and gives
- * back), so no other test signs in as them.
- */
-export const REVOCABLE_SCHEDULER: Role = {
-  email: 'e2e-revocable-scheduler@e2e.test',
-  displayName: 'Robin Revocable',
-  isAdmin: false,
-  pages: ['/admin/ask', '/admin/schedule', SCHEDULE_MANAGE],
-  storageState: state('revocable-scheduler'),
-};
-
 /** On the roster (scheduled) but with no dashboard access. */
 export const ROSTER_ONLY: Role = {
   email: 'e2e-roster@e2e.test',
@@ -165,7 +153,6 @@ export const ROLES: Role[] = [
   MANAGER,
   SCHEDULER,
   SCHEDULE_VIEWER,
-  REVOCABLE_SCHEDULER,
   ROSTER_ONLY,
   ...defaultProjects().flatMap((project) =>
     (['link', 'code'] as const).map((purpose) => signInRole(project.name ?? 'default', purpose))
