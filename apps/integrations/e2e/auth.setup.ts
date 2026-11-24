@@ -95,6 +95,7 @@ setup('seed the staff roster and sign each role in', async () => {
       contact_emails: [partner.contact],
       enabled: partner === PARTNER,
       reconciliation_enabled: false,
+      member_perk: partner.memberPerk,
       updated_by: 'e2e',
     })),
     { onConflict: 'slug' }

@@ -46,6 +46,14 @@ export const momence = {
   addSession: (session: SessionInput) => post<{ id: number }>('/__momence/sessions', session),
   addBooking: (booking: { sessionId: number; memberId: number }) =>
     post<{ id: number }>('/__momence/bookings', booking),
+  /** An active bought membership on a member: a monthly subscription unless `type` says otherwise. */
+  addMembership: (membership: {
+    memberId: number;
+    name: string;
+    type?: 'subscription' | 'package-events';
+    isFrozen?: boolean;
+    endDate?: string | null;
+  }) => post<{ id: number }>('/__momence/memberships', membership),
   /** A tag in Momence's tag list (the existing one if the name is taken). */
   addTag: (name: string) => post<{ id: number }>('/__momence/tags', { name }),
   /** A member and their tags, or null when Momence has no such member. */

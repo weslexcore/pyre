@@ -9,6 +9,7 @@
 //   POST /__momence/sessions   { name, startsAt, endsAt, ... }      -> { id }
 //   POST /__momence/bookings   { sessionId, memberId, ... }         -> { id }
 //   POST /__momence/tags       { name }                             -> { id } (existing id if named)
+//   POST /__momence/memberships { memberId, type, name, ... }       -> { id } (an active bought membership)
 //   GET  /__momence/check-ins                                       -> booking ids checked in
 //
 // Host API served from that state (paths under /momence/api/v2). Every call
@@ -18,7 +19,7 @@
 //   POST   /host/members                           create one { email, firstName, lastName }
 //   POST   /host/members/list                      members matching body.query / tag filter
 //   GET    /host/members/{id}/sessions             the member's bookings
-//   GET    /host/members/{id}/bought-memberships[/active]   none: nobody here owns a pack
+//   GET    /host/members/{id}/bought-memberships[/active]   memberships added for them (else none)
 //   PUT    /host/members/{id}/phone-number         { phoneNumber }
 //   POST   /host/members/{id}/tags/{tagId}         tag them (404 for an unknown member or tag)
 //   DELETE /host/members/{id}/tags/{tagId}         untag them
@@ -97,6 +98,8 @@ export function momenceWorld(): MockRoute[] {
   const tags = new Map<number, string>();
   /** Tag ids per member. */
   const memberTags = new Map<number, Set<number>>();
+  /** Bought memberships per member, in Momence's BoughtMembership shape. */
+  const memberships = new Map<number, Record<string, unknown>[]>();
 
   const newMember = (input: Omit<WorldMember, 'id'>): number => {
     const id = nextId++;
@@ -158,6 +161,34 @@ export function momenceWorld(): MockRoute[] {
         }
         const id = nextId++;
         tags.set(id, name);
+        return { json: { id } };
+      },
+    },
+    {
+      method: 'POST',
+      path: '/__momence/memberships',
+      handler: ({ body }) => {
+        const { memberId, name, ...rest } = body as {
+          memberId: number;
+          name: string;
+        } & Record<string, unknown>;
+        if (!members.has(memberId)) return badRequest('unknown member');
+        const id = nextId++;
+        const list = memberships.get(memberId) ?? [];
+        list.push({
+          type: 'subscription',
+          startDate: new Date().toISOString(),
+          endDate: null,
+          isFrozen: false,
+          eventCreditsLeft: null,
+          eventCreditsTotal: null,
+          moneyCreditsLeft: null,
+          moneyCreditsTotal: null,
+          ...rest,
+          membership: { id: nextId++, name },
+          id,
+        });
+        memberships.set(memberId, list);
         return { json: { id } };
       },
     },
@@ -285,7 +316,7 @@ export function momenceWorld(): MockRoute[] {
       handler: ({ path, query }): MockResponse => {
         const memberId = idFromPath(path, /members\/(\d+)\/bought/);
         if (!members.has(memberId)) return { status: 404, json: { message: 'Member not found' } };
-        return page([], query);
+        return page(memberships.get(memberId) ?? [], query);
       },
     },
     {

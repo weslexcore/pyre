@@ -15,6 +15,7 @@ const STATIC_PAGES = [
   '/shop',
   '/blog',
   '/bft',
+  '/perks',
   '/embody',
   '/humble-haven',
   '/hi',
