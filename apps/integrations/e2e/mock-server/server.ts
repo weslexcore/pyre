@@ -35,6 +35,8 @@ import { ACCESS_TOKEN, momenceWorld } from './momence-world';
 // The credentials e2e/env.ts gives the app.
 const MOMENCE = { hostId: 'e2e', token: 'e2e', clientId: 'e2e', clientSecret: 'e2e' };
 const RESEND_KEY = 're_e2e';
+/** Addresses the Resend mock has created a contact for. */
+const resendContacts = new Set<string>();
 
 /** The OAuth token endpoint takes a form body: a password or refresh grant. */
 function issueToken({ body }: MockRequest): MockResponse {
@@ -127,7 +129,57 @@ await runMockServer({
         return { json: { data: body.map(() => ({ id: `e2e-email-${++emailId}` })) } };
       },
     },
-    // Audience contacts: the unsubscribe and suppression paths mark them.
+    // Audience contacts. Created by the Momence member sync and mailing-list
+    // sign-ups; a second create for the same address is refused, as Resend
+    // refuses a duplicate, so the app falls back to an update.
+    {
+      // The resend-reconcile job pages the contact list. One page, newest
+      // first, like Resend; the mock keeps no unsubscribe flags of its own.
+      method: 'GET',
+      path: '/resend/contacts',
+      handler: ({ headers }) =>
+        headers.authorization === `Bearer ${RESEND_KEY}`
+          ? {
+              json: {
+                object: 'list',
+                has_more: false,
+                data: [...resendContacts].reverse().map((email) => ({
+                  id: `e2e-contact-${email}`,
+                  email,
+                  first_name: null,
+                  last_name: null,
+                  unsubscribed: false,
+                  created_at: new Date(0).toISOString(),
+                })),
+              },
+            }
+          : missingKey,
+    },
+    {
+      method: 'POST',
+      path: '/resend/contacts',
+      handler: ({ headers, body }) => {
+        if (headers.authorization !== `Bearer ${RESEND_KEY}`) return missingKey;
+        const email = String((body as { email?: unknown })?.email ?? '').toLowerCase();
+        if (!email) {
+          return { status: 422, json: { name: 'validation_error', message: 'Missing email' } };
+        }
+        if (resendContacts.has(email)) {
+          return { status: 409, json: { name: 'validation_error', message: 'Contact exists' } };
+        }
+        resendContacts.add(email);
+        return { json: { object: 'contact', id: `e2e-contact-${email}` } };
+      },
+    },
+    {
+      method: 'POST',
+      path: /^\/resend\/contacts\/[^/]+\/segments\/[^/]+$/,
+      handler: ({ headers }) =>
+        headers.authorization === `Bearer ${RESEND_KEY}`
+          ? { json: { id: 'e2e-segment-member' } }
+          : missingKey,
+    },
+    // The unsubscribe and suppression paths mark contacts.
     {
       method: 'PATCH',
       path: /^\/resend\/contacts\/[^/]+$/,

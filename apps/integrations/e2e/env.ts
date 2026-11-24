@@ -20,6 +20,7 @@ export const SECRETS = {
   cron: 'e2e-cron-secret',
   unsubscribe: 'e2e-unsubscribe-secret',
   referral: 'e2e-referral-secret',
+  mailingList: 'e2e-mailing-list-secret',
   partner: 'e2e-partner-secret',
   partnerLink: 'e2e-partner-link-secret',
   scheduleLink: 'e2e-schedule-link-secret',
@@ -56,6 +57,8 @@ const BLANK = Object.fromEntries(
     'RESEND_API_KEY',
     'RESEND_FROM',
     'RESEND_SEGMENT_ID',
+    'RESEND_VOLUNTEER_SEGMENT_ID',
+    'MAILING_LIST_API_SECRET',
     'ADMIN_EMAILS',
     'STAFF_EMAILS',
     'QSTASH_TOKEN',
@@ -124,6 +127,9 @@ export const APP_ENV: Record<string, string> = {
   RESEND_BASE_URL: `${MOCK_URL}/resend`,
   RESEND_API_KEY: 're_e2e',
   RESEND_FROM: 'Pyre E2E <e2e@pyresauna.com>',
+  // The newsletter segment sign-ups join, and the volunteer list's.
+  RESEND_SEGMENT_ID: 'e2e-newsletter-segment',
+  RESEND_VOLUNTEER_SEGMENT_ID: 'e2e-volunteer-segment',
 
   // Mailchimp -> mock server: the suppression mirror and subscriber sync.
   MAILCHIMP_API_BASE: `${MOCK_URL}/mailchimp/3.0`,
@@ -140,6 +146,7 @@ export const APP_ENV: Record<string, string> = {
   CRON_SECRET: SECRETS.cron,
   UNSUBSCRIBE_SECRET: SECRETS.unsubscribe,
   REFERRAL_API_SECRET: SECRETS.referral,
+  MAILING_LIST_API_SECRET: SECRETS.mailingList,
   PARTNER_API_SECRET: SECRETS.partner,
   PARTNER_LINK_SECRET: SECRETS.partnerLink,
   SCHEDULE_LINK_SECRET: SECRETS.scheduleLink,

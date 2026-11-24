@@ -7,8 +7,9 @@
 // open however slowly the page loads.
 
 import type { Page } from '@playwright/test';
+import { uniqueEmail } from '@pyre/e2e-utils';
 import promoPopups from '../src/lib/promoPopup';
-import { expect, test } from './test';
+import { expect, test, upstreamRequests, waitForFormReady } from './test';
 
 test.use({ seedLocalStorage: {} });
 
@@ -72,4 +73,27 @@ test('appears after its delay, folds into a tab when closed, and reopens from it
   await page.clock.runFor(400); // the tab's exit animation
   await expect(headline).toBeVisible();
   await expect(container.getByRole('button', { name: 'Close popup' })).toBeVisible();
+});
+
+test('its form signs the visitor up through the mailing-list route', async ({ page }, testInfo) => {
+  test.skip(!popup?.form, 'No popup with a form is live');
+  const address = uniqueEmail(testInfo, 'popup');
+
+  await open(page, '/blog');
+  const container = page.locator('[data-component="promo-popup"]');
+  const form = container.locator('[data-popup-form]').filter({ visible: true });
+  await expect(form).toBeVisible({ timeout: SETUP_MS + delayMs + 5_000 });
+
+  await form.getByLabel('Email').fill(address);
+  await waitForFormReady(form);
+  await form.getByRole('button', { name: popup!.form!.submitLabel }).click();
+
+  await expect(form.locator('[data-popup-success]')).toHaveText(popup!.form!.successMessage);
+  const sent = await upstreamRequests(
+    '/integrations/api/mailing-list/subscribe',
+    (body) => body.email === address
+  );
+  expect(sent.map((r) => r.body)).toEqual([
+    { email: address, list: 'newsletter', source: 'promo_popup' },
+  ]);
 });

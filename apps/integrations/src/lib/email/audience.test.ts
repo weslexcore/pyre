@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const lookupSuppression = vi.fn();
 const create = vi.fn();
 const update = vi.fn();
+const addToSegment = vi.fn();
 
 vi.mock('./suppression', () => ({
   lookupSuppression: (email: string) => lookupSuppression(email),
 }));
 vi.mock('./resend', () => ({
-  getResend: () => ({ contacts: { create, update } }),
+  getResend: () => ({ contacts: { create, update, segments: { add: addToSegment } } }),
 }));
 
 const { upsertResendContact } = await import('./audience');
@@ -17,6 +18,8 @@ beforeEach(() => {
   lookupSuppression.mockReset();
   create.mockReset().mockResolvedValue({ data: { id: 'new' }, error: null });
   update.mockReset().mockResolvedValue({ data: { id: 'old' }, error: null });
+  addToSegment.mockReset().mockResolvedValue({ data: { id: 's' }, error: null });
+  vi.stubEnv('RESEND_SEGMENT_ID', 'seg-newsletter');
 });
 
 describe('upsertResendContact', () => {
@@ -53,5 +56,32 @@ describe('upsertResendContact', () => {
     expect(result).toEqual({ status: 'skipped', reason: 'suppression-unknown' });
     expect(create).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('puts a new contact in the newsletter segment and any extra ones', async () => {
+    lookupSuppression.mockResolvedValue(false);
+    await upsertResendContact({ email: 'a@example.com' }, { extraSegmentIds: ['seg-volunteer'] });
+    expect(create.mock.calls[0][0].segments).toEqual([
+      { id: 'seg-newsletter' },
+      { id: 'seg-volunteer' },
+    ]);
+  });
+
+  it('adds an existing contact to the segments only when asked', async () => {
+    lookupSuppression.mockResolvedValue(false);
+    create.mockResolvedValue({ data: null, error: { message: 'exists' } });
+    await upsertResendContact({ email: 'a@example.com' });
+    expect(addToSegment).not.toHaveBeenCalled();
+
+    addToSegment.mockResolvedValueOnce({ data: null, error: { message: 'already in segment' } });
+    const result = await upsertResendContact(
+      { email: 'a@example.com' },
+      { extraSegmentIds: ['seg-volunteer'], joinSegments: true }
+    );
+    expect(addToSegment.mock.calls).toEqual([
+      [{ email: 'a@example.com', segmentId: 'seg-newsletter' }],
+      [{ email: 'a@example.com', segmentId: 'seg-volunteer' }],
+    ]);
+    expect(result).toMatchObject({ status: 'updated', suppressed: false });
   });
 });

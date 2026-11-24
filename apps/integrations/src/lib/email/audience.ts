@@ -26,11 +26,24 @@ export interface ResendContactInput {
 }
 
 export type ResendUpsertResult =
-  | { status: 'created' | 'updated'; id?: string }
+  | { status: 'created' | 'updated'; id?: string; suppressed: boolean }
   | { status: 'skipped'; reason: string };
 
+export interface ResendUpsertOptions {
+  /** Segments to join beyond RESEND_SEGMENT_ID (e.g. the volunteer list). */
+  extraSegmentIds?: string[];
+  /**
+   * Also add a contact that already exists to the segments. A sign-up form
+   * wants this (a booker who joins the mailing list must land in the
+   * newsletter segment); the Momence member sync doesn't, so its updates stay
+   * one call.
+   */
+  joinSegments?: boolean;
+}
+
 export async function upsertResendContact(
-  contact: ResendContactInput
+  contact: ResendContactInput,
+  { extraSegmentIds = [], joinSegments = false }: ResendUpsertOptions = {}
 ): Promise<ResendUpsertResult> {
   const resend = getResend();
 
@@ -47,18 +60,20 @@ export async function upsertResendContact(
     return { status: 'skipped', reason: 'suppression-unknown' };
   }
 
-  const segmentId = import.meta.env.RESEND_SEGMENT_ID;
+  const segmentIds = [import.meta.env.RESEND_SEGMENT_ID, ...extraSegmentIds].filter(
+    (id): id is string => Boolean(id)
+  );
 
   const created = await resend.contacts.create({
     email: contact.email,
     firstName: contact.firstName,
     lastName: contact.lastName,
     ...(suppressed && { unsubscribed: true }),
-    ...(segmentId && { segments: [{ id: segmentId }] }),
+    ...(segmentIds.length > 0 && { segments: segmentIds.map((id) => ({ id })) }),
   });
 
   if (!created.error) {
-    return { status: 'created', id: created.data?.id };
+    return { status: 'created', id: created.data?.id, suppressed };
   }
 
   // Contact already exists (or create otherwise rejected) — fall through to an
@@ -76,7 +91,20 @@ export async function upsertResendContact(
     );
   }
 
-  return { status: 'updated', id: updated.data?.id };
+  if (joinSegments) {
+    // Already a member answers with an error too; neither is worth failing
+    // the sign-up over, and the newsletter import script repairs the segment.
+    for (const segmentId of segmentIds) {
+      const { error } = await resend.contacts.segments.add({ email: contact.email, segmentId });
+      if (error) {
+        console.warn(
+          `[Resend Audience] Could not add ${contact.email} to segment ${segmentId}: ${error.message}`
+        );
+      }
+    }
+  }
+
+  return { status: 'updated', id: updated.data?.id, suppressed };
 }
 
 // Mark a contact unsubscribed in Resend (downstream mirror of the suppression

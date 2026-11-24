@@ -199,15 +199,6 @@ export interface SignupFormContent {
     successMessage: string;
     errorMessage: string;
   };
-  mailchimp: {
-    action: string;
-    audienceU: string;
-    audienceId: string;
-    fId: string;
-    tagId: string;
-    honeypotFieldName: string;
-    postJson?: string;
-  };
   antiSpam: {
     honeypotFields: {
       website: string;

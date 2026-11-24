@@ -281,6 +281,7 @@ test.describe('webhooks', { tag: DESKTOP_ONLY_TAG }, () => {
       'sop-run-expiry',
       'pyre-agent-routines',
       'weekly-shifts',
+      'resend-reconcile',
     ];
 
     /**
@@ -341,6 +342,7 @@ test.describe('webhooks', { tag: DESKTOP_ONLY_TAG }, () => {
         expect(jobs[name], name).toMatchObject({ dryRun: true });
       }
       expect(jobs['journey-advance']).toMatchObject({ sent: 0, wouldSend: expect.any(Array) });
+      expect(jobs['resend-reconcile']).toMatchObject({ trigger: 'dry-run', finished: true });
     });
 
     test('partner maintenance expires a request nobody answered, and tells the customer', async ({
