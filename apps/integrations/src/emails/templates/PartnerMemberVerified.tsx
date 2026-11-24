@@ -74,7 +74,7 @@ PartnerMemberVerified.PreviewProps = {
   membershipName: 'Founding Unlimited',
   memberSince: '2026-08-01T00:00:00.000Z',
   validThrough: null,
-  memberPerk: '15% off class packs',
+  memberPerk: '15% off',
   verifiedAt: '2026-11-24T17:00:00.000Z',
 } satisfies PartnerMemberVerifiedProps;
 

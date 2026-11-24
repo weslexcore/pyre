@@ -355,7 +355,7 @@ function PartnerCard({
           <label className="flex flex-col gap-1">
             <span className={sectionHeading}>Perk for Pyre members (optional)</span>
             <span className="font-mono text-xs text-white/30">
-              What this partner gives Pyre members, e.g. "15% off class packs". Set it and Pyre
+              What this partner gives Pyre members, e.g. "15% off". Set it and Pyre
               members can ask us, on /perks, to email this partner's contacts that their membership
               is active. Leave blank and that request is turned off.
             </span>

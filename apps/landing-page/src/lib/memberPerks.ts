@@ -24,7 +24,7 @@ export interface MemberPerkPartner {
   name: string;
   /** Neighbourhood or a few words on where they are. */
   where: string;
-  /** What Pyre members get, e.g. "15% off class packs". */
+  /** What Pyre members get, e.g. "15% off". */
   perk: string;
   description: string;
   /** A photo of the partner itself (their space or a class), shown on its card. */
@@ -91,14 +91,13 @@ const memberPerks: MemberPerksContent = {
     title: 'Where your membership counts',
     subtitle: 'Pick a partner, verify once, and mention Pyre when you book with them.',
     claimLabel: 'Claim this perk',
-    // TODO(perks): confirm each perk with the partner before launch, and enter
-    // the same wording in "Perk for Pyre members" on /admin/partners.
+    // Enter the same wording in "Perk for Pyre members" on /admin/partners.
     items: [
       {
         slug: 'bft',
         name: 'BFT Carytown',
         where: 'Carytown',
-        perk: '15% off class packs',
+        perk: '15% off',
         description: 'Coached group strength and conditioning, just across the river.',
         image: { src: bftImg, alt: 'A kettlebell class at BFT', position: 'center 40%' },
       },
@@ -106,7 +105,7 @@ const memberPerks: MemberPerksContent = {
         slug: 'humble-haven',
         name: 'Humble Haven Yoga',
         where: 'Forest Ave',
-        perk: '15% off class packs',
+        perk: '15% off',
         description: 'Heated power vinyasa, plus unheated and adaptive classes.',
         image: { src: humbleHavenImg, alt: 'The sunlit front room at Humble Haven Yoga' },
       },
@@ -114,7 +113,7 @@ const memberPerks: MemberPerksContent = {
         slug: 'embody',
         name: 'Embody Pilates',
         where: 'Forest Hill',
-        perk: '15% off class packs',
+        perk: '15% off',
         description: 'Small-group reformer Pilates, a short walk from Pyre.',
         image: {
           src: embodyImg,

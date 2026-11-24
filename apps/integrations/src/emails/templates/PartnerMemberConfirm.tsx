@@ -37,7 +37,7 @@ export function PartnerMemberConfirm({
 
 PartnerMemberConfirm.PreviewProps = {
   partnerName: 'BFT Carytown',
-  memberPerk: '15% off class packs',
+  memberPerk: '15% off',
   confirmUrl: 'https://pyre-integrations.vercel.app/api/partner/member-confirm?token=preview',
   expiresDays: 2,
 } satisfies PartnerMemberConfirmProps;

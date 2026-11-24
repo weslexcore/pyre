@@ -95,7 +95,7 @@ export interface PartnerDeniedProps {
 
 export interface PartnerMemberConfirmProps {
   partnerName: string;
-  /** What the partner gives Pyre members, e.g. "15% off class packs". */
+  /** What the partner gives Pyre members, e.g. "15% off". */
   memberPerk: string;
   confirmUrl: string;
   expiresDays: number;
