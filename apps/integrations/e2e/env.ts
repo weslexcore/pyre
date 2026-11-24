@@ -56,8 +56,7 @@ const BLANK = Object.fromEntries(
     'POSTHOG_PROJECT_ID',
     'RESEND_API_KEY',
     'RESEND_FROM',
-    'RESEND_SEGMENT_ID',
-    'RESEND_VOLUNTEER_SEGMENT_ID',
+    'NEWSLETTER_FROM',
     'MAILING_LIST_API_SECRET',
     'ADMIN_EMAILS',
     'STAFF_EMAILS',
@@ -127,9 +126,6 @@ export const APP_ENV: Record<string, string> = {
   RESEND_BASE_URL: `${MOCK_URL}/resend`,
   RESEND_API_KEY: 're_e2e',
   RESEND_FROM: 'Pyre E2E <e2e@pyresauna.com>',
-  // The newsletter segment sign-ups join, and the volunteer list's.
-  RESEND_SEGMENT_ID: 'e2e-newsletter-segment',
-  RESEND_VOLUNTEER_SEGMENT_ID: 'e2e-volunteer-segment',
 
   // Mailchimp -> mock server: the suppression mirror and subscriber sync.
   MAILCHIMP_API_BASE: `${MOCK_URL}/mailchimp/3.0`,

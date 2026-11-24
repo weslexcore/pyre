@@ -1,15 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Contact, Resend } from 'resend';
 
-// Keeps Resend's per-contact `unsubscribed` flag in step with the
-// email_suppressions table (the source of truth, see ./suppression.ts).
-// Broadcasts (the monthly newsletter) only check Resend's flag, and journeys
-// only check our table, so the two must agree in both directions:
-//   - suppressed with us, subscribed in Resend  -> mark unsubscribed in Resend
-//   - unsubscribed in Resend, missing with us   -> add to email_suppressions
-//     (a contact.updated webhook that never arrived)
-//
-// Used by the daily `resend-reconcile` cron job and by
+// Paced Resend calls and bulk reads, shared by the newsletter send job and
 // scripts/import-mailchimp-audience.mts, so it takes its clients as arguments
 // and never reads import.meta.env.
 
@@ -108,58 +100,4 @@ export async function loadSuppressedEmails(db: SupabaseClient): Promise<Set<stri
     if (!data || data.length < PAGE) break;
   }
   return emails;
-}
-
-export interface ReconcileDeps {
-  resend: Resend;
-  pace: Pacer;
-  /** Suppressed addresses, lowercased. Updated in place as new ones are added. */
-  suppressed: Set<string>;
-  /** Records an unsubscribe Resend knows about and we don't. */
-  suppress: (email: string) => Promise<void>;
-  dryRun: boolean;
-}
-
-export interface ReconcileTally {
-  scanned: number;
-  /** Suppressed with us, so marked unsubscribed in Resend. */
-  markedUnsubscribed: string[];
-  /** Unsubscribed in Resend, so added to email_suppressions. */
-  newSuppressions: string[];
-  errors: string[];
-}
-
-export function emptyTally(): ReconcileTally {
-  return { scanned: 0, markedUnsubscribed: [], newSuppressions: [], errors: [] };
-}
-
-/** Brings one page of contacts into line with the suppression list. */
-export async function reconcileContacts(
-  contacts: Contact[],
-  { resend, pace, suppressed, suppress, dryRun }: ReconcileDeps,
-  tally: ReconcileTally
-): Promise<void> {
-  for (const contact of contacts) {
-    tally.scanned++;
-    const email = contact.email.toLowerCase();
-    const isSuppressed = suppressed.has(email);
-
-    if (isSuppressed && !contact.unsubscribed) {
-      tally.markedUnsubscribed.push(email);
-      if (dryRun) continue;
-      const { error } = await pacedCall(pace, () =>
-        resend.contacts.update({ id: contact.id, unsubscribed: true })
-      );
-      if (error) tally.errors.push(`mark ${email}: ${error.message}`);
-    } else if (!isSuppressed && contact.unsubscribed) {
-      tally.newSuppressions.push(email);
-      if (dryRun) continue;
-      try {
-        await suppress(email);
-        suppressed.add(email);
-      } catch (e) {
-        tally.errors.push(`suppress ${email}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-  }
 }

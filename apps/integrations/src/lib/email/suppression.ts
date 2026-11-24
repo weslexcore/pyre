@@ -47,8 +47,8 @@ export interface SuppressInput {
 
 // Record a suppression and mirror it outward. Insert is idempotent (unique
 // email, first reason wins); propagation failures are logged, not thrown — the
-// authoritative record is already saved, and the daily resend-reconcile job
-// (lib/email/resend-sync.ts) repairs a Resend mirror that failed.
+// authoritative record is already saved, and nothing we send reads the
+// mirrors (the newsletter send and journeys both check this table).
 //
 // Only a NEW suppression is mirrored. Marking a contact unsubscribed in Resend
 // fires a contact.updated webhook, which lands back here; mirroring again on

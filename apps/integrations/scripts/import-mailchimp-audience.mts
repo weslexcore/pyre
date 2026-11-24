@@ -1,42 +1,35 @@
-// One-off before the newsletter moves from Mailchimp to Resend broadcasts.
-// Brings the Mailchimp audience, email_suppressions and the Resend contact list
-// into agreement, then reports what the broadcast segment will reach.
+// One-off before the newsletter moves from Mailchimp to our own sending.
+// Builds the mailing list (newsletter_subscribers) out of the Mailchimp
+// audience and the Resend contacts made before the list moved to Supabase,
+// brings email_suppressions up to date, and reports how many the first issue
+// will reach.
 //
 //   A. Mailchimp unsubscribed / cleaned  -> email_suppressions
 //      (source mailchimp-import; cleaned counts as a bounce). The Mailchimp
 //      webhook only caught opt-outs after it was set up; this covers the rest.
-//   B. Every Resend contact reconciled with email_suppressions, both ways
-//      (lib/email/resend-sync.ts): suppressed -> unsubscribed in Resend;
-//      unsubscribed in Resend but unknown to us -> suppressed, and mirrored to
-//      Mailchimp while Mailchimp still sends.
-//   C. Mailchimp subscribers with no Resend contact -> created in the segment
-//      (people who signed up through Mailchimp and never booked).
-//   D. Subscribed, unsuppressed Resend contacts outside the segment -> added
-//      (contacts created before RESEND_SEGMENT_ID was set).
+//   B. Resend contacts marked unsubscribed that we never heard about
+//      -> email_suppressions (source resend-import), and mirrored to Mailchimp
+//      while Mailchimp still sends.
+//   C. Mailchimp subscribers and subscribed Resend contacts
+//      -> newsletter_subscribers (source mailchimp-import / resend-import).
+//      An address already on the list is left as it is.
 //
 // Mailchimp pending, transactional and archived members are counted, not
-// imported: none of them opted in to the newsletter.
+// imported: none of them opted in to the newsletter. Suppressed addresses are
+// imported to the list like anyone else; the send skips them.
 //
-// Idempotent: a second run finds nothing left to do. Resend is paced at ~2
-// requests a second, so a large audience takes a few minutes.
+// Idempotent: a second run finds nothing left to do.
 //
 // Run from apps/integrations. Needs MAILCHIMP_API_KEY, MAILCHIMP_AUDIENCE_ID,
-// RESEND_API_KEY, RESEND_SEGMENT_ID, SUPABASE_URL and SUPABASE_SECRET_KEY (or
+// RESEND_API_KEY, SUPABASE_URL and SUPABASE_SECRET_KEY (or
 // SUPABASE_SERVICE_ROLE_KEY) in .env or the shell:
 //   tsx scripts/import-mailchimp-audience.mts            # dry run (default)
 //   tsx scripts/import-mailchimp-audience.mts --execute  # make the changes
 
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { type Contact, Resend } from 'resend';
-import {
-  createPacer,
-  emptyTally,
-  fetchAllContacts,
-  loadSuppressedEmails,
-  pacedCall,
-  reconcileContacts,
-} from '../src/lib/email/resend-sync';
+import { Resend } from 'resend';
+import { createPacer, fetchAllContacts, loadSuppressedEmails } from '../src/lib/email/resend-sync';
 
 try {
   process.loadEnvFile(new URL('../.env', import.meta.url).pathname);
@@ -50,7 +43,6 @@ const env = (name: string) => process.env[name]?.trim() || undefined;
 const MAILCHIMP_API_KEY = env('MAILCHIMP_API_KEY');
 const MAILCHIMP_AUDIENCE_ID = env('MAILCHIMP_AUDIENCE_ID');
 const RESEND_API_KEY = env('RESEND_API_KEY');
-const SEGMENT_ID = env('RESEND_SEGMENT_ID');
 const SUPABASE_URL = env('SUPABASE_URL');
 const SUPABASE_KEY = env('SUPABASE_SECRET_KEY') ?? env('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -58,7 +50,6 @@ const missing = Object.entries({
   MAILCHIMP_API_KEY,
   MAILCHIMP_AUDIENCE_ID,
   RESEND_API_KEY,
-  RESEND_SEGMENT_ID: SEGMENT_ID,
   SUPABASE_URL,
   SUPABASE_SECRET_KEY: SUPABASE_KEY,
 })
@@ -152,6 +143,29 @@ async function insertSuppressions(
   }
 }
 
+interface SubscriberRow {
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  source: string;
+}
+
+async function loadSubscriberEmails(): Promise<Set<string>> {
+  const emails = new Set<string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from('newsletter_subscribers')
+      .select('email')
+      .order('email')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Could not read newsletter_subscribers: ${error.message}`);
+    for (const row of data ?? []) emails.add(String(row.email));
+    if (!data || data.length < PAGE) break;
+  }
+  return emails;
+}
+
 // --- Run ---
 
 const sample = (list: string[]) =>
@@ -192,83 +206,69 @@ async function main() {
   }
   for (const row of toSuppress) suppressed.add(row.email);
 
-  // B. Resend contacts against the suppression list.
+  // B. Resend contacts: unsubscribes we never heard about.
   console.log('\nReading Resend contacts…');
   const contacts = await fetchAllContacts(resend, pace);
-  const segmentIds = new Set((await fetchAllContacts(resend, pace, SEGMENT_ID)).map((c) => c.id));
-  console.log(`Resend contacts: ${contacts.length} (in segment: ${segmentIds.size})`);
-
-  const tally = emptyTally();
-  await reconcileContacts(
-    contacts,
-    {
-      resend,
-      pace,
-      suppressed,
-      dryRun: !execute,
-      suppress: async (email) => {
-        await insertSuppressions([{ email, reason: 'unsubscribe', source: 'resend-reconcile' }]);
+  console.log(`Resend contacts: ${contacts.length}`);
+  const errors: string[] = [];
+  const resendOptOuts = contacts
+    .filter((c) => c.unsubscribed && !suppressed.has(c.email.toLowerCase()))
+    .map((c) => c.email.toLowerCase());
+  console.log(
+    `\nB. Unsubscribed in Resend but not suppressed: ${resendOptOuts.length}${sample(resendOptOuts)}`
+  );
+  for (const email of resendOptOuts) {
+    if (execute) {
+      try {
+        await insertSuppressions([{ email, reason: 'unsubscribe', source: 'resend-import' }]);
         await mailchimpUnsubscribe(email);
-      },
-    },
-    tally
-  );
-  if (!execute) for (const email of tally.newSuppressions) suppressed.add(email);
-  console.log(
-    `\nB. Suppressed but subscribed in Resend, marked unsubscribed: ${tally.markedUnsubscribed.length}${sample(tally.markedUnsubscribed)}`
-  );
-  console.log(
-    `   Unsubscribed in Resend but not suppressed, now suppressed: ${tally.newSuppressions.length}${sample(tally.newSuppressions)}`
-  );
+      } catch (e) {
+        errors.push(`suppress ${email}: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+    }
+    suppressed.add(email);
+  }
 
-  // The contacts as they stand after B.
-  const byEmail = new Map<string, Contact>();
+  // C. The mailing list. Mailchimp first, so its names win over Resend's.
+  const existing = await loadSubscriberEmails();
+  console.log(`\nnewsletter_subscribers before: ${existing.size}`);
+  const toAdd = new Map<string, SubscriberRow>();
+  for (const m of byStatus.get('subscribed')!) {
+    if (existing.has(m.email) || toAdd.has(m.email)) continue;
+    toAdd.set(m.email, {
+      email: m.email,
+      first_name: m.firstName ?? null,
+      last_name: m.lastName ?? null,
+      source: 'mailchimp-import',
+    });
+  }
   for (const c of contacts) {
-    const email = c.email.toLowerCase();
-    byEmail.set(email, { ...c, unsubscribed: c.unsubscribed || suppressed.has(email) });
+    const email = c.email.trim().toLowerCase();
+    if (c.unsubscribed || existing.has(email) || toAdd.has(email)) continue;
+    toAdd.set(email, {
+      email,
+      first_name: c.first_name || null,
+      last_name: c.last_name || null,
+      source: 'resend-import',
+    });
   }
-
-  // C. Mailchimp subscribers Resend doesn't have.
-  const toCreate = byStatus
-    .get('subscribed')!
-    .filter((m) => !byEmail.has(m.email) && !suppressed.has(m.email));
+  const adding = [...toAdd.values()];
+  const fromMailchimp = adding.filter((r) => r.source === 'mailchimp-import').length;
   console.log(
-    `\nC. Mailchimp subscribers with no Resend contact, to create: ${toCreate.length}${sample(toCreate.map((m) => m.email))}`
+    `C. To add to the list: ${adding.length} (${fromMailchimp} from Mailchimp, ${adding.length - fromMailchimp} from Resend)${sample(adding.map((r) => r.email))}`
   );
-  let created = 0;
-  for (const m of toCreate) {
-    if (!execute) continue;
-    const { error } = await pacedCall(pace, () =>
-      resend.contacts.create({
-        email: m.email,
-        firstName: m.firstName,
-        lastName: m.lastName,
-        segments: [{ id: SEGMENT_ID! }],
-      })
-    );
-    if (error) tally.errors.push(`create ${m.email}: ${error.message}`);
-    else created++;
+  if (execute) {
+    for (let i = 0; i < adding.length; i += 500) {
+      const { error } = await db
+        .from('newsletter_subscribers')
+        .upsert(adding.slice(i, i + 500), { onConflict: 'email', ignoreDuplicates: true });
+      if (error) errors.push(`subscribers ${i}-${i + 500}: ${error.message}`);
+    }
   }
 
-  // D. Subscribed contacts outside the segment.
-  const toAdd = [...byEmail.values()].filter((c) => !c.unsubscribed && !segmentIds.has(c.id));
-  console.log(
-    `\nD. Subscribed contacts not in the segment, to add: ${toAdd.length}${sample(toAdd.map((c) => c.email))}`
-  );
-  let added = 0;
-  for (const c of toAdd) {
-    if (!execute) continue;
-    const { error } = await pacedCall(pace, () =>
-      resend.contacts.segments.add({ contactId: c.id, segmentId: SEGMENT_ID! })
-    );
-    if (error) tally.errors.push(`segment ${c.email}: ${error.message}`);
-    else added++;
-  }
-
-  // What a broadcast to the segment will reach. Resend skips unsubscribed
-  // contacts itself, so this counts the subscribed ones.
-  const reachable =
-    [...byEmail.values()].filter((c) => !c.unsubscribed).length + toCreate.length;
+  const list = new Set([...existing, ...toAdd.keys()]);
+  const reachable = [...list].filter((email) => !suppressed.has(email)).length;
   const mailchimpReachable = byStatus
     .get('subscribed')!
     .filter((m) => !suppressed.has(m.email)).length;
@@ -276,11 +276,11 @@ async function main() {
   console.log('\nSummary');
   console.log(`  email_suppressions after:              ${suppressed.size}`);
   console.log(`  Mailchimp subscribed, not suppressed:  ${mailchimpReachable}`);
-  console.log(`  Newsletter segment will reach:         ${reachable}`);
-  if (execute) console.log(`  Created ${created}, added to segment ${added}`);
-  if (tally.errors.length > 0) {
-    console.log(`\n${tally.errors.length} errors:`);
-    for (const e of tally.errors.slice(0, 50)) console.log(`  ${e}`);
+  console.log(`  Mailing list after:                    ${list.size}`);
+  console.log(`  The first issue will reach:            ${reachable}`);
+  if (errors.length > 0) {
+    console.log(`\n${errors.length} errors:`);
+    for (const e of errors.slice(0, 50)) console.log(`  ${e}`);
     process.exitCode = 1;
   }
   if (!execute) console.log('\nDry run. Re-run with --execute to apply.');

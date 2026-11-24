@@ -160,14 +160,14 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
-    // Daily (first tick at/after 4am ET): Resend's contact unsubscribe flags
-    // brought into line with email_suppressions, both ways — broadcasts only
-    // read Resend's flag, journeys only read ours. Last in the list: it pages
-    // the whole contact list at Resend's rate limit and resumes from a cursor
-    // when the tick's budget runs out.
-    name: 'resend-reconcile',
+    // The newsletter: an issue an admin approved goes out in batches of 100
+    // (lib/email/newsletter/send-job.ts). Last in the list: a big list can
+    // outlast the tick's shared budget, and the send carries on next tick from
+    // where it stopped. Each copy's send_key keeps a resumed send from mailing
+    // anyone twice.
+    name: 'newsletter-send',
     run: async (ctx) => {
-      const summary = await (await import('@/lib/email/resend-reconcile-job')).runResendReconcile(
+      const summary = await (await import('@/lib/email/newsletter/send-job')).runNewsletterSends(
         ctx
       );
       return summary as unknown as Record<string, unknown>;

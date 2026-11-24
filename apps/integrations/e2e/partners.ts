@@ -38,4 +38,6 @@ export const LIVE_TEMPLATES = [
   // Lost and found: the "is this yours?" email and the staff claim alert.
   'lost-found-found',
   'lost-found-claimed',
+  // The newsletter send job does nothing unless its template is live.
+  'newsletter',
 ];

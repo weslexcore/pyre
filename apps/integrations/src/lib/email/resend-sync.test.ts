@@ -1,12 +1,6 @@
 import type { Contact } from 'resend';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  emptyTally,
-  fetchAllContacts,
-  loadSuppressedEmails,
-  pacedCall,
-  reconcileContacts,
-} from './resend-sync';
+import { fetchAllContacts, loadSuppressedEmails, pacedCall } from './resend-sync';
 
 const noPace = async () => {};
 
@@ -30,108 +24,9 @@ function fakeResend(pages: Contact[][] = []) {
         if (hasMore && data.length > 0) data[data.length - 1].id = `page-${index + 1}`;
         return { data: { object: 'list', data, has_more: hasMore }, error: null };
       }),
-      update: vi.fn(async () => ({ data: { id: 'x' }, error: null })),
     },
   };
 }
-
-describe('reconcileContacts', () => {
-  it('marks suppressed contacts unsubscribed in Resend', async () => {
-    const resend = fakeResend();
-    const tally = emptyTally();
-    await reconcileContacts(
-      [contact('Gone@Example.com', false, 'c1'), contact('stay@example.com')],
-      {
-        resend: resend as never,
-        pace: noPace,
-        suppressed: new Set(['gone@example.com']),
-        suppress: vi.fn(),
-        dryRun: false,
-      },
-      tally
-    );
-    expect(resend.contacts.update).toHaveBeenCalledWith({ id: 'c1', unsubscribed: true });
-    expect(resend.contacts.update).toHaveBeenCalledTimes(1);
-    expect(tally.markedUnsubscribed).toEqual(['gone@example.com']);
-    expect(tally.scanned).toBe(2);
-  });
-
-  it('suppresses a contact Resend has unsubscribed but we never heard about', async () => {
-    const suppress = vi.fn(async () => {});
-    const suppressed = new Set<string>();
-    const tally = emptyTally();
-    await reconcileContacts(
-      [contact('missed@example.com', true)],
-      { resend: fakeResend() as never, pace: noPace, suppressed, suppress, dryRun: false },
-      tally
-    );
-    expect(suppress).toHaveBeenCalledWith('missed@example.com');
-    expect(suppressed.has('missed@example.com')).toBe(true);
-    expect(tally.newSuppressions).toEqual(['missed@example.com']);
-  });
-
-  it('leaves agreeing contacts alone', async () => {
-    const resend = fakeResend();
-    const suppress = vi.fn();
-    const tally = emptyTally();
-    await reconcileContacts(
-      [contact('a@example.com'), contact('b@example.com', true)],
-      {
-        resend: resend as never,
-        pace: noPace,
-        suppressed: new Set(['b@example.com']),
-        suppress,
-        dryRun: false,
-      },
-      tally
-    );
-    expect(resend.contacts.update).not.toHaveBeenCalled();
-    expect(suppress).not.toHaveBeenCalled();
-  });
-
-  it('only reports in a dry run', async () => {
-    const resend = fakeResend();
-    const suppress = vi.fn();
-    const tally = emptyTally();
-    await reconcileContacts(
-      [contact('gone@example.com'), contact('missed@example.com', true)],
-      {
-        resend: resend as never,
-        pace: noPace,
-        suppressed: new Set(['gone@example.com']),
-        suppress,
-        dryRun: true,
-      },
-      tally
-    );
-    expect(resend.contacts.update).not.toHaveBeenCalled();
-    expect(suppress).not.toHaveBeenCalled();
-    expect(tally.markedUnsubscribed).toEqual(['gone@example.com']);
-    expect(tally.newSuppressions).toEqual(['missed@example.com']);
-  });
-
-  it('records a failed update and carries on', async () => {
-    const resend = fakeResend();
-    resend.contacts.update.mockResolvedValueOnce({
-      data: null,
-      error: { name: 'not_found', message: 'gone' },
-    } as never);
-    const tally = emptyTally();
-    await reconcileContacts(
-      [contact('a@example.com'), contact('b@example.com')],
-      {
-        resend: resend as never,
-        pace: noPace,
-        suppressed: new Set(['a@example.com', 'b@example.com']),
-        suppress: vi.fn(),
-        dryRun: false,
-      },
-      tally
-    );
-    expect(resend.contacts.update).toHaveBeenCalledTimes(2);
-    expect(tally.errors).toEqual(['mark a@example.com: gone']);
-  });
-});
 
 describe('fetchAllContacts', () => {
   it('follows the cursor through every page', async () => {

@@ -37,12 +37,9 @@ interface ImportMetaEnv {
   // Resend transactional + marketing email
   readonly RESEND_API_KEY?: string;
   readonly RESEND_FROM?: string;
-  // Optional Resend segment new contacts are attached to (broadcast target).
-  // Contacts themselves are account-global since Resend's segments migration.
-  readonly RESEND_SEGMENT_ID?: string;
-  // Optional segment for the volunteer page's "tell me when events open" sign-up
-  // (they join RESEND_SEGMENT_ID too, as they did on Mailchimp).
-  readonly RESEND_VOLUNTEER_SEGMENT_ID?: string;
+  // Optional sender for the newsletter (e.g. a news. subdomain, so bulk mail
+  // can't hurt booking-confirmation deliverability); RESEND_FROM otherwise.
+  readonly NEWSLETTER_FROM?: string;
   // Mailing-list sign-up: shared secret the landing page sends on /api/mailing-list/subscribe
   readonly MAILING_LIST_API_SECRET?: string;
   // Resend webhook (svix) signing secret

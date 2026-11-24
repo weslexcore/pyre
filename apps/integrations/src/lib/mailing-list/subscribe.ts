@@ -1,16 +1,16 @@
-import { upsertResendContact } from '@/lib/email/audience';
+import { getDb } from '@/lib/db';
 
-// Mailing-list sign-ups from the landing page forms (the footer form, the
-// promo popup, partner and link-in-bio pages, the volunteer page). The landing
-// page's /api/mailing-list route owns the abuse checks and calls this
-// server-to-server.
+// The mailing list: newsletter_subscribers in Supabase. Joined from the
+// landing page forms (the footer form, the promo popup, partner and
+// link-in-bio pages, the volunteer page, relayed by the landing page's
+// /api/mailing-list route, which owns the abuse checks), and by every Momence
+// customer through the member webhook, as they were on Mailchimp.
 //
-// A sign-up is a Resend contact in the newsletter segment (RESEND_SEGMENT_ID);
-// the volunteer list also joins RESEND_VOLUNTEER_SEGMENT_ID when that's set.
-// Someone on the suppression list stays unsubscribed: the form has no double
-// opt-in, so a sign-up can't prove the owner of the address asked to come
-// back, and anyone could type in someone else's. They get the same answer as
-// everyone else, so the form never reveals who has opted out.
+// Joining never lifts a suppression: the form has no double opt-in, so a
+// sign-up can't prove the owner of the address asked to come back, and anyone
+// could type in someone else's. The newsletter send skips suppressed
+// addresses, and the form gives everyone the same answer, so it never reveals
+// who has opted out.
 
 export const MAILING_LISTS = ['newsletter', 'volunteer'] as const;
 export type MailingList = (typeof MAILING_LISTS)[number];
@@ -20,33 +20,45 @@ export function isMailingList(value: unknown): value is MailingList {
 }
 
 export type SubscribeOutcome =
-  | { outcome: 'subscribed'; suppressed: boolean }
+  | { outcome: 'subscribed' }
   | { outcome: 'unavailable'; reason: string };
+
+export interface SubscribeInput {
+  email: string;
+  list: MailingList;
+  /** Where they joined: website_form, promo_popup, momence… ([a-z0-9_-], 60 max). */
+  source: string;
+  firstName?: string;
+  lastName?: string;
+}
 
 export async function subscribeToMailingList({
   email,
   list,
   source,
-}: {
-  email: string;
-  list: MailingList;
-  source: string;
-}): Promise<SubscribeOutcome> {
-  const volunteerSegment = import.meta.env.RESEND_VOLUNTEER_SEGMENT_ID;
-  const extraSegmentIds = list === 'volunteer' && volunteerSegment ? [volunteerSegment] : [];
-  if (!import.meta.env.RESEND_SEGMENT_ID) {
-    // Without the segment a sign-up would never get the newsletter.
-    console.error('[Mailing list] RESEND_SEGMENT_ID not configured');
-    return { outcome: 'unavailable', reason: 'segment-not-configured' };
+  firstName,
+  lastName,
+}: SubscribeInput): Promise<SubscribeOutcome> {
+  const db = getDb();
+  if (!db) {
+    console.error('[Mailing list] Supabase not configured');
+    return { outcome: 'unavailable', reason: 'no-db' };
   }
 
-  const result = await upsertResendContact({ email }, { extraSegmentIds, joinSegments: true });
-  if (result.status === 'skipped') {
-    return { outcome: 'unavailable', reason: result.reason };
+  // Volunteers get the newsletter too, as they did on Mailchimp.
+  const lists = list === 'volunteer' ? ['newsletter', 'volunteer'] : ['newsletter'];
+  const { error } = await db.rpc('newsletter_subscribe', {
+    p_email: email.trim().toLowerCase(),
+    p_lists: lists,
+    p_source: source.toLowerCase(),
+    p_first_name: firstName ?? null,
+    p_last_name: lastName ?? null,
+  });
+  if (error) {
+    console.error(`[Mailing list] Could not add ${email}: ${error.message}`);
+    return { outcome: 'unavailable', reason: 'db-error' };
   }
 
-  console.info(
-    `[Mailing list] ${email} ${result.status} (${list} via ${source}${result.suppressed ? ', suppressed' : ''})`
-  );
-  return { outcome: 'subscribed', suppressed: result.suppressed };
+  console.info(`[Mailing list] ${email} joined ${list} via ${source}`);
+  return { outcome: 'subscribed' };
 }
