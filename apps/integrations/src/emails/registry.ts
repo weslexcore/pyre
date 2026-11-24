@@ -6,6 +6,7 @@ import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
+import { NewsletterEmail } from './templates/NewsletterEmail';
 import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerMemberConfirm } from './templates/PartnerMemberConfirm';
 import { PartnerMemberVerified } from './templates/PartnerMemberVerified';
@@ -46,6 +47,13 @@ export const EMAIL_TEMPLATES: Registry = {
   journey: {
     subject: (p) => p.subject,
     Component: JourneyEmail,
+  },
+  // The monthly newsletter. Registered so its live switch shows on
+  // /admin/email-templates; the newsletter send job (lib/email/newsletter)
+  // renders and sends it, never sendTemplate().
+  newsletter: {
+    subject: (p) => p.subject,
+    Component: NewsletterEmail,
   },
   'partner-verification-request': {
     subject: (p) => `Membership check: ${p.customerName} - Pyre x ${p.partnerName}`,

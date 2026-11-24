@@ -59,10 +59,11 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
 }
 
 /**
- * The monthly newsletter (Resend broadcast). Same blocks as a journey email;
+ * The monthly newsletter (/admin/newsletters). Same blocks as a journey email;
  * unsubscribeUrl is required because the footer link is not optional here.
  */
 export interface NewsletterEmailProps {
+  subject: string;
   preview: string;
   background: 'clouds' | 'trees' | 'lamps';
   blocks: EmailBlockInput[];
@@ -474,6 +475,7 @@ export interface ScheduleLintProps {
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   journey: JourneyEmailProps;
+  newsletter: NewsletterEmailProps;
   'partner-verification-request': PartnerVerificationRequestProps;
   'partner-verified': PartnerVerifiedProps;
   'partner-denied': PartnerDeniedProps;

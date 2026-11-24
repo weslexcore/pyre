@@ -54,6 +54,7 @@ export async function renderNewsletter(
 
   const body = toTemplateContent(content);
   const element = createElement(NewsletterEmail, {
+    subject: body.subject,
     preview: body.preview,
     background: body.background,
     blocks: body.blocks,
