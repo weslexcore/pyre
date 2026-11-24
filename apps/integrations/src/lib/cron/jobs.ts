@@ -159,4 +159,18 @@ export const CRON_JOBS: CronJob[] = [
       return summary as unknown as Record<string, unknown>;
     },
   },
+  {
+    // Daily (first tick at/after 4am ET): Resend's contact unsubscribe flags
+    // brought into line with email_suppressions, both ways — broadcasts only
+    // read Resend's flag, journeys only read ours. Last in the list: it pages
+    // the whole contact list at Resend's rate limit and resumes from a cursor
+    // when the tick's budget runs out.
+    name: 'resend-reconcile',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/email/resend-reconcile-job')).runResendReconcile(
+        ctx
+      );
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
 ];

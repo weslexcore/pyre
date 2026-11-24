@@ -1,4 +1,5 @@
 import { getResend } from './resend';
+import { lookupSuppression } from './suppression';
 
 // Resend contact sync — the marketing-contact counterpart to the Mailchimp
 // upsert in @pyre/webhook-core. Called from the same webhook/backfill flows so
@@ -9,10 +10,14 @@ import { getResend } from './resend';
 // set, new contacts are also attached to that segment (useful as the broadcast
 // target for the monthly digest).
 //
-// IMPORTANT: we never write `unsubscribed` here. Resend owns that flag per
-// contact (set via broadcast footers, our /api/unsubscribe route, or the
-// suppression propagator) and a member-update webhook must not resubscribe
-// someone who opted out.
+// IMPORTANT: we never write `unsubscribed: false` here. A member-update webhook
+// must not resubscribe someone who opted out. We DO write `unsubscribed: true`
+// for anyone on the suppression list: broadcasts only check Resend's own flag,
+// so a contact created (or re-created) after its suppression would otherwise
+// get the newsletter. When the suppression list can't be read the contact is
+// not written at all; creating it subscribed could mail an opted-out person,
+// and creating it unsubscribed would echo back through the contact webhook as
+// a real unsubscribe.
 
 export interface ResendContactInput {
   email: string;
@@ -34,12 +39,21 @@ export async function upsertResendContact(
     return { status: 'skipped', reason: 'resend-not-configured' };
   }
 
+  const suppressed = await lookupSuppression(contact.email);
+  if (suppressed === null) {
+    console.warn(
+      `[Resend Audience] Suppression list unavailable — skipping contact upsert for ${contact.email}`
+    );
+    return { status: 'skipped', reason: 'suppression-unknown' };
+  }
+
   const segmentId = import.meta.env.RESEND_SEGMENT_ID;
 
   const created = await resend.contacts.create({
     email: contact.email,
     firstName: contact.firstName,
     lastName: contact.lastName,
+    ...(suppressed && { unsubscribed: true }),
     ...(segmentId && { segments: [{ id: segmentId }] }),
   });
 
@@ -53,6 +67,7 @@ export async function upsertResendContact(
     email: contact.email,
     firstName: contact.firstName,
     lastName: contact.lastName,
+    ...(suppressed && { unsubscribed: true }),
   });
 
   if (updated.error) {
