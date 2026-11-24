@@ -91,6 +91,31 @@ export interface PartnerDeniedProps {
   reason: 'denied' | 'expired';
 }
 
+// Member perks (Pyre member -> partner; lib/partner/member-verification.ts).
+
+export interface PartnerMemberConfirmProps {
+  partnerName: string;
+  /** What the partner gives Pyre members, e.g. "15% off class packs". */
+  memberPerk: string;
+  confirmUrl: string;
+  expiresDays: number;
+}
+
+export interface PartnerMemberVerifiedProps {
+  partnerName: string;
+  /** From Momence, not the form. */
+  memberName: string;
+  memberEmail: string;
+  membershipName: string;
+  /** ISO; the membership's start in Momence, when it has one. */
+  memberSince: string | null;
+  /** ISO; null = no end date (renews until cancelled). */
+  validThrough: string | null;
+  memberPerk: string;
+  /** ISO; when Momence was checked. */
+  verifiedAt: string;
+}
+
 export interface PartnerReconciliationProps {
   partnerName: string;
   /** e.g. "2026-q3" */
@@ -440,6 +465,8 @@ export interface EmailPropsByTemplate {
   'partner-verified': PartnerVerifiedProps;
   'partner-denied': PartnerDeniedProps;
   'partner-reconciliation': PartnerReconciliationProps;
+  'partner-member-confirm': PartnerMemberConfirmProps;
+  'partner-member-verified': PartnerMemberVerifiedProps;
   'referral-redeemed': ReferralRedeemedProps;
   'referral-reward-earned': ReferralRewardEarnedProps;
   'admin-message': AdminMessageEmailProps;

@@ -97,6 +97,8 @@ export interface PartnerRow {
   enabled: boolean;
   decision_expiry_days: number;
   reconciliation_enabled: boolean;
+  /** What the partner gives Pyre members (the /perks flow); null = no member perk. */
+  member_perk: string | null;
   notes: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -122,6 +124,25 @@ export interface PartnerVerificationRow {
   /** Partner contacts the request email actually reached; 0 = nobody. */
   notified_count: number;
   last_notified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// A Pyre member asking us to vouch for them at a partner (the /perks flow,
+// lib/partner/member-verification.ts). Name and membership come from Momence
+// at click time, never from the form.
+export interface PartnerMemberVerificationRow {
+  id: string;
+  partner_slug: string;
+  member_email: string;
+  status: 'awaiting_confirmation' | 'verified' | 'not_member' | 'expired';
+  momence_member_id: number | null;
+  member_name: string | null;
+  membership_name: string | null;
+  membership_ends_at: string | null;
+  /** Partner contacts the "membership is valid" email reached. */
+  notified_count: number;
+  confirmed_at: string | null;
   created_at: string;
   updated_at: string;
 }

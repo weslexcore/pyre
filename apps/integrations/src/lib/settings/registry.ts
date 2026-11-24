@@ -193,11 +193,12 @@ export const SETTINGS = {
       { value: 'action', label: 'Action' },
       { value: 'update', label: 'Update' },
       { value: 'hours', label: 'Hours' },
+      { value: 'inventory', label: 'Inventory' },
       { value: 'question', label: 'Question' },
       { value: 'safety', label: 'Safety' },
       { value: 'feedback', label: 'Feedback' },
     ],
-    default: ['action', 'update', 'hours'],
+    default: ['action', 'update', 'hours', 'inventory'],
     min: 1,
   },
   'sops.assist': {

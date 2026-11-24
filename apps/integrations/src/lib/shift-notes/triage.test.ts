@@ -55,6 +55,9 @@ describe('triageStatus', () => {
   it('puts anything actionable on the to-do list and resolves the rest', () => {
     expect(triageStatus([{ type: 'action', probability: 0.9 }])).toBe('todo');
     expect(triageStatus([{ type: 'safety', probability: 0.4 }])).toBe('todo');
+    // A brief stock report ("used the last two bottles") stays to do, so the
+    // inventory change can be suggested from it.
+    expect(triageStatus([{ type: 'inventory', probability: 0.8 }])).toBe('todo');
     expect(triageStatus([{ type: 'feedback', probability: 0.8 }])).toBe('resolved');
     expect(triageStatus([])).toBe('resolved');
   });

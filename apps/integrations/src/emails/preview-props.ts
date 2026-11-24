@@ -11,6 +11,8 @@ import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
 import { PartnerDenied } from './templates/PartnerDenied';
+import { PartnerMemberConfirm } from './templates/PartnerMemberConfirm';
+import { PartnerMemberVerified } from './templates/PartnerMemberVerified';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
@@ -33,6 +35,8 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'partner-verified': PartnerVerified.PreviewProps,
   'partner-denied': PartnerDenied.PreviewProps,
   'partner-reconciliation': PartnerReconciliation.PreviewProps,
+  'partner-member-confirm': PartnerMemberConfirm.PreviewProps,
+  'partner-member-verified': PartnerMemberVerified.PreviewProps,
   'referral-redeemed': ReferralRedeemed.PreviewProps,
   'referral-reward-earned': ReferralRewardEarned.PreviewProps,
   'admin-message': AdminMessage.PreviewProps,

@@ -9,6 +9,8 @@ export const PARTNER = {
   discountPercent: 20,
   /** Every confirm/deny email goes here. */
   contact: 'partner-desk@e2e.test',
+  /** What it gives Pyre members (the /perks flow). */
+  memberPerk: '10% off day passes',
 } as const;
 
 /** Switched off: it takes no new requests. */
@@ -18,6 +20,7 @@ export const PARTNER_OFF = {
   tagName: 'e2e-partner-off-verified',
   discountPercent: 15,
   contact: 'closed-desk@e2e.test',
+  memberPerk: null,
 } as const;
 
 /** The referral tier the suite's referrers give (the shared contract's percent). */
@@ -30,6 +33,8 @@ export const LIVE_TEMPLATES = [
   'partner-verification-request',
   'partner-verified',
   'partner-denied',
+  'partner-member-confirm',
+  'partner-member-verified',
   // Lost and found: the "is this yours?" email and the staff claim alert.
   'lost-found-found',
   'lost-found-claimed',
