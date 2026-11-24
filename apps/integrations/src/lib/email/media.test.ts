@@ -3,12 +3,12 @@ import { blockContentSchema } from '@/lib/email/journeys/schema';
 import { EMAIL_MEDIA_MAX_BYTES, emailMediaPath, emailMediaProblem } from './media';
 
 describe('emailMediaProblem', () => {
-  it('takes the formats every mail client shows, up to 5 MB', () => {
+  it('takes the formats every mail client shows, up to 4 MB', () => {
     expect(emailMediaProblem({ type: 'image/jpeg', size: 1000 })).toBeNull();
     expect(emailMediaProblem({ type: 'image/png', size: EMAIL_MEDIA_MAX_BYTES })).toBeNull();
     expect(emailMediaProblem({ type: 'image/webp', size: 1000 })).toMatch(/JPG, PNG or GIF/);
     expect(emailMediaProblem({ type: 'image/png', size: EMAIL_MEDIA_MAX_BYTES + 1 })).toMatch(
-      /over 5 MB/
+      /over 4 MB/
     );
   });
 });

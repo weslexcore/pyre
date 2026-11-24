@@ -25,7 +25,9 @@ const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/curre
 <link rel="icon" type="image/png" sizes="32x32" href={pngHref} />
 <link rel="icon" type="image/svg+xml" href={svgHref} />
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-<link rel="manifest" href="/manifest.webmanifest" />
+<!-- use-credentials: behind Vercel deployment protection (staging) the manifest
+     request needs the login cookie, or it is redirected to Vercel's sign-in. -->
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
 <meta name="theme-color" content={black} />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />

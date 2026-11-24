@@ -35,7 +35,7 @@ const TIPS = {
   subject:
     'The first thing people see in their inbox. Keep it short and specific; merge fields like {{firstName|friend}} work here too.',
   background:
-    'The photo behind the email header: one of the Pyre photos in the brand style, or upload your own (JPG, PNG or GIF, up to 5 MB). A wide photo works best.',
+    'The photo behind the email header: one of the Pyre photos in the brand style, or upload your own (JPG, PNG or GIF; big photos are shrunk to fit). A wide photo works best.',
   preview:
     'The grey line most inboxes show after the subject. Use it to add the hook the subject leaves out. Leave empty to let the inbox pick text from the email.',
   mergeFields:

@@ -96,6 +96,39 @@ test.describe('an admin', { tag: DESKTOP_ONLY_TAG }, () => {
 test.describe('an email photo upload', { tag: DESKTOP_ONLY_TAG }, () => {
   test.use({ storageState: ADMIN.storageState as string });
 
+  test('shrinks a big photo before it uploads', async ({ page }) => {
+    await open(page, '/admin/newsletters');
+    await page.getByRole('button', { name: 'New newsletter' }).click();
+    await expect(page).toHaveURL(/\/admin\/newsletters\/[0-9a-f-]{36}$/);
+    await page.getByLabel('Background', { exact: true }).selectOption('own');
+
+    // A 3000px photo full of noise: several MB as a PNG, over Vercel's limit.
+    await page.getByLabel('Upload a photo').evaluate(async (input: HTMLInputElement) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 3000;
+      canvas.height = 2000;
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+      const pixels = ctx.createImageData(3000, 2000);
+      for (let i = 0; i < pixels.data.length; i++) pixels.data[i] = (i * 2654435761) % 256;
+      ctx.putImageData(pixels, 0, 0);
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b as Blob), 'image/png')
+      );
+      const files = new DataTransfer();
+      files.items.add(new File([blob], 'huge.png', { type: 'image/png' }));
+      input.files = files.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const thumbnail = page.getByRole('img', { name: 'Your background' });
+    await expect(thumbnail).toBeVisible({ timeout: 30_000 });
+    const width = await thumbnail.evaluate(async (img: HTMLImageElement) => {
+      await img.decode();
+      return img.naturalWidth;
+    });
+    expect(width).toBe(1600);
+  });
+
   test('refuses a format some mail clients cannot show', async ({ request }) => {
     const response = await request.post('/api/admin/email-media', {
       multipart: { file: { name: 'a.webp', mimeType: 'image/webp', buffer: PNG } },
