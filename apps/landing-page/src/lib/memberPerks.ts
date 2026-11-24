@@ -73,7 +73,7 @@ const memberPerks: MemberPerksContent = {
   },
   hero: {
     eyebrow: 'For Pyre members',
-    title: 'Your membership works\nbeyond our door.',
+    title: 'Carry the heat\nwith you.',
     subtitle:
       "Pyre members get perks at the studios and gyms we partner with around Richmond. Tell us where you're headed, and we'll vouch for you.",
     image: {
