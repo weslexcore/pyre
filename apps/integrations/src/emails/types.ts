@@ -50,7 +50,8 @@ export interface MarketingEmailBaseProps {
 export interface JourneyEmailProps extends MarketingEmailBaseProps {
   subject: string;
   preview: string;
-  background: 'clouds' | 'trees' | 'lamps';
+  /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
+  background: string;
   blocks: EmailBlockInput[];
   /** utm_campaign for tracked links — the journey's campaign, else its id. */
   campaign: string;
@@ -65,7 +66,8 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
 export interface NewsletterEmailProps {
   subject: string;
   preview: string;
-  background: 'clouds' | 'trees' | 'lamps';
+  /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
+  background: string;
   blocks: EmailBlockInput[];
   /** utm_campaign for tracked links: the newsletter campaign's slug. */
   campaign: string;

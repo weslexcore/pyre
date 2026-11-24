@@ -240,6 +240,24 @@ export type JourneyAction = z.infer<typeof actionSchema>;
 // --- Email content ---
 
 export const EMAIL_BACKGROUNDS = ['trees', 'clouds', 'lamps'] as const;
+export type EmailBackgroundPreset = (typeof EMAIL_BACKGROUNDS)[number];
+
+/** An image address an email can use: http(s), and nothing that could break out of CSS url(). */
+export const EMAIL_IMAGE_URL_RE = /^https?:\/\/[^\s"'()<>{}\\]+$/;
+
+export function isBackgroundPreset(value: string): value is EmailBackgroundPreset {
+  return (EMAIL_BACKGROUNDS as readonly string[]).includes(value);
+}
+
+/** One of the Pyre photos, or the address of an uploaded one (/api/admin/email-media). */
+export const emailBackgroundSchema = z.union([
+  z.enum(EMAIL_BACKGROUNDS),
+  z
+    .string()
+    .trim()
+    .max(1000)
+    .regex(EMAIL_IMAGE_URL_RE, 'A background must be one of the photos or an uploaded image'),
+]);
 
 /** Button colors — the Pyre brand palette (hex, since email clients need it). */
 export const BUTTON_COLORS = {
@@ -296,7 +314,7 @@ export const blockContentSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   /** Inbox preview line. */
   preview: z.string().max(200).default(''),
-  background: z.enum(EMAIL_BACKGROUNDS).default('trees'),
+  background: emailBackgroundSchema.default('trees'),
   blocks: z.array(blockSchema).max(60),
 });
 

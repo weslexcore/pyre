@@ -2,8 +2,9 @@
 // background, and an ordered list of blocks. Merge-field chips insert
 // {{field}} at the cursor of whichever field was focused last.
 
-import { type ReactNode, useId, useRef } from 'react';
+import { type ReactNode, useId, useRef, useState } from 'react';
 import { isTaggedHost, journeyLink, journeyLinkContent } from '@/emails/components/utm';
+import { uploadEmailImage } from '@/lib/client/emailMedia';
 import { MERGE_FIELD_KEYS, MERGE_FIELDS } from '@/lib/email/journeys/merge-fields';
 import {
   type BlockContent,
@@ -13,8 +14,10 @@ import {
   BUTTON_STYLES,
   type ButtonStyle,
   EMAIL_BACKGROUNDS,
+  type EmailBackgroundPreset,
   type EmailBlock,
   type EmailBlockType,
+  isBackgroundPreset,
 } from '@/lib/email/journeys/schema';
 import { Field, FieldLabel } from './Field';
 import {
@@ -31,7 +34,8 @@ type Inserter = (token: string) => void;
 const TIPS = {
   subject:
     'The first thing people see in their inbox. Keep it short and specific; merge fields like {{firstName|friend}} work here too.',
-  background: 'The photo behind the email header. Each one is a Pyre photo in the brand style.',
+  background:
+    'The photo behind the email header: one of the Pyre photos in the brand style, or upload your own (JPG, PNG or GIF, up to 5 MB). A wide photo works best.',
   preview:
     'The grey line most inboxes show after the subject. Use it to add the hook the subject leaves out. Leave empty to let the inbox pick text from the email.',
   mergeFields:
@@ -39,7 +43,7 @@ const TIPS = {
   body: 'The email is built from blocks, top to bottom. Drag a block by its handle to move it. Text supports Markdown: **bold**, *italic*, [link text](https://...), ## headings, - bullet lists, 1. numbered lists and > quotes. Plain links are tracked automatically.',
 } as const;
 
-const BACKGROUND_LABELS: Record<BlockContent['background'], string> = {
+const BACKGROUND_LABELS: Record<EmailBackgroundPreset, string> = {
   trees: 'Trees',
   clouds: 'Clouds',
   lamps: 'Lamps',
@@ -123,19 +127,10 @@ export function BlockEditor({
           />
         </Field>
         <Field label="Background" tip={TIPS.background}>
-          <select
-            className={`${compactSelectClass} w-full`}
+          <BackgroundPicker
             value={content.background}
-            onChange={(e) =>
-              onChange({ ...content, background: e.target.value as BlockContent['background'] })
-            }
-          >
-            {EMAIL_BACKGROUNDS.map((bg) => (
-              <option key={bg} value={bg}>
-                {BACKGROUND_LABELS[bg]}
-              </option>
-            ))}
-          </select>
+            onChange={(background) => onChange({ ...content, background })}
+          />
         </Field>
       </div>
       <Field label="Inbox preview line" tip={TIPS.preview}>
@@ -353,11 +348,14 @@ function BlockFields({
       return (
         <div className="grid gap-2 sm:grid-cols-3">
           <MiniField label="Image address" className="sm:col-span-2">
-            <input
-              className={`${compactInputClass} w-full font-mono text-xs`}
-              placeholder="https://..."
-              {...field(block.src, (src) => onChange({ ...block, src }))}
-            />
+            <div className="flex gap-1.5">
+              <input
+                className={`${compactInputClass} min-w-0 flex-1 font-mono text-xs`}
+                placeholder="https://... or upload a photo"
+                {...field(block.src, (src) => onChange({ ...block, src }))}
+              />
+              <UploadButton label="Upload" onUploaded={(src) => onChange({ ...block, src })} />
+            </div>
           </MiniField>
           <MiniField label="Description (for screen readers)">
             <input
@@ -401,6 +399,111 @@ function MiniField({
       <span className="text-xs text-white/60">{label}</span>
       {children}
     </label>
+  );
+}
+
+/**
+ * A button that uploads one photo for the email (/api/admin/email-media)
+ * and hands back its address. Errors show under it.
+ */
+function UploadButton({ label, onUploaded }: { label: string; onUploaded: (url: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onUploaded(await uploadEmailImage(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+
+  return (
+    <span className="flex flex-col gap-1">
+      <button
+        type="button"
+        className={buttonClass}
+        disabled={busy}
+        onClick={() => input.current?.click()}
+      >
+        {busy ? 'Uploading...' : label}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/gif"
+        className="hidden"
+        aria-label={label}
+        onChange={(e) => void upload(e.target.files?.[0])}
+      />
+      {error && (
+        <span role="alert" className="text-xs text-[var(--pyre-red)]">
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** One of the Pyre photos, or an uploaded one with a thumbnail and a way to replace it. */
+function BackgroundPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (background: string) => void;
+}) {
+  const preset = isBackgroundPreset(value);
+  const [choosingOwn, setChoosingOwn] = useState(false);
+  const own = !preset || choosingOwn;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        className={`${compactSelectClass} w-full`}
+        aria-label="Background"
+        value={own ? 'own' : value}
+        onChange={(e) => {
+          if (e.target.value === 'own') {
+            setChoosingOwn(true);
+          } else {
+            setChoosingOwn(false);
+            onChange(e.target.value);
+          }
+        }}
+      >
+        {EMAIL_BACKGROUNDS.map((bg) => (
+          <option key={bg} value={bg}>
+            {BACKGROUND_LABELS[bg]}
+          </option>
+        ))}
+        <option value="own">Your own photo</option>
+      </select>
+      {own && (
+        <div className="flex items-center gap-2">
+          {!preset && (
+            <img
+              src={value}
+              alt="Your background"
+              className="h-10 w-16 shrink-0 rounded border border-white/10 object-cover"
+            />
+          )}
+          <UploadButton
+            label={preset ? 'Upload a photo' : 'Replace'}
+            onUploaded={(url) => {
+              setChoosingOwn(false);
+              onChange(url);
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
