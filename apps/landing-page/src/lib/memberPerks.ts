@@ -1,3 +1,6 @@
+import bftImg from '../assets/images/bft/bft-kettlebells.png';
+import embodyImg from '../assets/images/embody/hero.webp';
+import humbleHavenImg from '../assets/images/humble-haven/hero.webp';
 import steppingOut from '../assets/images/stepping_out.webp';
 import type { PartnerImage } from './partner';
 
@@ -24,6 +27,8 @@ export interface MemberPerkPartner {
   /** What Pyre members get, e.g. "15% off class packs". */
   perk: string;
   description: string;
+  /** A photo of the partner itself (their space or a class), shown on its card. */
+  image: PartnerImage;
 }
 
 export interface MemberPerksContent {
@@ -95,6 +100,7 @@ const memberPerks: MemberPerksContent = {
         where: 'Carytown',
         perk: '15% off class packs',
         description: 'Coached group strength and conditioning, just across the river.',
+        image: { src: bftImg, alt: 'A kettlebell class at BFT', position: 'center 40%' },
       },
       {
         slug: 'humble-haven',
@@ -102,6 +108,7 @@ const memberPerks: MemberPerksContent = {
         where: 'Forest Ave',
         perk: '15% off class packs',
         description: 'Heated power vinyasa, plus unheated and adaptive classes.',
+        image: { src: humbleHavenImg, alt: 'The sunlit front room at Humble Haven Yoga' },
       },
       {
         slug: 'embody',
@@ -109,6 +116,11 @@ const memberPerks: MemberPerksContent = {
         where: 'Forest Hill',
         perk: '15% off class packs',
         description: 'Small-group reformer Pilates, a short walk from Pyre.',
+        image: {
+          src: embodyImg,
+          alt: 'Two instructors holding a lunge on the reformers at Embody Pilates',
+          position: 'center 35%',
+        },
       },
     ],
   },
