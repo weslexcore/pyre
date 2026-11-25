@@ -92,7 +92,12 @@ export const test = base.extend<Fixtures>({
   },
 });
 
-export { expect, expectNoSidewaysScroll, waitForHydration } from '@pyre/e2e-utils';
+export {
+  clickAndHydrate,
+  expect,
+  expectNoSidewaysScroll,
+  waitForHydration,
+} from '@pyre/e2e-utils';
 
 /** Open a page and wait for its islands, so typing into a React form sticks. */
 export async function open(page: Page, path: string): Promise<void> {

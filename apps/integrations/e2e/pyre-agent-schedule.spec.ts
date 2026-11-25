@@ -32,7 +32,7 @@ import {
   weekLabel,
 } from './pyre-agent-helpers';
 import { ADMIN, SCHEDULE_VIEWER, SCHEDULER, STAFF, STAFF_2 } from './roles';
-import { mock } from './test';
+import { mock, open } from './test';
 
 test.describe.configure({ mode: 'parallel' });
 
@@ -113,6 +113,9 @@ test.describe('drafting from the chat', () => {
     staffId,
     schedulerSessions,
   }) => {
+    // A long flow with several agent round trips; it ran out of the default
+    // 30s on mobile-safari in CI.
+    test.slow();
     const monday = await seedShift({ daysAhead: days.ahead(0) });
     const tuesday = await seedShift({ daysAhead: days.ahead(1) });
     const note = `Give Sam the Monday ${marker}`;
@@ -333,7 +336,8 @@ test.describe('drafting from the chat', () => {
     });
     expect(notice.title).toContain('Draft schedule ready');
 
-    await page.goto(notice.href as string);
+    // Wait for the chat to hydrate: ask() below types into its composer.
+    await open(page, notice.href as string);
     await expect(draftCard(page, weekLabel(week))).toContainText('1 item waiting for review');
 
     // A revision asked for here is announced the same way.

@@ -17,7 +17,7 @@ export {
   WEBKIT_CANCELLED_LOAD_PATTERN,
 } from './fixtures';
 export { fillByName, waitForMinFillTime } from './forms';
-export { expectNoSidewaysScroll, waitForHydration } from './layout';
+export { clickAndHydrate, expectNoSidewaysScroll, waitForHydration } from './layout';
 export {
   createMockServer,
   type MockHandler,

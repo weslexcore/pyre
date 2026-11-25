@@ -5,7 +5,7 @@
 import { DESKTOP_ONLY_TAG, uniqueTag } from '@pyre/e2e-utils';
 import { addGuest } from './guests-helpers';
 import { MANAGER, STAFF, STAFF_2 } from './roles';
-import { expect, open, test } from './test';
+import { clickAndHydrate, expect, open, test } from './test';
 
 test.use({ storageState: STAFF.storageState as string });
 
@@ -25,10 +25,9 @@ test('a guest found by name opens their profile, which saves a summary and answe
 
   await open(page, '/admin/guests');
   await page.getByPlaceholder('Find a guest by name or email').fill(guest.lastName);
-  await page
-    .getByRole('link', { name: new RegExp(guest.lastName) })
-    .first()
-    .click();
+  // A client-side navigation: wait for the profile form to hydrate, or what
+  // is typed into it below is lost and the profile saves empty.
+  await clickAndHydrate(page.getByRole('link', { name: new RegExp(guest.lastName) }).first());
   await expect(page).toHaveURL(new RegExp(`/admin/guests/${guest.id}`));
   await expect(page.getByText(guest.name).first()).toBeVisible();
 

@@ -8,6 +8,12 @@ import { APP_ENV, APP_PORT, MOCK_PORT } from './e2e/env';
 // fetch already has somewhere to go.
 export default definePyreConfig({
   port: APP_PORT,
+  overrides: {
+    // The run fails if the app called an upstream the mock server has no
+    // route for (e2e/global-teardown.ts).
+    globalSetup: './e2e/global-setup.ts',
+    globalTeardown: './e2e/global-teardown.ts',
+  },
   webServers: [
     {
       name: 'mock upstreams',

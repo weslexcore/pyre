@@ -193,6 +193,7 @@ test.describe('a manager', () => {
     expect(configure.status()).toBe(200);
 
     await page.getByLabel('Search inventory').fill(name);
+    await expect(row(page, name)).toHaveCount(1);
     // Delete by keyboard, as the menu supports: it focuses its first item on
     // open and closes on any scroll, and a scripted click scrolls the item
     // into view first (on the Pixel profile that closes it). Delete is last,

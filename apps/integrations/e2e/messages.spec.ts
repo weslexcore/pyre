@@ -5,7 +5,7 @@
 import { DESKTOP_ONLY_TAG, uniqueTag } from '@pyre/e2e-utils';
 import { ADMIN, SHIFT_LEAD, STAFF, STAFF_2 } from './roles';
 import { postMessage } from './sops-helpers';
-import { expect, mock, open, test } from './test';
+import { clickAndHydrate, expect, mock, open, test } from './test';
 
 test.describe('reading a message', () => {
   test.use({ storageState: STAFF.storageState as string });
@@ -33,10 +33,9 @@ test.describe('reading a message', () => {
     expect(notice).toEqual({ kind: 'admin_message', read_at: null });
 
     await open(page, '/admin/messages');
-    await page
-      .getByRole('link', { name: new RegExp(title) })
-      .first()
-      .click();
+    // A client-side navigation: wait for the thread to hydrate, or the click
+    // on "I've read this" below can land before it has a handler.
+    await clickAndHydrate(page.getByRole('link', { name: new RegExp(title) }).first());
     await expect(page).toHaveURL(new RegExp(`/admin/messages/${message.id}$`));
     await expect(page.getByText('Fold towels in thirds from today.')).toBeVisible();
 
