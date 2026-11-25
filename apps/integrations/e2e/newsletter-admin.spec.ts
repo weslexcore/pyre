@@ -3,6 +3,7 @@
 // the API.
 
 import { allowConsole, DESKTOP_ONLY_TAG, uniqueEmail, uniqueTag } from '@pyre/e2e-utils';
+import { EMAIL_MEDIA_MAX_BYTES } from '../src/lib/email/media';
 import { ADMIN, STAFF } from './roles';
 import { expect, open, test } from './test';
 import { type SentEmail, upstreamRequests } from './upstream';
@@ -161,7 +162,11 @@ test.describe('a newsletter draft', { tag: DESKTOP_ONLY_TAG }, () => {
 });
 
 test.describe('an email photo upload', { tag: DESKTOP_ONLY_TAG }, () => {
-  test.use({ storageState: ADMIN.storageState as string });
+  test.use({
+    storageState: ADMIN.storageState as string,
+    // The new issue's preview loads the header logo and badges; see 'an admin'.
+    consoleAllowlist: allowConsole(/status of 403 .*\/email\//),
+  });
 
   test('shrinks a big photo before it uploads', async ({ page }) => {
     await open(page, '/admin/newsletters');
@@ -169,23 +174,45 @@ test.describe('an email photo upload', { tag: DESKTOP_ONLY_TAG }, () => {
     await expect(page).toHaveURL(/\/admin\/newsletters\/[0-9a-f-]{36}$/);
     await page.getByLabel('Background', { exact: true }).selectOption('own');
 
-    // A 3000px photo full of noise: several MB as a PNG, over Vercel's limit.
-    await page.getByLabel('Upload a photo').evaluate(async (input: HTMLInputElement) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 3000;
-      canvas.height = 2000;
-      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-      const pixels = ctx.createImageData(3000, 2000);
-      for (let i = 0; i < pixels.data.length; i++) pixels.data[i] = (i * 2654435761) % 256;
-      ctx.putImageData(pixels, 0, 0);
-      const blob = await new Promise<Blob>((resolve) =>
-        canvas.toBlob((b) => resolve(b as Blob), 'image/png')
-      );
-      const files = new DataTransfer();
-      files.items.add(new File([blob], 'huge.png', { type: 'image/png' }));
-      input.files = files.files;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    // A 3000px photo of random noise, which PNG can't compress: about 20 MB,
+    // and still several MB once scaled to 1600px, so it has to go out as a JPEG.
+    const upload = page.waitForRequest(
+      (req) => req.method() === 'POST' && req.url().endsWith('/api/admin/email-media')
+    );
+    const sourceBytes = await page
+      .getByLabel('Upload a photo')
+      .evaluate(async (input: HTMLInputElement) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 3000;
+        canvas.height = 2000;
+        const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+        const pixels = ctx.createImageData(3000, 2000);
+        let seed = 1;
+        for (let i = 0; i < pixels.data.length; i++) {
+          seed ^= seed << 13;
+          seed ^= seed >>> 17;
+          seed ^= seed << 5;
+          pixels.data[i] = i % 4 === 3 ? 255 : seed & 255;
+        }
+        ctx.putImageData(pixels, 0, 0);
+        const blob = await new Promise<Blob>((resolve) =>
+          canvas.toBlob((b) => resolve(b as Blob), 'image/png')
+        );
+        const files = new DataTransfer();
+        files.items.add(new File([blob], 'huge.png', { type: 'image/png' }));
+        input.files = files.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return blob.size;
+      });
+    // Otherwise the test proves nothing about the limit.
+    expect(sourceBytes).toBeGreaterThan(EMAIL_MEDIA_MAX_BYTES);
+
+    // What reaches the server is a JPEG under the limit, not the original.
+    const sent = (await upload).postDataBuffer();
+    expect(sent?.length ?? Infinity).toBeLessThan(EMAIL_MEDIA_MAX_BYTES);
+    expect(sent?.toString('latin1')).toMatch(
+      /filename="huge\.jpg"\r\nContent-Type: image\/jpeg/
+    );
 
     const thumbnail = page.getByRole('img', { name: 'Your background' });
     await expect(thumbnail).toBeVisible({ timeout: 30_000 });
