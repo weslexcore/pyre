@@ -95,14 +95,23 @@ export function GuestProfile({
   const fields = useMemo(() => ours.data?.fields ?? [], [ours.data]);
 
   // The form's working copy. Re-seeded whenever the saved profile changes
-  // (a save, a reload) unless the person is mid-edit.
+  // (a save, a reload).
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   const [seededFor, setSeededFor] = useState<string | null>(null);
   useEffect(() => {
     if (!ours.data) return;
     const key = profile ? `${profile.id}:${profile.updated_at}` : 'none';
     if (seededFor === key) return;
-    setDraft(draftFrom(profile));
+    // The form takes input while the profile is still loading. The first seed
+    // keeps what was typed before it landed, rather than wiping it.
+    setDraft((current) => {
+      const next = draftFrom(profile);
+      if (seededFor !== null) return next;
+      return {
+        summary: current.summary || next.summary,
+        values: { ...next.values, ...current.values },
+      };
+    });
     setSeededFor(key);
   }, [ours.data, profile, seededFor]);
 
