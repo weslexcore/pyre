@@ -18,6 +18,7 @@ Supabase stack). Start from whichever is closer to the new app.
 | `stubJson`, `stubMailchimpJsonp`, `stubTurnstile` | `@pyre/e2e-utils` | Browser-layer stubs (`page.route`). Each returns the requests it answered. `stubMailchimpJsonp` takes a list to answer successive submissions differently (an error, then a successful retry). The fake Turnstile widget solves again when the page resets it, as the real one does after a failed submission, and marks its container `TURNSTILE_SOLVED` once the page has a token |
 | `waitForMinFillTime`, `fillByName` | `@pyre/e2e-utils` | The forms' anti-bot `form_timestamp` wait, and filling fields by `name` |
 | `waitForHydration` | `@pyre/e2e-utils` | Wait until every Astro island has mounted. Typing into a React form before then is lost when React takes over the input |
+| `clickAndHydrate` | `@pyre/e2e-utils` | Click a link and wait for the page it opens to hydrate. Use it for every link a test follows before interacting with the new page: under `<ClientRouter />` the new page's text shows before its islands mount, so `toHaveURL` and `getByText` pass while clicks and typing are still lost |
 | `expectNoSidewaysScroll` | `@pyre/e2e-utils` | Fail if the page is wider than the screen (on a phone, it scrolls sideways). Call it once the content under test has rendered |
 | `uniqueEmail`, `uniqueTag` | `@pyre/e2e-utils` | Per-test, per-project names, for suites whose parallel tests share one database |
 | `ensureLocalSupabase`, `resetLocalSupabase`, `stopLocalSupabase` | both | The e2e Supabase stack (below) |
