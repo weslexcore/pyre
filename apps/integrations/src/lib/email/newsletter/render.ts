@@ -57,6 +57,7 @@ export async function renderNewsletter(
     subject: body.subject,
     preview: body.preview,
     background: body.background,
+    logo: body.logo,
     blocks: body.blocks,
     campaign,
     unsubscribeUrl: UNSUBSCRIBE_PLACEHOLDER,

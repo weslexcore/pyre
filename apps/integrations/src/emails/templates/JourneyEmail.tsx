@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { isSafeHref } from '@/lib/email/journeys/inline-markdown';
-import { BUTTON_COLORS, type EmailBlockInput } from '@/lib/email/journeys/schema';
+import { BUTTON_COLORS, type EmailBlockInput, type TextAlign } from '@/lib/email/journeys/schema';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import { type EmailUtmSource, journeyLink, journeyLinkContent } from '../components/utm';
 import type { JourneyEmailProps } from '../types';
@@ -50,20 +50,29 @@ function plainText(node: HastNode | undefined): string {
   return (node.children ?? []).map((c) => plainText(c as HastNode)).join('');
 }
 
+/**
+ * A style lined up as the block asks. Set on each element rather than a
+ * wrapper, since some mail clients (desktop Outlook) don't pass text-align
+ * down. Unset leaves the style as it was, so older emails render unchanged.
+ */
+const aligned = <S extends object>(style: S, align: TextAlign | undefined) =>
+  align ? { ...style, textAlign: align } : style;
+
 function markdownComponents(
   campaign: string,
   stepKey: string | undefined,
-  source: EmailUtmSource
+  source: EmailUtmSource,
+  align?: TextAlign
 ): Components {
   return {
-    h1: ({ children }) => <Text style={heading}>{children}</Text>,
-    h2: ({ children }) => <Text style={subheading}>{children}</Text>,
-    h3: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h4: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h5: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h6: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    h1: ({ children }) => <Text style={aligned(heading, align)}>{children}</Text>,
+    h2: ({ children }) => <Text style={aligned(subheading, align)}>{children}</Text>,
+    h3: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h4: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h5: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h6: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
     // pre-line keeps a single line break the author typed, as plain text did.
-    p: ({ children }) => <Text style={text}>{children}</Text>,
+    p: ({ children }) => <Text style={aligned(text, align)}>{children}</Text>,
     ul: ({ children }) => <ul style={list}>{children}</ul>,
     ol: ({ children, start }) => (
       <ol style={list} start={start}>
@@ -73,7 +82,7 @@ function markdownComponents(
     li: ({ children }) => <li style={listItem}>{children}</li>,
     // A checkbox input is stripped or drawn oddly by most mail clients.
     input: ({ checked }) => <span>{checked ? '☑ ' : '☐ '}</span>,
-    blockquote: ({ children }) => <div style={quote}>{children}</div>,
+    blockquote: ({ children }) => <div style={aligned(quote, align)}>{children}</div>,
     code: ({ children }) => <code style={inlineCode}>{children}</code>,
     hr: () => <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />,
     a: ({ children, href, node }) => {
@@ -106,6 +115,7 @@ function Markdown({
   stepKey,
   utmSource,
   inline = false,
+  align,
 }: {
   source: string;
   campaign: string;
@@ -113,8 +123,9 @@ function Markdown({
   utmSource: EmailUtmSource;
   /** Inside an existing line (a bullet, the sign-off): no paragraph wrapper. */
   inline?: boolean;
+  align?: TextAlign;
 }): ReactNode {
-  const components = markdownComponents(campaign, stepKey, utmSource);
+  const components = markdownComponents(campaign, stepKey, utmSource, align);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -138,10 +149,16 @@ function Block({
 }): ReactNode {
   switch (block.type) {
     case 'heading':
-      return <Text style={heading}>{block.text}</Text>;
+      return <Text style={aligned(heading, block.align)}>{block.text}</Text>;
     case 'paragraph':
       return (
-        <Markdown source={block.text} campaign={campaign} stepKey={stepKey} utmSource={utmSource} />
+        <Markdown
+          source={block.text}
+          campaign={campaign}
+          stepKey={stepKey}
+          utmSource={utmSource}
+          align={block.align}
+        />
       );
     case 'list':
       return (
@@ -200,7 +217,14 @@ function Block({
       );
     }
     case 'divider':
-      return <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />;
+      return (
+        <Hr
+          style={{
+            borderColor: block.color ? BUTTON_COLORS[block.color].hex : COLORS.sky,
+            margin: '28px 0 20px',
+          }}
+        />
+      );
     case 'image': {
       if (!isSafeHref(block.src)) return null;
       const img = (
@@ -270,13 +294,19 @@ export function EmailBlocks({
 export function JourneyEmail({
   preview,
   background,
+  logo,
   blocks,
   campaign,
   stepKey,
   unsubscribeUrl,
 }: JourneyEmailProps) {
   return (
-    <EmailLayout preview={preview} background={background} unsubscribeUrl={unsubscribeUrl}>
+    <EmailLayout
+      preview={preview}
+      background={background}
+      logo={logo}
+      unsubscribeUrl={unsubscribeUrl}
+    >
       <EmailBlocks blocks={blocks} campaign={campaign} stepKey={stepKey} />
     </EmailLayout>
   );

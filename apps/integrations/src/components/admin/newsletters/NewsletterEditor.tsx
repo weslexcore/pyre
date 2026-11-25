@@ -43,27 +43,151 @@ const draftOf = (issue: NewsletterDto): Draft => ({
   content: issue.content,
 });
 
+/** How long after the last change a draft saves itself. */
+const AUTOSAVE_MS = 1500;
+
+// Every unsaved change is also kept in this browser, so a reload, a closed
+// tab or a save the server refused (an empty subject, say) loses nothing.
+// `base` is the server version it was written on top of: a backup is only
+// restored onto that same version, never over someone else's later save.
+interface Backup {
+  draft: Draft;
+  base: string;
+}
+
+const backupKey = (id: string) => `pyre:newsletter-draft:${id}`;
+
+function readBackup(id: string): Backup | null {
+  try {
+    const raw = window.localStorage.getItem(backupKey(id));
+    if (!raw) return null;
+    const backup = JSON.parse(raw) as Partial<Backup>;
+    const draft = backup.draft as Partial<Draft> | undefined;
+    if (
+      typeof backup.base !== 'string' ||
+      typeof draft?.campaign !== 'string' ||
+      typeof draft.list !== 'string' ||
+      draft.content?.type !== 'blocks' ||
+      !Array.isArray(draft.content.blocks)
+    ) {
+      return null;
+    }
+    return backup as Backup;
+  } catch {
+    return null;
+  }
+}
+
+function writeBackup(id: string, backup: Backup | null) {
+  try {
+    if (backup) window.localStorage.setItem(backupKey(id), JSON.stringify(backup));
+    else window.localStorage.removeItem(backupKey(id));
+  } catch {
+    // Storage full or blocked: the server copy is all there is.
+  }
+}
+
 export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
   const url = `/api/admin/newsletters/${newsletterId}`;
   const { data, error, reload, setData } = useCachedJson<NewsletterDetailResponse>(url);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [saved, setSaved] = useState<string>('');
+  /** The draft as last saved, and the server version that save made. */
+  const [saved, setSaved] = useState<{ json: string; base: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  /** The draft the server last refused, so autosave doesn't retry it until it changes. */
+  const [refused, setRefused] = useState<{ json: string; error: string } | null>(null);
+  const [restored, setRestored] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [sendAt, setSendAt] = useState('');
   const campaignsId = useId();
 
-  // Take the server's copy when it first arrives, and whenever the issue
-  // stops being a draft (nothing local to keep then).
   const issue = data?.issue;
+  const draftJson = draft ? JSON.stringify(draft) : '';
+  const editable = issue?.status === 'draft';
+  const dirty = Boolean(editable && draft && saved && draftJson !== saved.json);
+
+  // Take the server's copy when it first arrives (picking up a backup of
+  // unsaved changes made on top of it), when a newer version arrives and
+  // nothing here is unsaved (a cached copy replaced by the fresh one), and
+  // whenever the issue stops being a draft.
   useEffect(() => {
     if (!issue) return;
-    if (draft === null || issue.status !== 'draft') {
-      setDraft(draftOf(issue));
-      setSaved(JSON.stringify(draftOf(issue)));
+    const server = draftOf(issue);
+    const serverJson = JSON.stringify(server);
+    if (draft === null) {
+      const backup = issue.status === 'draft' ? readBackup(newsletterId) : null;
+      const usable =
+        backup && backup.base === issue.updatedAt && JSON.stringify(backup.draft) !== serverJson;
+      if (!usable) writeBackup(newsletterId, null);
+      setDraft(usable ? backup.draft : server);
+      setRestored(Boolean(usable));
+      setSaved({ json: serverJson, base: issue.updatedAt });
+      return;
     }
-  }, [issue, draft]);
+    // Only for a version not yet taken, or this would run on every render.
+    if (saved?.base !== issue.updatedAt && (issue.status !== 'draft' || !dirty)) {
+      setDraft(server);
+      setSaved({ json: serverJson, base: issue.updatedAt });
+    }
+  }, [issue, draft, dirty, saved, newsletterId]);
+
+  // Back up unsaved changes in this browser; drop the backup once saved.
+  useEffect(() => {
+    if (!draft || !saved || !editable) return;
+    writeBackup(newsletterId, dirty ? { draft, base: saved.base } : null);
+  }, [draft, saved, dirty, editable, newsletterId]);
+
+  const save = async (): Promise<boolean> => {
+    if (!draft || !data) return false;
+    const json = JSON.stringify(draft);
+    setSaving(true);
+    try {
+      const result = await sendJson<{ issue: NewsletterDto }>(url, 'PATCH', draft);
+      // Only the saved marker moves: the draft itself stays as typed, so
+      // nothing typed while the save was on its way is lost.
+      setSaved({ json, base: result.issue.updatedAt });
+      setRefused(null);
+      setData((prev) => (prev ? { ...prev, issue: result.issue } : prev));
+      invalidateJson('/api/admin/newsletters');
+      return true;
+    } catch (e) {
+      setRefused({ json, error: errorText(e) });
+      // No longer a draft (sent from another tab): show what it is now.
+      if (e instanceof ApiError && (e.status === 409 || e.status === 404)) void reload();
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  // Save a moment after typing stops, one save at a time.
+  useEffect(() => {
+    if (!dirty || saving || refused?.json === draftJson) return;
+    const timer = setTimeout(() => void saveRef.current(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [dirty, saving, refused, draftJson]);
+
+  // Leaving the page inside the autosave wait: send what is left on the way out.
+  const pending = useRef<string | null>(null);
+  pending.current = dirty && refused?.json !== draftJson ? draftJson : null;
+  useEffect(() => {
+    const flush = () => {
+      if (!pending.current) return;
+      void fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: pending.current,
+        keepalive: true,
+      }).catch(() => {
+        // Too big for a keepalive request, or offline: the backup has it.
+      });
+    };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [url]);
 
   // Progress refreshes while it is going out.
   useEffect(() => {
@@ -75,32 +199,31 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
   if (error) return <ErrorBanner>{error}</ErrorBanner>;
   if (!data || !issue || !draft) return <p className="text-sm text-white/50">Loading...</p>;
 
-  const editable = issue.status === 'draft';
-  const dirty = editable && JSON.stringify(draft) !== saved;
   const reach = data.audience[draft.list].reachable;
   const status = statusLabel(issue);
 
   const apply = (next: NewsletterDto) => {
     setData({ ...data, issue: next });
     setDraft(draftOf(next));
-    setSaved(JSON.stringify(draftOf(next)));
+    setSaved({ json: JSON.stringify(draftOf(next)), base: next.updatedAt });
     invalidateJson('/api/admin/newsletters');
   };
 
-  const save = async (): Promise<boolean> => {
-    setSaving(true);
-    setActionError(null);
-    try {
-      const result = await sendJson<{ issue: NewsletterDto }>(url, 'PATCH', draft);
-      apply(result.issue);
-      return true;
-    } catch (e) {
-      setActionError(errorText(e));
-      return false;
-    } finally {
-      setSaving(false);
-    }
+  const discardRestored = () => {
+    setRestored(false);
+    setRefused(null);
+    setDraft(draftOf(issue));
   };
+
+  const saveState = !editable
+    ? null
+    : saving
+      ? 'Saving...'
+      : refused && refused.json === draftJson
+        ? `Not saved: ${refused.error} Your changes are kept in this browser until it can be.`
+        : dirty
+          ? 'Unsaved changes'
+          : 'All changes saved';
 
   const send = async () => {
     setConfirming(false);
@@ -138,6 +261,8 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
     if (!window.confirm('Delete this draft?')) return;
     try {
       await sendJson(url, 'DELETE');
+      writeBackup(newsletterId, null);
+      pending.current = null;
       invalidateJson('/api/admin/newsletters');
       window.location.href = '/admin/newsletters';
     } catch (e) {
@@ -153,7 +278,11 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
             All newsletters
           </a>
           <span className={badgeClass(status.tone)}>{status.text}</span>
-          {dirty && <span className="text-xs text-white/45">Unsaved changes</span>}
+          {saveState && (
+            <span role="status" className="text-xs text-white/45">
+              {saveState}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {editable && (
@@ -167,13 +296,21 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
                 disabled={!dirty || saving}
                 onClick={() => void save()}
               >
-                {saving ? 'Saving...' : 'Save'}
+                Save now
               </button>
             </>
           )}
         </div>
       </div>
 
+      {restored && editable && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/10 bg-white/[0.03] p-3 text-sm">
+          <span>Picked up the changes you hadn't saved yet in this browser.</span>
+          <button type="button" className={buttonClass} onClick={discardRestored}>
+            Discard them
+          </button>
+        </div>
+      )}
       {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
       {issue.lastError && issue.status === 'sending' && (
         <ErrorBanner>
@@ -235,6 +372,7 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
               onChange={(content) => setDraft({ ...draft, content })}
               campaign={draft.campaign}
               stepKey="newsletter"
+              logoPicker
             />
           </Section>
         </fieldset>
@@ -251,7 +389,7 @@ export function NewsletterEditor({ newsletterId }: { newsletterId: string }) {
               description={
                 data.canSend
                   ? undefined
-                  : 'Only an admin can send a newsletter. Save it and ask one to send it.'
+                  : 'Only an admin can send a newsletter. It saves as you go; ask one to send it.'
               }
             >
               {!data.templateLive && (

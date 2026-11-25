@@ -11,6 +11,7 @@ import { EmailBlocks } from './JourneyEmail';
 export function NewsletterEmail({
   preview,
   background,
+  logo,
   blocks,
   campaign,
   unsubscribeUrl,
@@ -19,6 +20,7 @@ export function NewsletterEmail({
     <EmailLayout
       preview={preview}
       background={background}
+      logo={logo}
       unsubscribeUrl={unsubscribeUrl}
       utmSource="newsletter"
     >

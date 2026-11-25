@@ -52,6 +52,8 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
   preview: string;
   /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
   background: string;
+  /** 'pyre' (or unset) for Pyre's logo, 'none' for no logo, or an uploaded image's address. */
+  logo?: string;
   blocks: EmailBlockInput[];
   /** utm_campaign for tracked links — the journey's campaign, else its id. */
   campaign: string;
@@ -68,6 +70,8 @@ export interface NewsletterEmailProps {
   preview: string;
   /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
   background: string;
+  /** 'pyre' (or unset) for Pyre's logo, 'none' for no logo, or an uploaded image's address. */
+  logo?: string;
   blocks: EmailBlockInput[];
   /** utm_campaign for tracked links: the newsletter campaign's slug. */
   campaign: string;

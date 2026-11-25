@@ -66,6 +66,8 @@ interface EmailLayoutProps {
   preview: string;
   children: ReactNode;
   background?: EmailBackground;
+  /** The header logo; see EmailHeader. */
+  logo?: string;
   unsubscribeUrl?: string;
   preferencesUrl?: string;
   /** utm_source for the footer's own links. */
@@ -76,6 +78,7 @@ export function EmailLayout({
   preview,
   children,
   background = 'clouds',
+  logo,
   unsubscribeUrl,
   preferencesUrl,
   utmSource,
@@ -87,7 +90,7 @@ export function EmailLayout({
       <Body style={main}>
         <Section style={backdrop(background)}>
           <Container style={container}>
-            <EmailHeader />
+            <EmailHeader logo={logo} />
             <Section style={bodyInset}>{children}</Section>
             <EmailFooter
               unsubscribeUrl={unsubscribeUrl}

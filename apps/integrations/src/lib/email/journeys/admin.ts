@@ -73,6 +73,7 @@ export async function renderStep(
     subject: filled.subject,
     preview: filled.preview,
     background: filled.background,
+    logo: filled.logo,
     blocks: filled.blocks,
     campaign,
     stepKey,

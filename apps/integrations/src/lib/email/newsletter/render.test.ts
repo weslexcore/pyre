@@ -89,6 +89,41 @@ describe('toTemplateContent', () => {
 const recipient = { firstName: 'Ana', unsubscribeUrl: 'https://example.com/unsub?token=a.b&x=1' };
 
 describe('renderNewsletter', () => {
+  it('lines up headings and text as each block asks', async () => {
+    const out = await renderNewsletter(
+      content({
+        blocks: [
+          { type: 'heading', text: 'Centered heading', align: 'center' },
+          { type: 'paragraph', text: 'Right text\n\n## Right subheading', align: 'right' },
+          { type: 'paragraph', text: 'Justified text', align: 'justify' },
+          { type: 'paragraph', text: 'Plain text' },
+        ],
+      }),
+      'newsletter-2026-12'
+    );
+    const styleOf = (inner: string) =>
+      out.html.match(new RegExp(`<p[^>]*style="([^"]*)"[^>]*>${inner}`))?.[1] ?? '';
+    expect(styleOf('Centered heading')).toContain('text-align:center');
+    expect(styleOf('Right text')).toContain('text-align:right');
+    expect(styleOf('Right subheading')).toContain('text-align:right');
+    expect(styleOf('Justified text')).toContain('text-align:justify');
+    expect(styleOf('Plain text')).not.toContain('text-align');
+  });
+
+  it("shows Pyre's logo unless told otherwise", async () => {
+    const pyre = await renderNewsletter(content(), 'newsletter-2026-12');
+    expect(pyre.html).toContain('logo-header-creme.png');
+
+    const own = 'https://example.supabase.co/storage/v1/object/public/email-media/2026-11/a.png';
+    const custom = await renderNewsletter(content({ logo: own }), 'newsletter-2026-12');
+    expect(custom.html).toContain(own);
+    expect(custom.html).not.toContain('logo-header-creme.png');
+
+    const none = await renderNewsletter(content({ logo: 'none' }), 'newsletter-2026-12');
+    expect(none.html).not.toContain('logo-header-creme.png');
+    expect(none.html).not.toContain('alt="Pyre"');
+  });
+
   it('renders once with placeholders, the address and newsletter UTMs', async () => {
     const out = await renderNewsletter(content(), 'newsletter-2026-12');
     expect(out.html).toContain('Hi {{{first_name|there}}}');

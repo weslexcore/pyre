@@ -38,6 +38,16 @@ test.describe('an admin', { tag: DESKTOP_ONLY_TAG }, () => {
     await page
       .getByPlaceholder('Write the paragraph. A blank line starts a new one.')
       .fill('Hello from the e2e newsletter.');
+    // The greeting (the first block) centered.
+    await page.getByRole('button', { name: 'Center', exact: true }).first().click();
+    await expect(page.getByRole('button', { name: 'Center', exact: true }).first()).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    // A gold divider under the text.
+    await page.getByRole('button', { name: '+ Divider' }).click();
+    await page.getByTitle('Gold').last().click();
+    await expect(page.getByRole('radio', { name: 'Gold' }).last()).toBeChecked();
     const preview = page.frameLocator('iframe[title="Newsletter preview"]');
     await expect(preview.getByText('Hello from the e2e newsletter.')).toBeVisible();
     await expect(preview.getByText('Hi there,')).toBeVisible();
@@ -59,8 +69,18 @@ test.describe('an admin', { tag: DESKTOP_ONLY_TAG }, () => {
       .poll(async () => (await page.request.get(photo)).status(), { message: 'served publicly' })
       .toBe(200);
 
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Unsaved changes')).toBeHidden();
+    // Their own logo in the header, in place of Pyre's.
+    await page.getByLabel('Logo', { exact: true }).selectOption('own');
+    await page.getByLabel('Upload a logo').setInputFiles({
+      name: 'logo.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    const logo = (await page.getByRole('img', { name: 'Your logo' }).getAttribute('src')) as string;
+    expect(logo).toMatch(/\/email-media\/\d{4}-\d{2}\/[0-9a-f-]+\.png$/);
+
+    // It saves itself.
+    await expect(page.getByText('All changes saved')).toBeVisible();
 
     await page.getByLabel('Send a test to').fill(tester);
     await page.getByRole('button', { name: 'Send test' }).click();
@@ -80,8 +100,11 @@ test.describe('an admin', { tag: DESKTOP_ONLY_TAG }, () => {
       .flatMap((r) => r.body as SentEmail[])
       .filter((e) => [e.to].flat().includes(reader) && e.subject === subject);
     expect(copies).toHaveLength(1);
-    expect(copies[0].html).toContain('Hi Rae,');
+    expect(copies[0].html).toMatch(/<hr[^>]*style="[^"]*#dbb155/);
+    expect(copies[0].html).toMatch(/<p[^>]*style="[^"]*text-align:center[^"]*"[^>]*>Hi Rae,/);
     expect(copies[0].html).toContain(`url(${photo})`);
+    expect(copies[0].html).toContain(`src="${logo}"`);
+    expect(copies[0].html).not.toContain('logo-header-creme.png');
 
     const id = page.url().split('/').pop();
     const { data } = await db
@@ -90,6 +113,50 @@ test.describe('an admin', { tag: DESKTOP_ONLY_TAG }, () => {
       .eq('id', id)
       .single();
     expect(data).toEqual({ status: 'sent', created_by: ADMIN.email });
+  });
+});
+
+test.describe('a newsletter draft', { tag: DESKTOP_ONLY_TAG }, () => {
+  test.use({
+    storageState: ADMIN.storageState as string,
+    consoleAllowlist: allowConsole(/status of 403 .*\/email\//, /status of 400/),
+  });
+
+  test('is still there after leaving the page', async ({ page, db }, testInfo) => {
+    const subject = uniqueTag(testInfo, 'E2E draft');
+    await open(page, '/admin/newsletters');
+    await page.getByRole('button', { name: 'New newsletter' }).click();
+    await expect(page).toHaveURL(/\/admin\/newsletters\/[0-9a-f-]{36}$/);
+    const editor = page.url();
+    const id = editor.split('/').pop();
+
+    // Saved to the server as it is typed.
+    await page.getByPlaceholder(/How was your first session/).fill(subject);
+    await page.getByLabel('Logo', { exact: true }).selectOption('none');
+    await expect(page.getByText('All changes saved')).toBeVisible();
+    const { data } = await db.from('newsletters').select('content').eq('id', id).single();
+    expect(data?.content).toMatchObject({ subject, logo: 'none' });
+
+    await open(page, '/admin/newsletters');
+    await open(page, editor);
+    await expect(page.getByPlaceholder(/How was your first session/)).toHaveValue(subject);
+    await expect(page.getByLabel('Logo', { exact: true })).toHaveValue('none');
+
+    // A change the server refuses (no subject) is kept in the browser.
+    await page.getByPlaceholder(/How was your first session/).fill('');
+    await page
+      .getByPlaceholder('Write the paragraph. A blank line starts a new one.')
+      .fill('Kept while the subject is empty.');
+    await expect(page.getByText(/Not saved: The email needs a subject line/)).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("Picked up the changes you hadn't saved yet")).toBeVisible();
+    await expect(
+      page.getByPlaceholder('Write the paragraph. A blank line starts a new one.')
+    ).toHaveValue('Kept while the subject is empty.');
+
+    await page.getByRole('button', { name: 'Discard them' }).click();
+    await expect(page.getByPlaceholder(/How was your first session/)).toHaveValue(subject);
+    await expect(page.getByText('All changes saved')).toBeVisible();
   });
 });
 
