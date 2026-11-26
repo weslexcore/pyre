@@ -39,11 +39,22 @@ export async function isSuppressed(email: string): Promise<boolean> {
   return (await lookupSuppression(email)) ?? true;
 }
 
+export type SuppressionMirror = 'resend' | 'mailchimp';
+
 export interface SuppressInput {
   email: string;
   reason: SuppressionReason;
   source: string;
+  /**
+   * A mirror the suppression came from, and so must not be written back to.
+   * The Resend contact.updated webhook passes 'resend': writing the unsubscribe
+   * back onto the contact fires another contact.updated, which is a loop.
+   */
+  from?: SuppressionMirror;
 }
+
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
 
 // Record a suppression and mirror it outward. Insert is idempotent (unique
 // email, first reason wins); propagation failures are logged, not thrown — the
@@ -52,8 +63,10 @@ export interface SuppressInput {
 //
 // Only a NEW suppression is mirrored. Marking a contact unsubscribed in Resend
 // fires a contact.updated webhook, which lands back here; mirroring again on
-// that echo would bounce between the two systems.
-export async function suppressEmail({ email, reason, source }: SuppressInput): Promise<void> {
+// that echo would bounce between the two systems (it once ran at ~20 webhooks
+// a second for a day, and filled the webhook execution index in Redis). "New"
+// is decided by a plain insert and the unique violation it raises on a repeat.
+export async function suppressEmail({ email, reason, source, from }: SuppressInput): Promise<void> {
   const normalized = email.toLowerCase();
   const db = getDb();
 
@@ -61,27 +74,26 @@ export async function suppressEmail({ email, reason, source }: SuppressInput): P
     throw new Error('Supabase not configured — cannot record suppression');
   }
 
-  const { data, error } = await db
+  const { error } = await db
     .from('email_suppressions')
-    .upsert({ email: normalized, reason, source }, { onConflict: 'email', ignoreDuplicates: true })
-    .select('id');
+    .insert({ email: normalized, reason, source });
 
-  if (error) {
-    throw new Error(`Failed to record suppression for ${normalized}: ${error.message}`);
-  }
-
-  // ignoreDuplicates returns only the rows it inserted.
-  if (!data || data.length === 0) {
+  if (error?.code === UNIQUE_VIOLATION) {
     console.info(`[Suppression] ${normalized} already suppressed (${reason} via ${source})`);
     return;
+  }
+  if (error) {
+    throw new Error(`Failed to record suppression for ${normalized}: ${error.message}`);
   }
 
   console.info(`[Suppression] ${normalized} suppressed (${reason} via ${source})`);
 
   await Promise.allSettled([
-    markResendContactUnsubscribed(normalized),
-    setSubscriberStatus(normalized, 'unsubscribed').catch((err) => {
-      console.warn(`[Suppression] Mailchimp mirror failed for ${normalized}:`, err);
-    }),
+    from === 'resend' ? Promise.resolve() : markResendContactUnsubscribed(normalized),
+    from === 'mailchimp'
+      ? Promise.resolve()
+      : setSubscriberStatus(normalized, 'unsubscribed').catch((err) => {
+          console.warn(`[Suppression] Mailchimp mirror failed for ${normalized}:`, err);
+        }),
   ]);
 }

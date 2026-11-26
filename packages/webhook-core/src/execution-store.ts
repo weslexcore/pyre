@@ -4,6 +4,14 @@ import { appendDailyStats } from './webhook-stats';
 const SORTED_SET_KEY = 'webhook:executions';
 const RECORD_PREFIX = 'webhook:exec:';
 const TTL_SECONDS = 14 * 24 * 60 * 60; // 14 days
+/**
+ * The index keeps at most this many of the newest executions, whatever their
+ * age. The 14-day trim alone is no bound: a webhook loop once pushed it past
+ * Upstash's 100MB per-key limit, after which every zadd (and so every
+ * execution record) failed. The trim runs before the zadd, so an index that is
+ * already over the limit shrinks back on the next write.
+ */
+const MAX_INDEXED = 50_000;
 
 export interface WebhookExecution {
   id: string;
@@ -30,6 +38,8 @@ export async function recordExecution(record: WebhookExecution): Promise<void> {
   const pipeline = redis.pipeline();
   pipeline.hset(key, record);
   pipeline.expire(key, TTL_SECONDS);
+  // Ranks run oldest first; leave room for the member about to be added.
+  pipeline.zremrangebyrank(SORTED_SET_KEY, 0, -MAX_INDEXED);
   pipeline.zadd(SORTED_SET_KEY, { score: record.timestamp, member: record.id });
   pipeline.zremrangebyscore(SORTED_SET_KEY, 0, cutoff);
   appendDailyStats(pipeline, record);

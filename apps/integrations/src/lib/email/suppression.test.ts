@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const markResendContactUnsubscribed = vi.fn(async (_email: string) => {});
 const setSubscriberStatus = vi.fn(async (_email: string, _status: string) => {});
-let upsertResult: { data: unknown[] | null; error: { message: string } | null };
+let insertResult: { error: { message: string; code?: string } | null };
 let lookupResult: { data: unknown; error: { message: string } | null };
 let dbAvailable = true;
 
 const db = {
   from: () => ({
-    upsert: () => ({ select: async () => upsertResult }),
+    insert: async () => insertResult,
     select: () => ({ eq: () => ({ maybeSingle: async () => lookupResult }) }),
   }),
 };
@@ -31,15 +31,28 @@ beforeEach(() => {
 
 describe('suppressEmail', () => {
   it('mirrors a new suppression to Resend and Mailchimp', async () => {
-    upsertResult = { data: [{ id: '1' }], error: null };
+    insertResult = { error: null };
     await suppressEmail({ email: 'A@Example.com', reason: 'unsubscribe', source: 'test' });
     expect(markResendContactUnsubscribed).toHaveBeenCalledWith('a@example.com');
     expect(setSubscriberStatus).toHaveBeenCalledWith('a@example.com', 'unsubscribed');
   });
 
+  it('never writes an unsubscribe back to the mirror it came from', async () => {
+    // Writing it back to Resend fires contact.updated again: a loop.
+    insertResult = { error: null };
+    await suppressEmail({
+      email: 'a@example.com',
+      reason: 'unsubscribe',
+      source: 'resend-contact',
+      from: 'resend',
+    });
+    expect(markResendContactUnsubscribed).not.toHaveBeenCalled();
+    expect(setSubscriberStatus).toHaveBeenCalledWith('a@example.com', 'unsubscribed');
+  });
+
   it('does not mirror again when the address was already suppressed', async () => {
     // The echo of our own Resend update arriving back through contact.updated.
-    upsertResult = { data: [], error: null };
+    insertResult = { error: { message: 'duplicate key value', code: '23505' } };
     await suppressEmail({
       email: 'a@example.com',
       reason: 'unsubscribe',
@@ -50,7 +63,7 @@ describe('suppressEmail', () => {
   });
 
   it('throws when the insert fails', async () => {
-    upsertResult = { data: null, error: { message: 'boom' } };
+    insertResult = { error: { message: 'boom' } };
     await expect(
       suppressEmail({ email: 'a@example.com', reason: 'bounce', source: 'test' })
     ).rejects.toThrow('boom');

@@ -171,7 +171,9 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
   ) {
     const email = event.data.email;
     await tracer.span(`Suppress (contact unsubscribed): ${email}`, () =>
-      suppressEmail({ email, reason: 'unsubscribe', source: 'resend-contact' })
+      // from: 'resend' — the contact is already unsubscribed there, and
+      // writing it back would fire this webhook again.
+      suppressEmail({ email, reason: 'unsubscribe', source: 'resend-contact', from: 'resend' })
     );
   }
 
