@@ -4,7 +4,8 @@
 //
 //   /momence/*       Momence v1 host-token API: Events, Teachers, Products
 //   /integrations/*  apps/integrations: referral lookup and redemption,
-//                    partner verification requests
+//                    partner verification and member-perk requests,
+//                    mailing-list sign-ups
 //   /turnstile/*     Cloudflare Turnstile's siteverify
 //
 // Every request is logged (GET /__requests), so a spec can check that a form
@@ -94,6 +95,30 @@ await runMockServer({
         failsThisTime(emailOf(request))
           ? { status: 503, json: { error: 'storage-unavailable' } }
           : { json: { ok: true } }
+      ),
+    },
+    {
+      method: 'POST',
+      path: '/integrations/api/partner/member-request',
+      // Answers as apps/integrations src/pages/api/partner/member-request.ts
+      // does; the 'closed-partner' slug stands in for a partner with no perk.
+      handler: integrations((request) => {
+        if ((request.body as { partner?: string })?.partner === 'closed-partner') {
+          return { status: 403, json: { error: 'no-member-perk' } };
+        }
+        return failsThisTime(emailOf(request))
+          ? { status: 503, json: { error: 'storage-unavailable' } }
+          : { json: { ok: true } };
+      }),
+    },
+    {
+      method: 'POST',
+      path: '/integrations/api/mailing-list/subscribe',
+      // Answers as apps/integrations src/pages/api/mailing-list/subscribe.ts does.
+      handler: integrations((request) =>
+        failsThisTime(emailOf(request))
+          ? { status: 503, json: { ok: false, error: 'suppression-unknown' } }
+          : { json: { ok: true, result: 'subscribed' } }
       ),
     },
     {

@@ -8,9 +8,9 @@ import {
 import { inferBookingAttribution } from '@/lib/analytics/booking-attribution';
 import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { getDb } from '@/lib/db';
-import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { json } from '@/lib/http/route';
+import { subscribeToMailingList } from '@/lib/mailing-list/subscribe';
 import { fetchMomenceMember } from '@/lib/momence/members';
 import { resolveSession } from '@/lib/momence-events';
 import { handlePaymentTransaction } from '@/lib/purchases/capture';
@@ -178,15 +178,16 @@ async function handleMemberEvent(
     });
   }
 
-  // Best-effort so a Resend outage never 500s the webhook (Mailchimp already synced).
-  try {
-    await tracer.span(
-      'Upsert Resend contact',
-      () => upsertResendContact({ email, firstName, lastName }),
-      { email }
-    );
-  } catch (error) {
-    log.warn(`Resend contact upsert failed for ${email}`, error);
+  // Every customer gets the newsletter, as they did on Mailchimp. Best-effort
+  // so a database blip never 500s the webhook (Mailchimp already synced).
+  const joined = await tracer.span(
+    'Add to mailing list',
+    () =>
+      subscribeToMailingList({ email, firstName, lastName, list: 'newsletter', source: 'momence' }),
+    { email }
+  );
+  if (joined.outcome === 'unavailable') {
+    log.warn(`Could not add ${email} to the mailing list: ${joined.reason}`);
   }
 }
 

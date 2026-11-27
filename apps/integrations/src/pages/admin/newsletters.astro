@@ -1,0 +1,15 @@
+---
+// The monthly newsletter: the issues, and the size of the mailing list. The
+// /api/admin/newsletters routes re-check access on every request; this page
+// gate is UX, the API gate is the security boundary.
+import { NewslettersIndex } from '@/components/admin/newsletters/NewslettersIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Newsletters"
+  subtitle="Write the monthly newsletter, test it, and send it to the mailing list."
+  wide
+>
+  <NewslettersIndex client:load />
+</AdminLayout>

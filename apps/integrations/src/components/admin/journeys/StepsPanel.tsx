@@ -474,6 +474,7 @@ function StepEditor({
               onChange={(content: BlockContent) => onChange({ content })}
               campaign={campaign}
               stepKey={step.key}
+              logoPicker
             />
             <div className="xl:sticky xl:top-4 xl:self-start">
               <EmailPreview

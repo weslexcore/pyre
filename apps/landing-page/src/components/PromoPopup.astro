@@ -106,13 +106,8 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
             data-popup-form
             class="mt-6 flex flex-col gap-3"
             novalidate
-            data-mailchimp-action={signupForm.mailchimp.action}
-            data-mailchimp-u={signupForm.mailchimp.audienceU}
-            data-mailchimp-id={signupForm.mailchimp.audienceId}
-            data-mailchimp-fid={signupForm.mailchimp.fId}
-            data-mailchimp-tag={signupForm.mailchimp.tagId}
-            data-honeypot={signupForm.mailchimp.honeypotFieldName}
             data-antispam={JSON.stringify(signupForm.antiSpam)}
+            data-turnstile={JSON.stringify(signupForm.turnstile)}
             data-success-message={promoConfig.form!.successMessage}
             data-redirect-href={promoConfig.form!.redirect?.href}
             data-redirect-delay={String(promoConfig.form!.redirect?.delayMs ?? 1200)}
@@ -131,9 +126,7 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
                 data-popup-email
               />
             </div>
-            <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
             <!-- Honeypot fields -->
-            <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
@@ -142,6 +135,9 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
             <Button type="submit" variant="primary" size="lg" class="btn-cta-animated w-full inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50">
               {promoConfig.form!.submitLabel}
             </Button>
+
+            <!-- Turnstile: invisible unless Cloudflare wants the visitor to click -->
+            <div class="flex justify-center empty:hidden" data-popup-turnstile></div>
 
             <p aria-live="polite" class="text-sm text-[var(--pyre-burnt-orange)] hidden" data-popup-error></p>
             <p role="status" class="text-sm text-green-400 hidden" data-popup-success></p>
@@ -221,6 +217,9 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
 </div>
 
 <script>
+  import { antiSpamFields, submitMailingListSignup } from '../lib/mailing-list';
+  import { loadTurnstileScript } from '../lib/turnstile-loader';
+
   (function () {
     let cleanup: (() => void) | null = null;
 
@@ -497,6 +496,49 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
         const handleHumanInput = () => { humanInput = true; };
         const handleFocusIn = () => { hasInteracted = true; };
 
+        // Turnstile, loaded once the visitor starts on the form. The widget is
+        // interaction-only, so most people never see it; the token arrives on
+        // its own a moment later.
+        const turnstileConfig = JSON.parse(popupForm.getAttribute('data-turnstile') || '{}');
+        const turnstileEl = popupForm.querySelector('[data-popup-turnstile]') as HTMLElement | null;
+        let turnstileToken = '';
+        let turnstileWidget: string | undefined;
+        let tokenWaiters: Array<(token: string) => void> = [];
+        const setToken = (token: string) => {
+          turnstileToken = token;
+          if (token) {
+            tokenWaiters.forEach((resolve) => resolve(token));
+            tokenWaiters = [];
+          }
+        };
+        let turnstileRequested = false;
+        const requestTurnstile = () => {
+          if (turnstileRequested || !turnstileConfig.siteKey || !turnstileEl) return;
+          turnstileRequested = true;
+          loadTurnstileScript()
+            .then(() => {
+              turnstileWidget = (window as any).turnstile.render(turnstileEl, {
+                sitekey: turnstileConfig.siteKey,
+                theme: 'dark',
+                appearance: 'interaction-only',
+                callback: setToken,
+                'error-callback': () => setToken(''),
+                'expired-callback': () => setToken(''),
+              });
+            })
+            .catch(() => { turnstileRequested = false; });
+        };
+        /** The token, waiting up to `ms` for one still on its way. */
+        const awaitToken = (ms: number) =>
+          turnstileToken
+            ? Promise.resolve(turnstileToken)
+            : new Promise<string>((resolve) => {
+                tokenWaiters.push(resolve);
+                setTimeout(() => resolve(turnstileToken), ms);
+              });
+        popupForm.addEventListener('focusin', requestTurnstile, { passive: true });
+        popupForm.addEventListener('input', requestTurnstile, { passive: true });
+
         if (antiSpamConfig.trackInteractions) {
           for (const type of ['mousemove', 'pointerdown', 'touchstart', 'keydown']) {
             document.addEventListener(type, handleHumanInput, { once: true, passive: true });
@@ -524,10 +566,6 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
           }
 
           // Honeypot checks
-          const honeypotName = popupForm.getAttribute('data-honeypot');
-          const honeypotInput = honeypotName ? popupForm.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
-          if (honeypotInput && honeypotInput.value.trim() !== '') return;
-
           const websiteInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
           const phoneInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
           const confirmEmailInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
@@ -545,106 +583,85 @@ if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
           const submitBtn = popupForm.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (submitBtn) submitBtn.disabled = true;
 
-          try {
-            const action = popupForm.getAttribute('data-mailchimp-action') || '';
-            const url = new URL(action);
-            url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
-            const params = new URLSearchParams(url.search);
-            params.set('EMAIL', email);
-            const tagValue = popupForm.querySelector('input[name="tags"]') as HTMLInputElement;
-            if (tagValue?.value) params.set('tags', tagValue.value);
-            const callbackName = '__mc_popup_' + Math.random().toString(36).slice(2);
-            params.set('c', callbackName);
-            const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
-
-            const script = document.createElement('script');
-            script.src = jsonpUrl;
-            script.async = true;
-
-            function scriptCleanup() {
-              try { delete (window as any)[callbackName]; } catch {}
-              if (script.parentNode) script.parentNode.removeChild(script);
-            }
-
-            (window as any)[callbackName] = function(response: any) {
-              scriptCleanup();
-              if (response?.result === 'success') {
-                if (successEl) {
-                  successEl.textContent = successMessage;
-                  successEl.classList.remove('hidden');
-                }
-                if (errorEl) errorEl.classList.add('hidden');
-
-                // PostHog tracking
-                if ((window as any).posthog) {
-                  const attribution = (window as any).pyreAttribution
-                    ? (window as any).pyreAttribution()
-                    : {};
-                  (window as any).posthog.identify(email);
-                  (window as any).posthog.people.set({
-                    email: email,
-                    signup_source: 'mailing_list',
-                    signup_date: new Date().toISOString(),
-                  });
-                  (window as any).posthog.capture('Mailing List Signup', {
-                    email,
-                    source: 'promo_popup',
-                    ...attribution,
-                  });
-                }
-
-                // Signed up. With a redirect, send the visitor on (same tab,
-                // so no popup blocker after the async JSONP callback) and show
-                // a fallback link meanwhile. Otherwise remove the popup after
-                // showing success (no tab).
-                const redirectHref = popupForm.getAttribute('data-redirect-href');
-                if (redirectHref) {
-                  try {
-                    localStorage.setItem(takenKey, '1');
-                  } catch {}
-                  const redirectLink = popupForm.querySelector('[data-popup-redirect-link]') as HTMLElement | null;
-                  redirectLink?.classList.remove('hidden');
-                  capture('promo_popup_redirected', { popup_id: popupId, href: redirectHref });
-                  const redirectDelay = Number(popupForm.getAttribute('data-redirect-delay')) || 1200;
-                  setTimeout(() => {
-                    window.location.href = redirectHref;
-                  }, redirectDelay);
-                } else {
-                  setTimeout(removeAll, 2000);
-                }
-              } else if (response?.msg) {
-                if (successEl) successEl.classList.add('hidden');
-                if (errorEl) {
-                  errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
-                  errorEl.classList.remove('hidden');
-                }
-                if (submitBtn) submitBtn.disabled = false;
-              } else {
-                if (successEl) successEl.classList.add('hidden');
-                if (errorEl) {
-                  errorEl.textContent = 'Something went wrong. Please try again.';
-                  errorEl.classList.remove('hidden');
-                }
-                if (submitBtn) submitBtn.disabled = false;
-              }
-            };
-
-            script.addEventListener('error', () => {
-              scriptCleanup();
-              if (submitBtn) submitBtn.disabled = false;
-              if (errorEl) {
-                errorEl.textContent = 'Something went wrong. Please try again.';
-                errorEl.classList.remove('hidden');
-              }
-            }, { once: true });
-
-            document.body.appendChild(script);
-          } catch {
-            if (submitBtn) submitBtn.disabled = false;
+          const showError = (message: string) => {
+            if (successEl) successEl.classList.add('hidden');
             if (errorEl) {
-              errorEl.textContent = 'Something went wrong. Please try again.';
+              errorEl.textContent = message;
               errorEl.classList.remove('hidden');
             }
+            if (submitBtn) submitBtn.disabled = false;
+          };
+
+          let token = '';
+          if (turnstileConfig.siteKey) {
+            requestTurnstile();
+            token = await awaitToken(10_000);
+            if (!token) {
+              showError('Please complete the security check.');
+              return;
+            }
+          }
+
+          const result = await submitMailingListSignup({
+            email,
+            list: 'newsletter',
+            source: 'promo_popup',
+            turnstileToken: token,
+            antiSpam: antiSpamFields(popupForm, antiSpamConfig),
+          });
+
+          // The token is spent either way; a retry needs a fresh one.
+          setToken('');
+          if (turnstileWidget && typeof (window as any).turnstile?.reset === 'function') {
+            try { (window as any).turnstile.reset(turnstileWidget); } catch {}
+          }
+
+          if (!result.ok) {
+            showError(result.error);
+            return;
+          }
+
+          if (successEl) {
+            successEl.textContent = successMessage;
+            successEl.classList.remove('hidden');
+          }
+          if (errorEl) errorEl.classList.add('hidden');
+
+          // PostHog tracking
+          if ((window as any).posthog) {
+            const attribution = (window as any).pyreAttribution
+              ? (window as any).pyreAttribution()
+              : {};
+            (window as any).posthog.identify(email);
+            (window as any).posthog.people.set({
+              email: email,
+              signup_source: 'mailing_list',
+              signup_date: new Date().toISOString(),
+            });
+            (window as any).posthog.capture('Mailing List Signup', {
+              email,
+              source: 'promo_popup',
+              ...attribution,
+            });
+          }
+
+          // Signed up. With a redirect, send the visitor on (same tab, so no
+          // popup blocker after the async request) and show a fallback link
+          // meanwhile. Otherwise remove the popup after showing success (no tab).
+          const redirectHref = popupForm.getAttribute('data-redirect-href');
+          if (redirectHref) {
+            try {
+              localStorage.setItem(takenKey, '1');
+            } catch {}
+            const redirectLink = popupForm.querySelector('[data-popup-redirect-link]') as HTMLElement | null;
+            redirectLink?.classList.remove('hidden');
+            capture('promo_popup_redirected', { popup_id: popupId, href: redirectHref });
+            const redirectDelay = Number(popupForm.getAttribute('data-redirect-delay')) || 1200;
+            setTimeout(() => {
+              window.location.href = redirectHref;
+            }, redirectDelay);
+          } else {
+            setTimeout(removeAll, 2000);
           }
         });
       }

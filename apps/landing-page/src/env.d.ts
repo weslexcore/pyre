@@ -24,6 +24,8 @@ interface ImportMetaEnv {
   // Partner verification hand-off to the integrations service
   readonly INTEGRATIONS_API_URL: string;
   readonly PARTNER_API_SECRET: string;
+  // Mailing-list sign-up hand-off to the integrations service (Resend contacts)
+  readonly MAILING_LIST_API_SECRET: string;
   // PostHog project token (client snippet + shared with integrations service)
   readonly POSTHOG_API_KEY: string;
   // PostHog query API (admin campaign performance)

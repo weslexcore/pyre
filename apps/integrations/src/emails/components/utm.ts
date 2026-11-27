@@ -15,9 +15,14 @@
 // URL) — extra params can break them, and click attribution for those comes
 // from Resend's click webhook instead.
 
-export function emailLink(url: string, campaign: string, content?: string): string {
+export function emailLink(
+  url: string,
+  campaign: string,
+  content?: string,
+  source: EmailUtmSource = 'lifecycle'
+): string {
   const u = new URL(url);
-  u.searchParams.set('utm_source', 'lifecycle');
+  u.searchParams.set('utm_source', source);
   u.searchParams.set('utm_medium', 'email');
   u.searchParams.set('utm_campaign', campaign);
   if (content) u.searchParams.set('utm_content', content);
@@ -78,12 +83,24 @@ export function isTaggedHost(href: string): boolean {
   }
 }
 
+/**
+ * Where a dashboard-built email goes out from: `lifecycle` for journey steps,
+ * `newsletter` for the monthly broadcast (matching the Campaigns tool's
+ * email-newsletter placement).
+ */
+export type EmailUtmSource = 'lifecycle' | 'newsletter';
+
 /** The link as it will be sent: tagged when it points at our site or Momence. */
-export function journeyLink(href: string, campaign: string, content: string): string {
+export function journeyLink(
+  href: string,
+  campaign: string,
+  content: string,
+  source: EmailUtmSource = 'lifecycle'
+): string {
   if (!isTaggedHost(href)) return href;
   const url = new URL(href);
   const tags: [string, string][] = [
-    ['utm_source', 'lifecycle'],
+    ['utm_source', source],
     ['utm_medium', 'email'],
     ['utm_campaign', campaign],
     ['utm_content', content],

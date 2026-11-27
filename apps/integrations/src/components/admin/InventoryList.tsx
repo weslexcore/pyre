@@ -243,16 +243,28 @@ export function InventoryList() {
     if (link.item) setHighlight(link.item);
   }, []);
 
+  // Scroll to a highlighted item once, when its row first renders. Not on
+  // every refetch: a scroll closes any open row menu (RowMenu), so a person who
+  // opens one just after adding an item would see it snap shut.
+  const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
     if (!highlight || !data) return;
     // A link to an inactive item (from global search) opens the Inactive list.
     if (data.items.find((i) => i.id === highlight)?.active === false) {
       setQuery((q) => (q.filter === 'inactive' ? q : { ...q, filter: 'inactive' }));
     }
-    document.getElementById(`item-${highlight}`)?.scrollIntoView({ block: 'center' });
+    if (scrolledTo.current === highlight) return;
+    const row = document.getElementById(`item-${highlight}`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+    scrolledTo.current = highlight;
+  }, [highlight, data]);
+
+  useEffect(() => {
+    if (!highlight) return;
     const timer = setTimeout(() => setHighlight(null), 4000);
     return () => clearTimeout(timer);
-  }, [highlight, data]);
+  }, [highlight]);
 
   const items = data?.items ?? [];
   const vendors = useMemo(() => distinctValues(items, 'vendor'), [items]);

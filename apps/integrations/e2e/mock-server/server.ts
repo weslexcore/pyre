@@ -127,7 +127,8 @@ await runMockServer({
         return { json: { data: body.map(() => ({ id: `e2e-email-${++emailId}` })) } };
       },
     },
-    // Audience contacts: the unsubscribe and suppression paths mark them.
+    // The suppression path marks contacts created before the mailing list
+    // moved to Supabase as unsubscribed.
     {
       method: 'PATCH',
       path: /^\/resend\/contacts\/[^/]+$/,

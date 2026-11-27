@@ -10,7 +10,10 @@ import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
+import { NewsletterEmail } from './templates/NewsletterEmail';
 import { PartnerDenied } from './templates/PartnerDenied';
+import { PartnerMemberConfirm } from './templates/PartnerMemberConfirm';
+import { PartnerMemberVerified } from './templates/PartnerMemberVerified';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
@@ -29,10 +32,13 @@ import type { EmailPropsByTemplate } from './types';
 export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailPropsByTemplate[K] } = {
   confirmation: sampleConfirmationProps,
   journey: JourneyEmail.PreviewProps,
+  newsletter: NewsletterEmail.PreviewProps,
   'partner-verification-request': PartnerVerificationRequest.PreviewProps,
   'partner-verified': PartnerVerified.PreviewProps,
   'partner-denied': PartnerDenied.PreviewProps,
   'partner-reconciliation': PartnerReconciliation.PreviewProps,
+  'partner-member-confirm': PartnerMemberConfirm.PreviewProps,
+  'partner-member-verified': PartnerMemberVerified.PreviewProps,
   'referral-redeemed': ReferralRedeemed.PreviewProps,
   'referral-reward-earned': ReferralRewardEarned.PreviewProps,
   'admin-message': AdminMessage.PreviewProps,

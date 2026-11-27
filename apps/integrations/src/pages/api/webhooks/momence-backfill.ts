@@ -4,9 +4,9 @@ import {
   upsertSubscriber,
   type WebhookTracer,
 } from '@pyre/webhook-core';
-import { upsertResendContact } from '@/lib/email/audience';
 import { hasBearer } from '@/lib/http/bearer';
 import { json } from '@/lib/http/route';
+import { subscribeToMailingList } from '@/lib/mailing-list/subscribe';
 import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/momence/members';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 
@@ -56,17 +56,24 @@ async function syncMember(
       });
     }
 
+    // 'resend' is the old name for the mailing list (newsletter_subscribers),
+    // kept so existing backfill commands still work.
     if (target === 'resend' || target === 'both') {
-      await tracer.span(
-        `Upsert Resend contact: ${member.email}`,
+      const joined = await tracer.span(
+        `Add to mailing list: ${member.email}`,
         () =>
-          upsertResendContact({
+          subscribeToMailingList({
             email: member.email,
             firstName: member.firstName,
             lastName: member.lastName,
+            list: 'newsletter',
+            source: 'momence',
           }),
         { email: member.email }
       );
+      if (joined.outcome === 'unavailable') {
+        throw new Error(`Mailing list unavailable: ${joined.reason}`);
+      }
     }
 
     return { success: true };

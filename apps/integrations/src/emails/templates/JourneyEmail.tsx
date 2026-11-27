@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { isSafeHref } from '@/lib/email/journeys/inline-markdown';
-import { BUTTON_COLORS, type EmailBlockInput } from '@/lib/email/journeys/schema';
+import { BUTTON_COLORS, type EmailBlockInput, type TextAlign } from '@/lib/email/journeys/schema';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
-import { journeyLink, journeyLinkContent } from '../components/utm';
+import { type EmailUtmSource, journeyLink, journeyLinkContent } from '../components/utm';
 import type { JourneyEmailProps } from '../types';
 
 // The one template behind every dashboard-built journey email: an ordered list
@@ -50,16 +50,29 @@ function plainText(node: HastNode | undefined): string {
   return (node.children ?? []).map((c) => plainText(c as HastNode)).join('');
 }
 
-function markdownComponents(campaign: string, stepKey?: string): Components {
+/**
+ * A style lined up as the block asks. Set on each element rather than a
+ * wrapper, since some mail clients (desktop Outlook) don't pass text-align
+ * down. Unset leaves the style as it was, so older emails render unchanged.
+ */
+const aligned = <S extends object>(style: S, align: TextAlign | undefined) =>
+  align ? { ...style, textAlign: align } : style;
+
+function markdownComponents(
+  campaign: string,
+  stepKey: string | undefined,
+  source: EmailUtmSource,
+  align?: TextAlign
+): Components {
   return {
-    h1: ({ children }) => <Text style={heading}>{children}</Text>,
-    h2: ({ children }) => <Text style={subheading}>{children}</Text>,
-    h3: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h4: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h5: ({ children }) => <Text style={minorHeading}>{children}</Text>,
-    h6: ({ children }) => <Text style={minorHeading}>{children}</Text>,
+    h1: ({ children }) => <Text style={aligned(heading, align)}>{children}</Text>,
+    h2: ({ children }) => <Text style={aligned(subheading, align)}>{children}</Text>,
+    h3: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h4: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h5: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
+    h6: ({ children }) => <Text style={aligned(minorHeading, align)}>{children}</Text>,
     // pre-line keeps a single line break the author typed, as plain text did.
-    p: ({ children }) => <Text style={text}>{children}</Text>,
+    p: ({ children }) => <Text style={aligned(text, align)}>{children}</Text>,
     ul: ({ children }) => <ul style={list}>{children}</ul>,
     ol: ({ children, start }) => (
       <ol style={list} start={start}>
@@ -69,7 +82,7 @@ function markdownComponents(campaign: string, stepKey?: string): Components {
     li: ({ children }) => <li style={listItem}>{children}</li>,
     // A checkbox input is stripped or drawn oddly by most mail clients.
     input: ({ checked }) => <span>{checked ? '☑ ' : '☐ '}</span>,
-    blockquote: ({ children }) => <div style={quote}>{children}</div>,
+    blockquote: ({ children }) => <div style={aligned(quote, align)}>{children}</div>,
     code: ({ children }) => <code style={inlineCode}>{children}</code>,
     hr: () => <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />,
     a: ({ children, href, node }) => {
@@ -77,7 +90,7 @@ function markdownComponents(campaign: string, stepKey?: string): Components {
       const label = plainText(node) || href;
       return (
         <Link
-          href={journeyLink(href, campaign, journeyLinkContent(stepKey, label, href))}
+          href={journeyLink(href, campaign, journeyLinkContent(stepKey, label, href), source)}
           style={linkStyle}
         >
           {children}
@@ -100,15 +113,19 @@ function Markdown({
   source,
   campaign,
   stepKey,
+  utmSource,
   inline = false,
+  align,
 }: {
   source: string;
   campaign: string;
   stepKey?: string;
+  utmSource: EmailUtmSource;
   /** Inside an existing line (a bullet, the sign-off): no paragraph wrapper. */
   inline?: boolean;
+  align?: TextAlign;
 }): ReactNode {
-  const components = markdownComponents(campaign, stepKey);
+  const components = markdownComponents(campaign, stepKey, utmSource, align);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -123,30 +140,51 @@ function Block({
   block,
   campaign,
   stepKey,
+  utmSource,
 }: {
   block: EmailBlockInput;
   campaign: string;
   stepKey?: string;
+  utmSource: EmailUtmSource;
 }): ReactNode {
   switch (block.type) {
     case 'heading':
-      return <Text style={heading}>{block.text}</Text>;
+      return <Text style={aligned(heading, block.align)}>{block.text}</Text>;
     case 'paragraph':
-      return <Markdown source={block.text} campaign={campaign} stepKey={stepKey} />;
+      return (
+        <Markdown
+          source={block.text}
+          campaign={campaign}
+          stepKey={stepKey}
+          utmSource={utmSource}
+          align={block.align}
+        />
+      );
     case 'list':
       return (
         <ul style={list}>
           {block.items.map((item, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
             <li key={i} style={listItem}>
-              <Markdown source={item} campaign={campaign} stepKey={stepKey} inline />
+              <Markdown
+                source={item}
+                campaign={campaign}
+                stepKey={stepKey}
+                utmSource={utmSource}
+                inline
+              />
             </li>
           ))}
         </ul>
       );
     case 'button': {
       if (!block.label || !isSafeHref(block.url)) return null;
-      const href = journeyLink(block.url, campaign, journeyLinkContent(stepKey, block.label));
+      const href = journeyLink(
+        block.url,
+        campaign,
+        journeyLinkContent(stepKey, block.label),
+        utmSource
+      );
       const color = BUTTON_COLORS[block.color ?? 'red'] ?? BUTTON_COLORS.red;
       if (block.style === 'link') {
         return (
@@ -179,7 +217,14 @@ function Block({
       );
     }
     case 'divider':
-      return <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />;
+      return (
+        <Hr
+          style={{
+            borderColor: block.color ? BUTTON_COLORS[block.color].hex : COLORS.sky,
+            margin: '28px 0 20px',
+          }}
+        />
+      );
     case 'image': {
       if (!isSafeHref(block.src)) return null;
       const img = (
@@ -195,7 +240,8 @@ function Block({
           href={journeyLink(
             block.href,
             campaign,
-            journeyLinkContent(stepKey, block.alt || 'image')
+            journeyLinkContent(stepKey, block.alt || 'image'),
+            utmSource
           )}
         >
           {img}
@@ -207,26 +253,61 @@ function Block({
     case 'signoff':
       return (
         <Text style={text}>
-          <Markdown source={block.text} campaign={campaign} stepKey={stepKey} inline />
+          <Markdown
+            source={block.text}
+            campaign={campaign}
+            stepKey={stepKey}
+            utmSource={utmSource}
+            inline
+          />
         </Text>
       );
   }
 }
 
+/**
+ * The body of a dashboard-built email: its blocks, in order, with every link
+ * tagged. Shared by journey steps and the newsletter, which differ only in
+ * utm_source and in the unsubscribe link their footer carries.
+ */
+export function EmailBlocks({
+  blocks,
+  campaign,
+  stepKey,
+  utmSource = 'lifecycle',
+}: {
+  blocks: EmailBlockInput[];
+  campaign: string;
+  stepKey?: string;
+  utmSource?: EmailUtmSource;
+}) {
+  return (
+    <>
+      {blocks.map((block, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
+        <Block key={i} block={block} campaign={campaign} stepKey={stepKey} utmSource={utmSource} />
+      ))}
+    </>
+  );
+}
+
 export function JourneyEmail({
   preview,
   background,
+  logo,
   blocks,
   campaign,
   stepKey,
   unsubscribeUrl,
 }: JourneyEmailProps) {
   return (
-    <EmailLayout preview={preview} background={background} unsubscribeUrl={unsubscribeUrl}>
-      {blocks.map((block, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-        <Block key={i} block={block} campaign={campaign} stepKey={stepKey} />
-      ))}
+    <EmailLayout
+      preview={preview}
+      background={background}
+      logo={logo}
+      unsubscribeUrl={unsubscribeUrl}
+    >
+      <EmailBlocks blocks={blocks} campaign={campaign} stepKey={stepKey} />
     </EmailLayout>
   );
 }

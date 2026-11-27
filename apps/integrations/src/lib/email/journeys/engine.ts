@@ -960,6 +960,7 @@ async function runDueStep(
       subject: content.subject,
       preview: content.preview,
       background: content.background,
+      logo: content.logo,
       blocks: content.blocks,
       campaign: journeyCampaign(journey.id, journey.definition),
       stepKey: step.key,

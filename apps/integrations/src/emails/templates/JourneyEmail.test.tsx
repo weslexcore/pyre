@@ -98,6 +98,34 @@ describe('JourneyEmail', () => {
     expect(out).toMatch(/background-color:#d15232/);
   });
 
+  it('draws dividers in the chosen color, and sky blue when none was chosen', async () => {
+    const hrStyles = (out: string) =>
+      [...out.matchAll(/<hr[^>]*style="([^"]*)"/g)].map((m) => m[1]);
+    const out = await html([{ type: 'divider', color: 'gold' }, { type: 'divider' }]);
+    const [gold, plain] = hrStyles(out);
+    expect(gold).toContain('#dbb155');
+    expect(plain).toContain('#3991b7');
+  });
+
+  it('lines up headings and text as each block asks, in a journey too', async () => {
+    const out = await html([
+      { type: 'heading', text: 'Centered', align: 'center' },
+      { type: 'paragraph', text: 'Justified', align: 'justify' },
+    ]);
+    expect(out).toMatch(/<p[^>]*style="[^"]*text-align:center[^"]*"[^>]*>Centered/);
+    expect(out).toMatch(/<p[^>]*style="[^"]*text-align:justify[^"]*"[^>]*>Justified/);
+  });
+
+  it("shows the step's own logo, no logo, or Pyre's when none was chosen", async () => {
+    const own = 'https://example.supabase.co/storage/v1/object/public/email-media/2026-11/b.png';
+    const withLogo = (logo?: string) => render(<JourneyEmail {...base} logo={logo} />);
+    expect(await withLogo()).toContain('logo-header-creme.png');
+    const custom = await withLogo(own);
+    expect(custom).toContain(own);
+    expect(custom).not.toContain('logo-header-creme.png');
+    expect(await withLogo('none')).not.toContain('alt="Pyre"');
+  });
+
   it('drops buttons and images with unsafe URLs', async () => {
     const out = await html([
       { type: 'button', label: 'Bad', url: 'javascript:alert(1)' },

@@ -240,8 +240,40 @@ export type JourneyAction = z.infer<typeof actionSchema>;
 // --- Email content ---
 
 export const EMAIL_BACKGROUNDS = ['trees', 'clouds', 'lamps'] as const;
+export type EmailBackgroundPreset = (typeof EMAIL_BACKGROUNDS)[number];
 
-/** Button colors — the Pyre brand palette (hex, since email clients need it). */
+/** An image address an email can use: http(s), and nothing that could break out of CSS url(). */
+export const EMAIL_IMAGE_URL_RE = /^https?:\/\/[^\s"'()<>{}\\]+$/;
+
+export function isBackgroundPreset(value: string): value is EmailBackgroundPreset {
+  return (EMAIL_BACKGROUNDS as readonly string[]).includes(value);
+}
+
+/** One of the Pyre photos, or the address of an uploaded one (/api/admin/email-media). */
+export const emailBackgroundSchema = z.union([
+  z.enum(EMAIL_BACKGROUNDS),
+  z
+    .string()
+    .trim()
+    .max(1000)
+    .regex(EMAIL_IMAGE_URL_RE, 'A background must be one of the photos or an uploaded image'),
+]);
+
+/**
+ * The logo at the top of the email: Pyre's, none, or the address of an
+ * uploaded one. Journey and newsletter emails both offer the choice; unset
+ * (every email saved before it existed) is Pyre's.
+ */
+export const emailLogoSchema = z.union([
+  z.enum(['pyre', 'none']),
+  z
+    .string()
+    .trim()
+    .max(1000)
+    .regex(EMAIL_IMAGE_URL_RE, "A logo must be Pyre's, none, or an uploaded image"),
+]);
+
+/** Button and divider colors — the Pyre brand palette (hex, since email clients need it). */
 export const BUTTON_COLORS = {
   red: { label: 'Ember red', hex: '#d15232', text: '#f5f1e9' },
   sky: { label: 'Sky blue', hex: '#3991b7', text: '#f5f1e9' },
@@ -260,10 +292,15 @@ export const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
   link: 'Text link',
 };
 
+export const TEXT_ALIGNS = ['left', 'center', 'right', 'justify'] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+/** How a heading or text block lines up; unset is left. */
+const textAlignSchema = z.enum(TEXT_ALIGNS).optional();
+
 export const blockSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('heading'), text: z.string().max(200) }),
+  z.object({ type: z.literal('heading'), text: z.string().max(200), align: textAlignSchema }),
   /** Markdown (GFM): headings, lists, quotes, bold/italic, links, images. */
-  z.object({ type: z.literal('paragraph'), text: z.string().max(5000) }),
+  z.object({ type: z.literal('paragraph'), text: z.string().max(5000), align: textAlignSchema }),
   z.object({ type: z.literal('list'), items: z.array(z.string().max(500)).max(20) }),
   z.object({
     type: z.literal('button'),
@@ -276,7 +313,11 @@ export const blockSchema = z.discriminatedUnion('type', [
     /** Stretch across the email's width. */
     fullWidth: z.boolean().default(false),
   }),
-  z.object({ type: z.literal('divider') }),
+  z.object({
+    type: z.literal('divider'),
+    /** Brand color (see BUTTON_COLORS); unset is sky blue, as dividers always were. */
+    color: z.enum(BUTTON_COLOR_KEYS).optional(),
+  }),
   z.object({
     type: z.literal('image'),
     src: z.string().max(1000),
@@ -293,10 +334,12 @@ export type EmailBlockType = EmailBlock['type'];
 
 export const blockContentSchema = z.object({
   type: z.literal('blocks'),
-  subject: z.string().trim().min(1).max(200),
+  subject: z.string().trim().min(1, 'The email needs a subject line.').max(200),
   /** Inbox preview line. */
   preview: z.string().max(200).default(''),
-  background: z.enum(EMAIL_BACKGROUNDS).default('trees'),
+  background: emailBackgroundSchema.default('trees'),
+  /** Unset means Pyre's logo (see emailLogoSchema). */
+  logo: emailLogoSchema.optional(),
   blocks: z.array(blockSchema).max(60),
 });
 

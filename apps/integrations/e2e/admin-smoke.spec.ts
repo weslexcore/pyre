@@ -40,6 +40,7 @@ const PAGES: Record<string, Expected> = {
   '/admin/shift-notes': { heading: 'Shift Notes' },
   '/admin/boards': { heading: 'Goals & Boards' },
   '/admin/journeys': { heading: 'Journeys' },
+  '/admin/newsletters': { heading: 'Newsletters' },
   '/admin/email-templates': { heading: 'Email Templates' },
   '/admin/campaigns': { heading: 'Campaigns' },
   '/admin/partners': { heading: 'Partner Discounts' },

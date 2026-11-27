@@ -1,0 +1,170 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import Button from '../components/Button.astro';
+import CtaTracking from '../components/CtaTracking.astro';
+import MemberPerkForm from '../components/MemberPerkForm.astro';
+import Layout from '../layouts/main.astro';
+import content from '../lib/memberPerks';
+
+// Member perks: what Pyre members get at partner businesses, and the form
+// that asks us to vouch for them. The reverse of the partner landing pages
+// (PartnerLanding.astro). All copy lives in lib/memberPerks.ts.
+---
+
+<Layout
+  title={content.meta.title}
+  description={content.meta.description}
+  ogImage={content.hero.image.src.src}
+  ogImageWidth={content.hero.image.src.width}
+  ogImageHeight={content.hero.image.src.height}
+  noIndex={true}
+  hidePromos={true}
+  transparentNav={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-[70dvh] flex items-center justify-center overflow-hidden">
+      <Image
+        src={content.hero.image.src}
+        alt={content.hero.image.alt}
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center"
+        style={content.hero.image.position && `object-position: ${content.hero.image.position}`}
+        loading="eager"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/65"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/30 to-[var(--pyre-black)]/50"></div>
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4">
+          {content.hero.eyebrow}
+        </p>
+        <h1 class="font-primary-semibold text-[clamp(2.25rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] whitespace-pre-line text-balance mb-4 md:mb-6">
+          {content.hero.title}
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">{content.hero.subtitle}</p>
+      </div>
+    </section>
+
+    <!-- Partners -->
+    <section aria-labelledby="partners-heading" class="py-16 md:py-24 px-4">
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <h2
+            id="partners-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {content.partners.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">{content.partners.subtitle}</p>
+        </div>
+
+        <ul class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          {content.partners.items.map((partner) => (
+            <li class="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
+              <Image
+                src={partner.image.src}
+                alt={partner.image.alt}
+                widths={[400, 640, 960]}
+                sizes="(min-width: 768px) 33vw, 100vw"
+                class="w-full aspect-[4/3] object-cover"
+                style={partner.image.position && `object-position: ${partner.image.position}`}
+                loading="lazy"
+                decoding="async"
+              />
+              <div class="flex flex-col flex-1 p-5 md:p-6">
+              <p class="font-mono-bold text-[10px] uppercase tracking-wide opacity-60 mb-2">
+                {partner.where}
+              </p>
+              <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">{partner.name}</h3>
+              <p class="font-primary-semibold text-2xl text-[var(--pyre-muted-gold)] leading-tight mb-3">
+                {partner.perk}
+              </p>
+              <p class="text-sm opacity-70 mb-5 flex-1">{partner.description}</p>
+              <Button
+                href={`#perk-${partner.slug}`}
+                variant="outline"
+                size="md"
+                ariaLabel={`${content.partners.claimLabel} at ${partner.name}`}
+                data-track-placement={`perks_${partner.slug.replace(/-/g, '_')}`}
+              >
+                {content.partners.claimLabel}
+              </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- Verify -->
+    <section
+      id="verify"
+      aria-labelledby="verify-heading"
+      class="border-t border-current/10 py-16 md:py-24 px-4 scroll-mt-24"
+    >
+      <div class="max-w-4xl mx-auto">
+        <div class="relative border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 md:p-10 shadow-lg">
+          <!-- Claim links land here (#perk-<slug>); the form reads the hash to pick the partner. -->
+          {content.partners.items.map((partner) => (
+            <span id={`perk-${partner.slug}`} class="block relative -top-24" aria-hidden="true"></span>
+          ))}
+          <div class="text-center mb-8">
+            <h2
+              id="verify-heading"
+              class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-2"
+            >
+              {content.form.title}
+            </h2>
+            <p class="text-base md:text-lg opacity-80">{content.form.subtitle}</p>
+          </div>
+
+          <div class="mb-10">
+            <MemberPerkForm partners={content.partners.items} copy={content.form} />
+          </div>
+
+          <h3 class="sr-only">{content.steps.title}</h3>
+          <ol class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            {content.steps.items.map((step, index) => (
+              <li class="border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 p-5">
+                <span class="font-primary-semibold text-3xl text-[var(--pyre-muted-gold)] leading-none block mb-2">
+                  {index + 1}
+                </span>
+                <h4 class="font-mono-bold text-sm uppercase tracking-wide mb-1">{step.title}</h4>
+                <p class="text-sm opacity-70">{step.description}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Not a member -->
+    <section aria-labelledby="not-member-heading" class="border-t border-current/10 py-16 md:py-20 px-4">
+      <div class="max-w-xl mx-auto text-center">
+        <h2
+          id="not-member-heading"
+          class="font-primary-semibold text-[clamp(1.5rem,3.5vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
+        >
+          {content.notMember.title}
+        </h2>
+        <p class="text-base md:text-lg opacity-80 mb-6">{content.notMember.body}</p>
+        <Button
+          href={content.notMember.cta.href}
+          variant="primary"
+          size="lg"
+          ariaLabel={content.notMember.cta.ariaLabel}
+          data-track-placement="perks_memberships"
+        >
+          {content.notMember.cta.label}
+        </Button>
+        <p class="mt-10 text-xs opacity-50 italic">{content.disclaimer}</p>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<CtaTracking />

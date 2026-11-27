@@ -9,12 +9,14 @@ import { markResendContactUnsubscribed } from './audience';
 
 export type SuppressionReason = 'unsubscribe' | 'complaint' | 'bounce' | 'momence' | 'manual';
 
-export async function isSuppressed(email: string): Promise<boolean> {
+/**
+ * Whether an address is on the suppression list: true, false, or null when the
+ * list cannot be read (no database, or the lookup failed). Callers decide what
+ * an unknown answer means for them.
+ */
+export async function lookupSuppression(email: string): Promise<boolean | null> {
   const db = getDb();
-  // Fail CLOSED for marketing email: without the suppression store we cannot
-  // prove consent, so treat everyone as suppressed rather than risk emailing
-  // someone who opted out.
-  if (!db) return true;
+  if (!db) return null;
 
   const { data, error } = await db
     .from('email_suppressions')
@@ -24,10 +26,17 @@ export async function isSuppressed(email: string): Promise<boolean> {
 
   if (error) {
     console.error(`[Suppression] Lookup failed for ${email}: ${error.message}`);
-    return true;
+    return null;
   }
 
   return data !== null;
+}
+
+export async function isSuppressed(email: string): Promise<boolean> {
+  // Fail CLOSED for marketing email: without the suppression store we cannot
+  // prove consent, so treat everyone as suppressed rather than risk emailing
+  // someone who opted out.
+  return (await lookupSuppression(email)) ?? true;
 }
 
 export type SuppressionMirror = 'resend' | 'mailchimp';

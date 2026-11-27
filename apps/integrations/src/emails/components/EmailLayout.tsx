@@ -4,17 +4,19 @@ import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
 import { EmailFooter } from './EmailFooter';
 import { EmailHeader } from './EmailHeader';
+import type { EmailUtmSource } from './utm';
 
 // Re-exported so existing templates importing COLORS from here keep working.
 export { COLORS };
 
-export type EmailBackground = 'clouds' | 'trees' | 'lamps';
+/** A preset photo, or the address of an uploaded image (journey and newsletter emails). */
+export type EmailBackground = 'clouds' | 'trees' | 'lamps' | (string & {});
 
-const BACKGROUND_IMAGES: Record<EmailBackground, string> = {
-  clouds: 'bg-clouds.jpg',
-  trees: 'bg-trees.jpg',
-  lamps: 'bg-lamps.png',
-};
+const BACKGROUND_IMAGES = new Map<string, string>([
+  ['clouds', 'bg-clouds.jpg'],
+  ['trees', 'bg-trees.jpg'],
+  ['lamps', 'bg-lamps.png'],
+]);
 
 const main = {
   backgroundColor: COLORS.black,
@@ -27,9 +29,16 @@ const main = {
 // Background image lives on a full-width Section (not Body) because Gmail can
 // strip body styles. Clients without background-image support (desktop
 // Outlook) fall back to the solid color.
+// An uploaded image is used as is; its address was checked on save
+// (emailBackgroundSchema), so it can't break out of url().
+const backgroundUrl = (background: EmailBackground) => {
+  const preset = BACKGROUND_IMAGES.get(background);
+  return preset ? `${ASSET_BASE}/${preset}` : background;
+};
+
 const backdrop = (background: EmailBackground) => ({
   backgroundColor: COLORS.black,
-  backgroundImage: `url(${ASSET_BASE}/${BACKGROUND_IMAGES[background]})`,
+  backgroundImage: `url(${backgroundUrl(background)})`,
   backgroundSize: 'cover',
   backgroundPosition: 'center top',
   backgroundRepeat: 'no-repeat',
@@ -57,16 +66,22 @@ interface EmailLayoutProps {
   preview: string;
   children: ReactNode;
   background?: EmailBackground;
+  /** The header logo; see EmailHeader. */
+  logo?: string;
   unsubscribeUrl?: string;
   preferencesUrl?: string;
+  /** utm_source for the footer's own links. */
+  utmSource?: EmailUtmSource;
 }
 
 export function EmailLayout({
   preview,
   children,
   background = 'clouds',
+  logo,
   unsubscribeUrl,
   preferencesUrl,
+  utmSource,
 }: EmailLayoutProps) {
   return (
     <Html lang="en">
@@ -75,9 +90,13 @@ export function EmailLayout({
       <Body style={main}>
         <Section style={backdrop(background)}>
           <Container style={container}>
-            <EmailHeader />
+            <EmailHeader logo={logo} />
             <Section style={bodyInset}>{children}</Section>
-            <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
+            <EmailFooter
+              unsubscribeUrl={unsubscribeUrl}
+              preferencesUrl={preferencesUrl}
+              utmSource={utmSource}
+            />
           </Container>
         </Section>
       </Body>

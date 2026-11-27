@@ -4,14 +4,14 @@
 // gives each test a calendar week of its own (schedule-helpers.ts) and
 // removes every draft, request, proposal and conversation it made there.
 
-import type { APIRequestContext, Page } from '@playwright/test';
-import { uniqueTag } from '@pyre/e2e-utils';
+import { type APIRequestContext, type Page, request as playwrightRequest } from '@playwright/test';
+import { ensureAuthUser, uniqueTag } from '@pyre/e2e-utils';
 import { addDays, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AGENT_API_SECRET, AGENTS_PATH } from './agent-secrets';
 import type { EveSessionView, EveState, ScriptTurn } from './mock-server/eve';
-import { MOCK_URL } from './ports';
-import { OFF_SHIFT_DUTY, type Role } from './roles';
+import { APP_URL, MOCK_URL } from './ports';
+import { ADMIN, OFF_SHIFT_DUTY, PASSWORD, type Role, SCHEDULER } from './roles';
 import { test as base, expect } from './schedule-helpers';
 import { open } from './test';
 
@@ -65,6 +65,15 @@ export const eve = {
       body: JSON.stringify({ state }),
     });
     expect(response.ok, `move ${id} to ${state}`).toBe(true);
+  },
+  /** Release the real completion callback after the routine start has returned. */
+  async reportRoutine(id: string): Promise<void> {
+    const response = await fetch(
+      `${MOCK_URL}${AGENTS_PATH}/__sessions/${encodeURIComponent(id)}/report-routine`,
+      { method: 'POST' }
+    );
+    expect(response.status, 'report routine completion').toBe(200);
+    expect(await response.json()).toEqual({ ok: true, closed: true });
   },
 };
 
@@ -249,6 +258,8 @@ interface AgentFixtures {
   marker: string;
   /** A day of this test's week, YYYY-MM-DD. */
   dayOf: (offset: number) => string;
+  /** A private identity so concurrent repeats cannot revoke each other's grant. */
+  revocableScheduler: { email: string; id: string; client: APIRequestContext };
 }
 
 export const test = base.extend<AgentFixtures>({
@@ -269,6 +280,44 @@ export const test = base.extend<AgentFixtures>({
   },
   dayOf: async ({ week }, use) => {
     await use((offset) => addDays(week, offset));
+  },
+  revocableScheduler: async ({ db, as, marker }, use) => {
+    const email = `${marker.toLowerCase()}@e2e.test`;
+    const userId = await ensureAuthUser(db, { email, password: PASSWORD, displayName: marker });
+    const admin = await as(ADMIN);
+    const client = await playwrightRequest.newContext({ baseURL: APP_URL });
+    let id: string | undefined;
+    try {
+      const inserted = await db
+        .from('staff')
+        .insert({
+          email,
+          user_id: userId,
+          display_name: marker,
+          active: true,
+          pages: SCHEDULER.pages,
+        })
+        .select('id')
+        .single();
+      check(inserted.error, 'seed private scheduler');
+      id = inserted.data!.id as string;
+      // Use the real update route to invalidate the app's cached staff roster.
+      const grant = await admin.patch('/api/admin/users', { data: { id, pages: SCHEDULER.pages } });
+      expect(grant.status(), await grant.text()).toBe(200);
+      const login = await client.post('/api/auth/password', {
+        data: { email, password: PASSWORD },
+      });
+      expect(login.status(), await login.text()).toBe(200);
+      await use({ email, id, client });
+    } finally {
+      await client.dispose();
+      if (id) {
+        const removed = await admin.delete(`/api/admin/users?id=${encodeURIComponent(id)}`);
+        expect(removed.status(), await removed.text()).toBe(200);
+      } else {
+        check((await db.auth.admin.deleteUser(userId)).error, 'remove private scheduler login');
+      }
+    }
   },
 });
 

@@ -1,4 +1,5 @@
 ---
+import type { MailingList } from '../lib/mailing-list';
 import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
@@ -6,7 +7,8 @@ import SectionDivider from './SectionDivider.astro';
 interface Props {
   variant?: 'default' | 'compact';
   formKey?: string;
-  tagId?: string;
+  /** Which list besides the newsletter, if any (the volunteer page's form). */
+  list?: MailingList;
   posthogSource?: string;
   title?: string;
   subtitle?: string;
@@ -16,7 +18,7 @@ interface Props {
 const {
   variant = 'default',
   formKey,
-  tagId,
+  list = 'newsletter',
   posthogSource,
   title,
   subtitle,
@@ -24,7 +26,6 @@ const {
 } = Astro.props;
 const isCompact = variant === 'compact';
 
-const resolvedTagId = tagId ?? signupForm.mailchimp.tagId;
 const resolvedPosthogSource = posthogSource ?? 'website_form';
 const resolvedTitle = title ?? signupForm.elements.title;
 const resolvedSubtitle = subtitle ?? signupForm.elements.subtitle;
@@ -92,11 +93,10 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         <form
           class={formClass}
           method="POST"
-          action={signupForm.mailchimp.action}
           novalidate
           data-signup-form
           data-turnstile-theme={turnstileTheme}
-          data-honeypot={signupForm.mailchimp.honeypotFieldName}
+          data-list={list}
           data-antispam={JSON.stringify(signupForm.antiSpam)}
           data-turnstile={JSON.stringify(signupForm.turnstile)}
           data-posthog-source={resolvedPosthogSource}
@@ -116,9 +116,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
               data-signup-email
             />
           </div>
-          <input type="hidden" name="tags" value={resolvedTagId} />
           <!-- Honeypot fields -->
-          <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
           <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
           <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
           <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
@@ -159,11 +157,10 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           <form
             class={formClass}
             method="POST"
-            action={signupForm.mailchimp.action}
             novalidate
             data-signup-form
             data-turnstile-theme={turnstileTheme}
-            data-honeypot={signupForm.mailchimp.honeypotFieldName}
+            data-list={list}
             data-antispam={JSON.stringify(signupForm.antiSpam)}
             data-turnstile={JSON.stringify(signupForm.turnstile)}
             data-posthog-source={resolvedPosthogSource}
@@ -183,9 +180,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
                 data-signup-email
               />
             </div>
-            <input type="hidden" name="tags" value={resolvedTagId} />
             <!-- Honeypot fields -->
-            <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
@@ -209,6 +204,8 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 )}
 
 <script>
+  import { antiSpamFields, submitMailingListSignup } from '../lib/mailing-list';
+
   (function() {
     const widgetIds = new Map<HTMLElement, string>();
     let turnstileScriptPromise: Promise<void> | null = null;
@@ -422,12 +419,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             return;
           }
 
-          const honeypotName = form.getAttribute('data-honeypot');
-          const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
-          if (honeypotInput && honeypotInput.value.trim() !== '') {
-            return;
-          }
-
           const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
           const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
           const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
@@ -456,101 +447,58 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             return;
           }
 
-          if (turnstileToken) {
-            try {
-              const verifyResponse = await fetch('/api/verify-turnstile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: turnstileToken }),
-              });
-              const verifyResult = await verifyResponse.json();
-              if (!verifyResult.success) {
-                errorEl.textContent = 'Security verification failed. Please try again.';
-                if (typeof (window as any).turnstile !== 'undefined') {
-                  (window as any).turnstile.reset();
-                }
-                turnstileToken = '';
-                return;
-              }
-            } catch {
-              errorEl.textContent = 'Security verification failed. Please try again.';
-              return;
-            }
-          }
           const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (submitBtn) submitBtn.disabled = true;
 
-          try {
-            const action = form.getAttribute('action') || '';
-            const url = new URL(action);
-            url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
-            const params = new URLSearchParams(url.search);
-            params.set('u', params.get('u') || '');
-            params.set('id', params.get('id') || '');
-            if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
-            params.set('EMAIL', email);
-            const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
-            if (tagInput?.value) params.set('tags', tagInput.value);
-            const callbackName = '__mc_cb_' + Math.random().toString(36).slice(2);
-            params.set('c', callbackName);
-            const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+          // The route verifies the Turnstile token (once: a token can't be
+          // reused), re-runs the bot checks and hands the address to the
+          // integrations service.
+          const result = await submitMailingListSignup({
+            email,
+            list: (form.getAttribute('data-list') || 'newsletter') as 'newsletter' | 'volunteer',
+            source: form.getAttribute('data-posthog-source') || 'website_form',
+            turnstileToken,
+            antiSpam: antiSpamFields(form, antiSpamConfig),
+          });
 
-            const script = document.createElement('script');
-            script.src = jsonpUrl;
-            script.async = true;
+          // Whatever happened, the token is spent; a retry needs a fresh one.
+          turnstileToken = '';
+          if (tokenInput) tokenInput.value = '';
+          const widgetId = turnstileContainer ? widgetIds.get(turnstileContainer) : undefined;
+          if (widgetId && typeof (window as any).turnstile?.reset === 'function') {
+            try { (window as any).turnstile.reset(widgetId); } catch {}
+          }
+          if (submitBtn) submitBtn.disabled = false;
 
-            function scriptCleanup() {
-              try { delete (window as any)[callbackName]; } catch {}
-              if (script.parentNode) script.parentNode.removeChild(script);
-            }
+          if (!result.ok) {
+            if (successEl) successEl.classList.add('hidden');
+            errorEl.textContent = result.error;
+            return;
+          }
 
-            (window as any)[callbackName] = function(response: any) {
-              scriptCleanup();
-              if (response?.result === 'success') {
-                emailInput.value = '';
-                errorEl.textContent = '';
-                if (successEl) {
-                  const successMsg = form.getAttribute('data-success-message') || 'Thanks for subscribing!';
-                  successEl.textContent = successMsg;
-                  successEl.classList.remove('hidden');
-                }
-                const urlObj = new URL(window.location.href);
-                urlObj.searchParams.set('subscribed', '1');
-                window.history.replaceState({}, '', urlObj.toString());
+          emailInput.value = '';
+          errorEl.textContent = '';
+          if (successEl) {
+            const successMsg = form.getAttribute('data-success-message') || 'Thanks for subscribing!';
+            successEl.textContent = successMsg;
+            successEl.classList.remove('hidden');
+          }
+          const urlObj = new URL(window.location.href);
+          urlObj.searchParams.set('subscribed', '1');
+          window.history.replaceState({}, '', urlObj.toString());
 
-                if ((window as any).posthog) {
-                  const phSource = form.getAttribute('data-posthog-source') || 'website_form';
-                  const attribution = (window as any).pyreAttribution
-                    ? (window as any).pyreAttribution()
-                    : {};
-                  (window as any).posthog.identify(email);
-                  (window as any).posthog.people.set({
-                    email: email,
-                    signup_source: 'mailing_list',
-                    signup_date: new Date().toISOString()
-                  });
-                  (window as any).posthog.capture('Mailing List Signup', { email, source: phSource, ...attribution });
-                }
-              } else if (response?.msg) {
-                if (successEl) successEl.classList.add('hidden');
-                errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
-              } else {
-                if (successEl) successEl.classList.add('hidden');
-                errorEl.textContent = 'Something went wrong. Please try again later.';
-              }
-              if (submitBtn) submitBtn.disabled = false;
-            };
-
-            script.addEventListener('error', () => {
-              scriptCleanup();
-              if (submitBtn) submitBtn.disabled = false;
-              form.submit();
-            }, { once: true });
-
-            document.body.appendChild(script);
-          } catch {
-            if (submitBtn) submitBtn.disabled = false;
-            form.submit();
+          if ((window as any).posthog) {
+            const phSource = form.getAttribute('data-posthog-source') || 'website_form';
+            const attribution = (window as any).pyreAttribution
+              ? (window as any).pyreAttribution()
+              : {};
+            (window as any).posthog.identify(email);
+            (window as any).posthog.people.set({
+              email: email,
+              signup_source: 'mailing_list',
+              signup_date: new Date().toISOString()
+            });
+            (window as any).posthog.capture('Mailing List Signup', { email, source: phSource, ...attribution });
           }
         };
 

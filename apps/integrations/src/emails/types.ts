@@ -50,12 +50,32 @@ export interface MarketingEmailBaseProps {
 export interface JourneyEmailProps extends MarketingEmailBaseProps {
   subject: string;
   preview: string;
-  background: 'clouds' | 'trees' | 'lamps';
+  /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
+  background: string;
+  /** 'pyre' (or unset) for Pyre's logo, 'none' for no logo, or an uploaded image's address. */
+  logo?: string;
   blocks: EmailBlockInput[];
   /** utm_campaign for tracked links — the journey's campaign, else its id. */
   campaign: string;
   /** The step's key, prefixed onto each link's utm_content. */
   stepKey?: string;
+}
+
+/**
+ * The monthly newsletter (/admin/newsletters). Same blocks as a journey email;
+ * unsubscribeUrl is required because the footer link is not optional here.
+ */
+export interface NewsletterEmailProps {
+  subject: string;
+  preview: string;
+  /** A preset photo (clouds, trees, lamps) or an uploaded image's address. */
+  background: string;
+  /** 'pyre' (or unset) for Pyre's logo, 'none' for no logo, or an uploaded image's address. */
+  logo?: string;
+  blocks: EmailBlockInput[];
+  /** utm_campaign for tracked links: the newsletter campaign's slug. */
+  campaign: string;
+  unsubscribeUrl: string;
 }
 
 // Partner verification lifecycle (all transactional — no unsubscribeUrl).
@@ -89,6 +109,31 @@ export interface PartnerDeniedProps {
   partnerName: string;
   /** 'denied' = partner said no; 'expired' = nobody responded in time. */
   reason: 'denied' | 'expired';
+}
+
+// Member perks (Pyre member -> partner; lib/partner/member-verification.ts).
+
+export interface PartnerMemberConfirmProps {
+  partnerName: string;
+  /** What the partner gives Pyre members, e.g. "15% off". */
+  memberPerk: string;
+  confirmUrl: string;
+  expiresDays: number;
+}
+
+export interface PartnerMemberVerifiedProps {
+  partnerName: string;
+  /** From Momence, not the form. */
+  memberName: string;
+  memberEmail: string;
+  membershipName: string;
+  /** ISO; the membership's start in Momence, when it has one. */
+  memberSince: string | null;
+  /** ISO; null = no end date (renews until cancelled). */
+  validThrough: string | null;
+  memberPerk: string;
+  /** ISO; when Momence was checked. */
+  verifiedAt: string;
 }
 
 export interface PartnerReconciliationProps {
@@ -436,10 +481,13 @@ export interface ScheduleLintProps {
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   journey: JourneyEmailProps;
+  newsletter: NewsletterEmailProps;
   'partner-verification-request': PartnerVerificationRequestProps;
   'partner-verified': PartnerVerifiedProps;
   'partner-denied': PartnerDeniedProps;
   'partner-reconciliation': PartnerReconciliationProps;
+  'partner-member-confirm': PartnerMemberConfirmProps;
+  'partner-member-verified': PartnerMemberVerifiedProps;
   'referral-redeemed': ReferralRedeemedProps;
   'referral-reward-earned': ReferralRewardEarnedProps;
   'admin-message': AdminMessageEmailProps;

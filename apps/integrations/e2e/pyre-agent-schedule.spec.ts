@@ -31,8 +31,8 @@ import {
   test,
   weekLabel,
 } from './pyre-agent-helpers';
-import { ADMIN, REVOCABLE_SCHEDULER, SCHEDULE_VIEWER, SCHEDULER, STAFF, STAFF_2 } from './roles';
-import { mock } from './test';
+import { ADMIN, SCHEDULE_VIEWER, SCHEDULER, STAFF, STAFF_2 } from './roles';
+import { mock, open } from './test';
 
 test.describe.configure({ mode: 'parallel' });
 
@@ -74,7 +74,8 @@ async function draftItems(db: Db, proposalId: string) {
       const { data, error } = await db
         .from(table)
         .select('id, is_draft')
-        .eq('proposal_id', proposalId);
+        .eq('proposal_id', proposalId)
+        .order('id');
       expect(error).toBeNull();
       return (data ?? []) as Array<{ id: string; is_draft: boolean }>;
     })
@@ -108,9 +109,13 @@ test.describe('drafting from the chat', () => {
     marker,
     seedShift,
     days,
+    dayOf,
     staffId,
     schedulerSessions,
   }) => {
+    // A long flow with several agent round trips; it ran out of the default
+    // 30s on mobile-safari in CI.
+    test.slow();
     const monday = await seedShift({ daysAhead: days.ahead(0) });
     const tuesday = await seedShift({ daysAhead: days.ahead(1) });
     const note = `Give Sam the Monday ${marker}`;
@@ -157,13 +162,27 @@ test.describe('drafting from the chat', () => {
       weekStart: week,
       agentSessionId: scheduler.id,
       summary: { uncoveredShifts: 1, warnings: [`Short a lead on Tuesday ${marker}`] },
+      shifts: [
+        {
+          key: 'wed',
+          shiftDate: dayOf(2),
+          label: `E2E shift ${marker}`,
+          startsAt: '12:00',
+          endsAt: '14:00',
+          staffNeeded: 1,
+        },
+      ],
       assignments: [
         { shiftId: monday.id, staffId: await staffId(STAFF) },
         { shiftId: tuesday.id, staffId: await staffId(STAFF_2) },
+        { shiftKey: 'wed', staffId: await staffId(STAFF) },
+      ],
+      dutyAssignments: [
+        { dutyKey: OFF_SHIFT_DUTY.key, date: dayOf(2), staffId: await staffId(STAFF_2) },
       ],
     });
 
-    await expect(card).toContainText('2 items waiting for review', { timeout: 20_000 });
+    await expect(card).toContainText('5 items waiting for review', { timeout: 20_000 });
     await expect(card).toContainText('1 shift left uncovered');
     await expect(card).toContainText(`Short a lead on Tuesday ${marker}`);
     await expect(card.getByRole('link', { name: 'Open on the board' })).toHaveAttribute(
@@ -175,7 +194,11 @@ test.describe('drafting from the chat', () => {
 
     // Nothing is live and nobody has been told.
     const items = await draftItems(db, proposalId);
-    expect(items.assignments.every((a) => a.is_draft)).toBe(true);
+    expect(items).toEqual({
+      shifts: [expect.objectContaining({ is_draft: true })],
+      assignments: Array.from({ length: 3 }, () => expect.objectContaining({ is_draft: true })),
+      duties: [expect.objectContaining({ is_draft: true })],
+    });
     expect(await scheduleNotices(db, STAFF.email, [proposalId, monday.id])).toHaveLength(0);
 
     // Asking to approve only proposes.
@@ -183,7 +206,7 @@ test.describe('drafting from the chat', () => {
     const proposed = page.getByRole('region', { name: 'Proposed changes' });
     await expect(proposed).toContainText('Schedule draft');
     await expect(proposed).toContainText('Approve the whole draft');
-    expect((await draftItems(db, proposalId)).assignments.every((a) => a.is_draft)).toBe(true);
+    expect(await draftItems(db, proposalId)).toEqual(items);
     expect(await proposalStatus(db, proposalId)).toBe('draft');
     expect(await scheduleNotices(db, STAFF.email, [proposalId, monday.id])).toHaveLength(0);
 
@@ -191,7 +214,11 @@ test.describe('drafting from the chat', () => {
     await expect(proposed).toContainText('Applied');
 
     expect(await proposalStatus(db, proposalId)).toBe('approved');
-    expect((await draftItems(db, proposalId)).assignments.every((a) => !a.is_draft)).toBe(true);
+    expect(await draftItems(db, proposalId)).toEqual({
+      shifts: items.shifts.map((item) => ({ ...item, is_draft: false })),
+      assignments: items.assignments.map((item) => ({ ...item, is_draft: false })),
+      duties: items.duties.map((item) => ({ ...item, is_draft: false })),
+    });
     const { data: log } = await db
       .from('schedule_changes')
       .select('actor_email, action')
@@ -206,6 +233,7 @@ test.describe('drafting from the chat', () => {
 
   test('a revision replaces the card, and the conversation survives a reload', async ({
     page,
+    db,
     request,
     week,
     marker,
@@ -228,7 +256,7 @@ test.describe('drafting from the chat', () => {
     await openChat(page);
     await ask(page, `Draft ${week} ${marker}`, `First draft started ${marker}.`);
     const [scheduler] = await schedulerSessions();
-    await saveDraft(request, {
+    const original = await saveDraft(request, {
       weekStart: week,
       agentSessionId: scheduler.id,
       assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF) }],
@@ -239,20 +267,32 @@ test.describe('drafting from the chat', () => {
     await ask(page, 'Use Casey instead', 'Revision sent.');
     await expect(card).toContainText('Revising the draft');
     await expect(draftCard(page, weekLabel(week))).toHaveCount(1);
+    const latestTurn = page
+      .getByRole('listitem')
+      .filter({ has: page.getByText('Revision sent.', { exact: true }) });
+    await expect(
+      latestTurn.getByRole('region', { name: `Schedule draft for the week of ${weekLabel(week)}` })
+    ).toHaveCount(1);
 
-    await saveDraft(request, {
+    const replacement = await saveDraft(request, {
       weekStart: week,
       agentSessionId: scheduler.id,
       assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF_2) }],
     });
     await card.getByText('Show every item').click();
     await expect(card).toContainText(STAFF_2.displayName, { timeout: 20_000 });
+    await expect(card).not.toContainText(STAFF.displayName);
+    expect(await proposalStatus(db, original)).toBe('superseded');
+    expect(await proposalStatus(db, replacement)).toBe('draft');
 
     await page.reload();
     await expect(page.getByText('Revision sent.')).toBeVisible();
     await expect(page.getByText(`First draft started ${marker}.`)).toBeVisible();
     await expect(draftCard(page, weekLabel(week))).toHaveCount(1);
     await expect(draftCard(page, weekLabel(week))).toContainText('1 item waiting for review');
+    await card.getByText('Show every item').click();
+    await expect(card).toContainText(STAFF_2.displayName);
+    await expect(card).not.toContainText(STAFF.displayName);
   });
 
   test('leaving the chat: the notice brings the person back to the draft', async ({
@@ -287,14 +327,17 @@ test.describe('drafting from the chat', () => {
       agentSessionId: scheduler.id,
       assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF) }],
     });
-    const [notice] = await proposalNotices(db, SCHEDULER.email, first);
+    const notices = await proposalNotices(db, SCHEDULER.email, first);
+    expect(notices).toHaveLength(1);
+    const [notice] = notices;
     expect(notice).toMatchObject({
       kind: 'schedule_change',
       href: `/admin/ask?c=${encodeURIComponent(chat.id)}`,
     });
     expect(notice.title).toContain('Draft schedule ready');
 
-    await page.goto(notice.href as string);
+    // Wait for the chat to hydrate: ask() below types into its composer.
+    await open(page, notice.href as string);
     await expect(draftCard(page, weekLabel(week))).toContainText('1 item waiting for review');
 
     // A revision asked for here is announced the same way.
@@ -304,7 +347,9 @@ test.describe('drafting from the chat', () => {
       agentSessionId: scheduler.id,
       assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF_2) }],
     });
-    const [revised] = await proposalNotices(db, SCHEDULER.email, second);
+    const revisedNotices = await proposalNotices(db, SCHEDULER.email, second);
+    expect(revisedNotices).toHaveLength(1);
+    const [revised] = revisedNotices;
     expect(revised.title).toContain('Revised draft ready');
     expect(revised.href).toBe(`/admin/ask?c=${encodeURIComponent(chat.id)}`);
 
@@ -425,7 +470,7 @@ test.describe('confirming parts of a draft', { tag: DESKTOP_ONLY_TAG }, () => {
         {
           key: 'thu',
           shiftDate: dayOf(3),
-          label: `E2E shift ${marker} new`,
+          label: `E2E shift ${marker}`,
           startsAt: '12:00',
           endsAt: '14:00',
           staffNeeded: 1,
@@ -580,14 +625,21 @@ test.describe('confirming parts of a draft', { tag: DESKTOP_ONLY_TAG }, () => {
       );
       if (replacement) {
         expect(await proposalStatus(db, replacement)).toBe('draft');
-        expect((await draftItems(db, replacement)).assignments.every((a) => a.is_draft)).toBe(true);
+        expect((await draftItems(db, replacement)).assignments).toEqual([
+          expect.objectContaining({ is_draft: true }),
+        ]);
         expect(await scheduleNotices(db, STAFF_2.email, [replacement, shift.id])).toHaveLength(0);
         // Clear the way for the next round.
-        await scheduler.post(REVIEW_API, { data: { action: 'discard', proposalId: replacement } });
+        const discarded = await scheduler.post(REVIEW_API, {
+          data: { action: 'discard', proposalId: replacement },
+        });
+        expect(discarded.status(), await discarded.text()).toBe(200);
       }
       if (change === 'approved') {
         // Take the live assignment off again so the shift is open for nothing else.
-        await db.from('shift_assignments').delete().eq('proposal_id', original);
+        expect(
+          (await db.from('shift_assignments').delete().eq('proposal_id', original)).error
+        ).toBeNull();
       }
     }
   });
@@ -652,6 +704,7 @@ test.describe('confirming parts of a draft', { tag: DESKTOP_ONLY_TAG }, () => {
       .eq('entity_id', monA)
       .eq('action', 'accept_item');
     expect(accepts).toHaveLength(1);
+    expect(await rows(db, 'shift_assignments', [monA])).toEqual([{ id: monA, is_draft: false }]);
 
     // One item decided on the board first: the other still applies, and the card says so.
     const partial = await propose(
@@ -681,9 +734,11 @@ test.describe('confirming parts of a draft', { tag: DESKTOP_ONLY_TAG }, () => {
     const fresh = await assignmentIds(db, (await openProposalId(db, week)) as string);
     const lone = fresh.get(`${wed.id}:${casey}`) as string;
     const doomed = await propose({ accept: [`assignment:${lone}`] }, 'doomed');
-    await scheduler.post(REVIEW_API, {
+    const rejected = await scheduler.post(REVIEW_API, {
       data: { action: 'reject-item', kind: 'assignment', id: lone },
     });
+    expect(rejected.status(), await rejected.text()).toBe(200);
+    expect(await rows(db, 'shift_assignments', [lone])).toEqual([]);
     const refused = await scheduler.post(ACTIONS_API, { data: { id: doomed, action: 'apply' } });
     expect(refused.status()).toBe(422);
     const refusedAction = ((await refused.json()) as { action: { status: string; error: string } })
@@ -694,12 +749,13 @@ test.describe('confirming parts of a draft', { tag: DESKTOP_ONLY_TAG }, () => {
 });
 
 async function openProposalId(db: Db, week: string): Promise<string | null> {
-  const { data } = await db
+  const { data, error } = await db
     .from('schedule_proposals')
     .select('id')
     .eq('week_start', week)
     .eq('status', 'draft')
     .maybeSingle();
+  expect(error, 'read open proposal').toBeNull();
   return (data as { id: string } | null)?.id ?? null;
 }
 
@@ -743,6 +799,13 @@ test.describe('who may draft and confirm', { tag: DESKTOP_ONLY_TAG }, () => {
     expect(
       (await viewerPage.post('/api/admin/schedule-draft', { data: { weekStart: week } })).status()
     ).toBe(403);
+    expect(
+      (
+        await viewerPage.post('/api/admin/schedule-draft-refine', {
+          data: { weekStart: week, prompt: 'x' },
+        })
+      ).status()
+    ).toBe(403);
     expect(await schedulerSessions()).toHaveLength(1);
 
     // Someone else cannot apply the requester's confirmation.
@@ -760,12 +823,15 @@ test.describe('who may draft and confirm', { tag: DESKTOP_ONLY_TAG }, () => {
       { kind: 'schedule.review', weekStart: week, acceptAll: true, rationale: 'mine' },
       `${marker}-owner`
     );
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
     const actionId = (proposed.body.proposal as { id: string }).id;
+    const itemsBefore = await draftItems(db, proposalId);
     const byOther = await (await as(ADMIN)).post(ACTIONS_API, {
       data: { id: actionId, action: 'apply' },
     });
     expect(byOther.status()).toBe(404);
     expect(await proposalStatus(db, proposalId)).toBe('draft');
+    expect(await draftItems(db, proposalId)).toEqual(itemsBefore);
   });
 
   test('a manager whose grant is taken away before Apply cannot publish', async ({
@@ -777,49 +843,44 @@ test.describe('who may draft and confirm', { tag: DESKTOP_ONLY_TAG }, () => {
     seedShift,
     staffId,
     schedulerSessions,
+    revocableScheduler,
   }) => {
     const shift = await seedShift();
     const admin = await as(ADMIN);
-    const { data: person } = await db
-      .from('staff')
-      .select('id, pages')
-      .eq('email', REVOCABLE_SCHEDULER.email)
-      .single();
-    const { id, pages } = person as { id: string; pages: string[] };
+    const { id, email, client } = revocableScheduler;
+    const started = await pyreOp(request, email, 'schedule_start', { weekStart: week });
+    expect(started.status, JSON.stringify(started.body)).toBe(200);
+    const [session] = await schedulerSessions();
+    const proposalId = await saveDraft(request, {
+      weekStart: week,
+      agentSessionId: session.id,
+      assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF) }],
+    });
+    const proposed = await pyreOp(
+      request,
+      email,
+      'propose',
+      { kind: 'schedule.review', weekStart: week, acceptAll: true, rationale: 'before' },
+      `${marker}-revoked`
+    );
+    expect(proposed.status).toBe(200);
+    const actionId = (proposed.body.proposal as { id: string }).id;
 
-    try {
-      await pyreOp(request, REVOCABLE_SCHEDULER.email, 'schedule_start', { weekStart: week });
-      const [session] = await schedulerSessions();
-      const proposalId = await saveDraft(request, {
-        weekStart: week,
-        agentSessionId: session.id,
-        assignments: [{ shiftId: shift.id, staffId: await staffId(STAFF) }],
-      });
-      const proposed = await pyreOp(
-        request,
-        REVOCABLE_SCHEDULER.email,
-        'propose',
-        { kind: 'schedule.review', weekStart: week, acceptAll: true, rationale: 'before' },
-        `${marker}-revoked`
-      );
-      expect(proposed.status).toBe(200);
-      const actionId = (proposed.body.proposal as { id: string }).id;
+    const revoked = await admin.patch('/api/admin/users', {
+      data: { id, pages: ['/admin/ask', '/admin/schedule'] },
+    });
+    expect(revoked.status(), await revoked.text()).toBe(200);
 
-      const revoked = await admin.patch('/api/admin/users', {
-        data: { id, pages: ['/admin/ask', '/admin/schedule'] },
-      });
-      expect(revoked.status(), await revoked.text()).toBe(200);
-
-      const applied = await (await as(REVOCABLE_SCHEDULER)).post(ACTIONS_API, {
-        data: { id: actionId, action: 'apply' },
-      });
-      expect(applied.status()).toBe(422);
-      expect(await proposalStatus(db, proposalId)).toBe('draft');
-      expect(await scheduleNotices(db, STAFF.email, [proposalId, shift.id])).toHaveLength(0);
-    } finally {
-      const restored = await admin.patch('/api/admin/users', { data: { id, pages } });
-      expect(restored.status(), 'restore the grant').toBe(200);
-    }
+    const applied = await client.post(ACTIONS_API, {
+      data: { id: actionId, action: 'apply' },
+    });
+    expect(applied.status()).toBe(422);
+    expect((await applied.json()).action).toMatchObject({ status: 'pending', error: 'Forbidden' });
+    expect(await proposalStatus(db, proposalId)).toBe('draft');
+    expect((await draftItems(db, proposalId)).assignments).toEqual([
+      expect.objectContaining({ is_draft: true }),
+    ]);
+    expect(await scheduleNotices(db, STAFF.email, [proposalId, shift.id])).toHaveLength(0);
   });
 });
 
@@ -853,9 +914,10 @@ test.describe('revising', { tag: DESKTOP_ONLY_TAG }, () => {
     });
     // Monday is confirmed on the board before any revision.
     const confirmed = (await assignmentIds(db, original)).get(`${mon.id}:${sam}`) as string;
-    await (await as(SCHEDULER)).post(REVIEW_API, {
+    const accepted = await (await as(SCHEDULER)).post(REVIEW_API, {
       data: { action: 'accept-item', kind: 'assignment', id: confirmed },
     });
+    expect(accepted.status(), await accepted.text()).toBe(200);
 
     // Parked: the note goes into the same session.
     const parked = await pyreOp(request, SCHEDULER.email, 'schedule_revise', {
@@ -888,11 +950,19 @@ test.describe('revising', { tag: DESKTOP_ONLY_TAG }, () => {
     expect(fresh.messages[0]).toContain('no longer available');
     expect(fresh.messages[0]).toContain('Second note');
     expect(fresh.messages[0]).toContain('Third note');
-    const { data: thread } = await db
+    const { data: thread, error: threadError } = await db
       .from('schedule_draft_messages')
-      .select('agent_session_id')
-      .eq('week_start', week);
-    expect(new Set((thread ?? []).map((t) => t.agent_session_id))).toEqual(new Set([fresh.id]));
+      .select('agent_session_id, content')
+      .eq('week_start', week)
+      .eq('role', 'admin')
+      .order('created_at');
+    expect(threadError).toBeNull();
+    expect(thread).toEqual(
+      ['First note', 'Second note', 'Third note'].map((content) => ({
+        agent_session_id: fresh.id,
+        content,
+      }))
+    );
     const last = await saveDraft(request, {
       weekStart: week,
       agentSessionId: fresh.id,
@@ -984,7 +1054,12 @@ test.describe('the board after the shared-run refactor', { tag: DESKTOP_ONLY_TAG
       expect(body.sessions.map((s) => s.weekStart)).toEqual([past, week]);
       expect(body.weekStart).toBe(past);
       expect(body.sessionId).toBe(body.sessions[0].sessionId);
-      expect(body.sync).toBeTruthy();
+      expect(body.sync).toMatchObject({
+        dryRun: false,
+        horizonDays: 21,
+        events: expect.any(Number),
+        windows: expect.any(Number),
+      });
       for (const { weekStart, sessionId } of body.sessions) {
         const session = await eve.session(sessionId);
         expect(session.messages[0]).toContain(`week starting ${weekStart}`);
@@ -1020,14 +1095,18 @@ test.describe('the board after the shared-run refactor', { tag: DESKTOP_ONLY_TAG
       });
       expect(empty.status()).toBe(400);
     } finally {
-      await db.from('schedule_draft_messages').delete().eq('week_start', past);
-      await db.from('schedule_draft_requests').delete().eq('week_start', past);
+      expect(
+        (await db.from('schedule_draft_messages').delete().eq('week_start', past)).error
+      ).toBeNull();
+      expect(
+        (await db.from('schedule_draft_requests').delete().eq('week_start', past)).error
+      ).toBeNull();
     }
   });
 });
 
 test.describe('the weekly routine', { tag: DESKTOP_ONLY_TAG }, () => {
-  test('a Monday routine drafts as its owner, and the draft waits for Apply', async ({
+  test('a due weekly routine drafts as its owner, and the draft waits for Apply', async ({
     as,
     db,
     request,
@@ -1058,29 +1137,58 @@ test.describe('the weekly routine', { tag: DESKTOP_ONLY_TAG }, () => {
 
     try {
       // Due now.
-      await db
+      const due = await db
         .from('pyre_agent_routines')
         .update({ next_run_at: new Date(Date.now() - 60_000).toISOString() })
-        .eq('id', routineId);
+        .eq('id', routineId)
+        .select('id');
+      expect(due.error).toBeNull();
+      expect(due.data).toEqual([{ id: routineId }]);
       const tick = await request.get('/api/cron/tick?job=pyre-agent-routines', {
         headers: { authorization: `Bearer ${SECRETS.cron}` },
         timeout: 60_000,
       });
       expect(tick.status()).toBe(200);
+      const tickBody = await tick.json();
+      expect(tickBody.jobs['pyre-agent-routines']).toMatchObject({ dryRun: false, failed: [] });
 
-      const [chat] = await eve.knowledgeSessions(marker);
+      const chats = await eve.knowledgeSessions(marker);
+      expect(chats).toHaveLength(1);
+      const [chat] = chats;
       expect(chat.scope).toMatchObject({ email: SCHEDULER.email, scheduleManage: true });
       expect(chat.routineRunId).toBeTruthy();
-      await expect
-        .poll(async () => {
-          const { data: run } = await db
-            .from('pyre_agent_routine_runs')
-            .select('status, trigger, session_id')
-            .eq('id', chat.routineRunId as string)
-            .single();
-          return run;
-        })
-        .toEqual({ status: 'answered', trigger: 'scheduled', session_id: chat.id });
+      const readRun = async () => {
+        const { data: run, error } = await db
+          .from('pyre_agent_routine_runs')
+          .select('status, trigger, session_id')
+          .eq('id', chat.routineRunId as string)
+          .single();
+        expect(error).toBeNull();
+        return run;
+      };
+      expect(await readRun()).toEqual({
+        status: 'running',
+        trigger: 'scheduled',
+        session_id: chat.id,
+      });
+      // Release the agent callback only after the app has saved its session.
+      await eve.reportRoutine(chat.id);
+      expect(await readRun()).toEqual({
+        status: 'answered',
+        trigger: 'scheduled',
+        session_id: chat.id,
+      });
+      const routineNotices = await proposalNotices(
+        db,
+        SCHEDULER.email,
+        chat.routineRunId as string
+      );
+      expect(routineNotices).toEqual([
+        expect.objectContaining({
+          kind: 'agent_routine',
+          href: `/admin/ask?c=${encodeURIComponent(chat.id)}`,
+        }),
+      ]);
 
       const [requestRow] = await draftRequests(db, week);
       expect(requestRow).toMatchObject({
@@ -1097,19 +1205,26 @@ test.describe('the weekly routine', { tag: DESKTOP_ONLY_TAG }, () => {
       const [notice] = await proposalNotices(db, SCHEDULER.email, proposalId);
       expect(notice.href).toBe(`/admin/ask?c=${encodeURIComponent(chat.id)}`);
       expect(await proposalStatus(db, proposalId)).toBe('draft');
-      expect((await draftItems(db, proposalId)).assignments.every((a) => a.is_draft)).toBe(true);
+      expect((await draftItems(db, proposalId)).assignments).toEqual([
+        expect.objectContaining({ is_draft: true }),
+      ]);
       expect(await scheduleNotices(db, STAFF.email, [proposalId, shift.id])).toHaveLength(0);
     } finally {
-      const { data: runs } = await db
+      const { data: runs, error } = await db
         .from('pyre_agent_routine_runs')
         .select('id')
         .eq('routine_id', routineId);
+      expect(error).toBeNull();
       const runIds = (runs ?? []).map((r) => r.id as string);
       if (runIds.length > 0) {
-        await db.from('staff_notifications').delete().in('source_id', runIds);
+        expect(
+          (await db.from('staff_notifications').delete().in('source_id', runIds)).error
+        ).toBeNull();
       }
-      await db.from('pyre_agent_routine_runs').delete().eq('routine_id', routineId);
-      await db.from('pyre_agent_routines').delete().eq('id', routineId);
+      expect(
+        (await db.from('pyre_agent_routine_runs').delete().eq('routine_id', routineId)).error
+      ).toBeNull();
+      expect((await db.from('pyre_agent_routines').delete().eq('id', routineId)).error).toBeNull();
     }
   });
 });

@@ -193,22 +193,26 @@ test.describe('a manager', () => {
     expect(configure.status()).toBe(200);
 
     await page.getByLabel('Search inventory').fill(name);
+    await expect(row(page, name)).toHaveCount(1);
     // Delete by keyboard, as the menu supports: it focuses its first item on
     // open and closes on any scroll, and a scripted click scrolls the item
     // into view first (on the Pixel profile that closes it). Delete is last,
-    // so ArrowUp wraps to it. Retried as a whole: the row re-renders as the
-    // saved item comes back, which can close a menu opened too early.
+    // so ArrowUp wraps to it. Retried as a whole, up to the row going: the
+    // list revalidates behind its cached copy, and a refetch that lands after
+    // the add re-renders the row, closing a menu opened before it (and
+    // swallowing the Enter meant for Delete).
+    // Deleting asks with the browser's own confirm().
+    page.on('dialog', (dialog) => void dialog.accept());
     await expect(async () => {
+      if ((await row(page, name).count()) === 0) return;
       if (!(await page.getByRole('menuitem', { name: 'Delete' }).isVisible())) {
         await page.getByRole('button', { name: `Options for ${name}` }).click();
       }
       await page.keyboard.press('ArrowUp');
       await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeFocused({ timeout: 2_000 });
-    }).toPass({ timeout: 15_000 });
-    // Deleting asks with the browser's own confirm().
-    page.once('dialog', (dialog) => void dialog.accept());
-    await page.keyboard.press('Enter');
-    await expect(row(page, name)).toHaveCount(0);
+      await page.keyboard.press('Enter');
+      await expect(row(page, name)).toHaveCount(0, { timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
     await expect
       .poll(async () => (await db.from('inventory').select('id').eq('id', id)).data)
       .toEqual([]);

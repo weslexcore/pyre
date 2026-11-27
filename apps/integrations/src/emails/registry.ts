@@ -6,7 +6,10 @@ import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
+import { NewsletterEmail } from './templates/NewsletterEmail';
 import { PartnerDenied } from './templates/PartnerDenied';
+import { PartnerMemberConfirm } from './templates/PartnerMemberConfirm';
+import { PartnerMemberVerified } from './templates/PartnerMemberVerified';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
@@ -45,6 +48,13 @@ export const EMAIL_TEMPLATES: Registry = {
     subject: (p) => p.subject,
     Component: JourneyEmail,
   },
+  // The monthly newsletter. Registered so its live switch shows on
+  // /admin/email-templates; the newsletter send job (lib/email/newsletter)
+  // renders and sends it, never sendTemplate().
+  newsletter: {
+    subject: (p) => p.subject,
+    Component: NewsletterEmail,
+  },
   'partner-verification-request': {
     subject: (p) => `Membership check: ${p.customerName} - Pyre x ${p.partnerName}`,
     Component: PartnerVerificationRequest,
@@ -60,6 +70,14 @@ export const EMAIL_TEMPLATES: Registry = {
   'partner-reconciliation': {
     subject: (p) => `Quarterly member check - Pyre x ${p.partnerName}`,
     Component: PartnerReconciliation,
+  },
+  'partner-member-confirm': {
+    subject: (p) => `Confirm your ${p.partnerName} member perk`,
+    Component: PartnerMemberConfirm,
+  },
+  'partner-member-verified': {
+    subject: (p) => `Verified Pyre member: ${p.memberName} - Pyre x ${p.partnerName}`,
+    Component: PartnerMemberVerified,
   },
   'referral-redeemed': {
     subject: (p) => `${p.referrerName} gave you ${p.discountPercent}% off at Pyre`,

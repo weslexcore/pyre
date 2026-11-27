@@ -24,7 +24,11 @@ test.describe('the Pyre Agent dock', () => {
     // during the first render) does not match its server HTML, and React
     // re-renders it on the client. Page loads by URL never warm, so only a
     // spec that follows a link sees it.
-    test.use({ consoleAllowlist: allowConsole('Hydration failed because the server rendered') });
+    test.use({
+      consoleAllowlist: allowConsole(
+        /Hydration failed because the server rendered[\s\S]*<InventoryList>/
+      ),
+    });
 
     test('ask from any page; closing it or changing pages keeps the chat', async ({
       page,
@@ -40,7 +44,10 @@ test.describe('the Pyre Agent dock', () => {
       await launcher.click();
       await expect(dock).toBeVisible();
 
-      await dock.getByLabel('Your question').fill(`What is ${marker}?`);
+      const question = `What is ${marker}?`;
+      await dock.getByLabel('Your question').fill(question);
+      await expect(dock.getByLabel('Your question')).toHaveValue(question);
+      await expect(dock.getByRole('button', { name: 'Send' })).toBeEnabled();
       await dock.getByRole('button', { name: 'Send' }).click();
       await expect(dock.getByText(answer)).toBeVisible({ timeout: 30_000 });
       // The dock never writes the conversation into another page's URL.
@@ -85,7 +92,11 @@ test.describe('the Pyre Agent dock', () => {
     const launcher = page.getByRole('button', { name: 'Pyre Agent' });
     const dock = page.getByRole('dialog', { name: 'Pyre Agent' });
     await launcher.click();
-    await dock.getByLabel('Your question').fill(`Tell me about ${marker}`);
+    await expect(dock).toBeVisible();
+    const question = `Tell me about ${marker}`;
+    await dock.getByLabel('Your question').fill(question);
+    await expect(dock.getByLabel('Your question')).toHaveValue(question);
+    await expect(dock.getByRole('button', { name: 'Send' })).toBeEnabled();
     await dock.getByRole('button', { name: 'Send' }).click();
     await expect(dock.getByText(answer)).toBeVisible({ timeout: 30_000 });
 

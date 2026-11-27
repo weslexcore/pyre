@@ -159,4 +159,18 @@ export const CRON_JOBS: CronJob[] = [
       return summary as unknown as Record<string, unknown>;
     },
   },
+  {
+    // The newsletter: an issue an admin approved goes out in batches of 100
+    // (lib/email/newsletter/send-job.ts). Last in the list: a big list can
+    // outlast the tick's shared budget, and the send carries on next tick from
+    // where it stopped. Each copy's send_key keeps a resumed send from mailing
+    // anyone twice.
+    name: 'newsletter-send',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/email/newsletter/send-job')).runNewsletterSends(
+        ctx
+      );
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
 ];

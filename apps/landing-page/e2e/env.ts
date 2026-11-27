@@ -32,10 +32,12 @@ export const APP_ENV: Record<string, string> = {
   MOMENCE_HOST_ID: 'e2e',
   MOMENCE_API_TOKEN: 'e2e',
   MOMENCE_API_BASE: `${MOCK_URL}/momence`,
-  // Integrations service (referral lookup / redemption, partner verification)
+  // Integrations service (referral lookup / redemption, partner verification,
+  // mailing-list sign-ups)
   INTEGRATIONS_API_URL: `${MOCK_URL}/integrations`,
   REFERRAL_API_SECRET: E2E_SECRET,
   PARTNER_API_SECRET: E2E_SECRET,
+  MAILING_LIST_API_SECRET: E2E_SECRET,
   // Turnstile (see TURNSTILE_SECRET): a site key so the forms run the widget,
   // and siteverify -> mock server.
   PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: 'e2e-site-key',

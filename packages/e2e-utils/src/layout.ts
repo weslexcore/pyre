@@ -1,6 +1,6 @@
 // Layout assertions shared by every suite.
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Nothing pushes the page wider than the screen. On a phone that shows up as
@@ -41,4 +41,40 @@ export async function waitForHydration(page: Page, timeout = 15_000): Promise<vo
   await page.waitForFunction(() => document.querySelectorAll('astro-island[ssr]').length === 0, null, {
     timeout,
   });
+}
+
+/**
+ * Click a link and wait until the page it leads to has hydrated. Under
+ * Astro's <ClientRouter /> (the integrations dashboard) a link click swaps the
+ * new page's server-rendered HTML in without a page load: its URL and text
+ * show at once, but its islands mount a moment later, and a click or typing
+ * before then is lost. waitForHydration alone can pass on the old page, so
+ * this first waits for the swap to finish (astro:page-load) or for a new
+ * document (a full page load, where the marker below is gone).
+ */
+export async function clickAndHydrate(target: Locator, timeout = 15_000): Promise<void> {
+  const page = target.page();
+  await page.evaluate(() => {
+    const marked = window as Window & { __e2eSwapped?: boolean };
+    marked.__e2eSwapped = false;
+    document.addEventListener(
+      'astro:page-load',
+      () => {
+        marked.__e2eSwapped = true;
+      },
+      { once: true }
+    );
+  });
+  await target.click();
+  await expect
+    .poll(
+      () =>
+        page
+          .evaluate(() => (window as Window & { __e2eSwapped?: boolean }).__e2eSwapped !== false)
+          // The old document's context goes away mid-navigation; try again.
+          .catch(() => false),
+      { timeout, message: 'the link led to a new page' }
+    )
+    .toBe(true);
+  await waitForHydration(page, timeout);
 }

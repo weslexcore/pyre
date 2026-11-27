@@ -58,6 +58,7 @@ interface PartnerFormState {
   decisionExpiryDays: string;
   enabled: boolean;
   reconciliationEnabled: boolean;
+  memberPerk: string;
   notes: string;
 }
 
@@ -71,6 +72,7 @@ const blankForm = (): PartnerFormState => ({
   decisionExpiryDays: '14',
   enabled: true,
   reconciliationEnabled: true,
+  memberPerk: '',
   notes: '',
 });
 
@@ -84,6 +86,7 @@ const formFromRow = (p: PartnerRow): PartnerFormState => ({
   decisionExpiryDays: String(p.decision_expiry_days),
   enabled: p.enabled,
   reconciliationEnabled: p.reconciliation_enabled,
+  memberPerk: p.member_perk ?? '',
   notes: p.notes ?? '',
 });
 
@@ -350,6 +353,23 @@ function PartnerCard({
           </div>
 
           <label className="flex flex-col gap-1">
+            <span className={sectionHeading}>Perk for Pyre members (optional)</span>
+            <span className="font-mono text-xs text-white/30">
+              What this partner gives Pyre members, e.g. "15% off". Set it and Pyre
+              members can ask us, on /perks, to email this partner's contacts that their membership
+              is active. Leave blank and that request is turned off.
+            </span>
+            <input
+              className={inputClass}
+              value={form.memberPerk}
+              disabled={!canManage}
+              maxLength={200}
+              placeholder="none"
+              onChange={(e) => set('memberPerk', e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
             <span className={sectionHeading}>Notes</span>
             <textarea
               className={inputClass}
@@ -469,6 +489,7 @@ function applyForm(partner: PartnerRow, form: PartnerFormState): PartnerRow {
     decision_expiry_days: Number(form.decisionExpiryDays),
     enabled: form.enabled,
     reconciliation_enabled: form.reconciliationEnabled,
+    member_perk: form.memberPerk.trim() || null,
     notes: form.notes || null,
     updated_at: new Date().toISOString(),
   };
@@ -530,6 +551,7 @@ export function PartnersManager() {
       decisionExpiryDays: Number(form.decisionExpiryDays),
       enabled: form.enabled,
       reconciliationEnabled: form.reconciliationEnabled,
+      memberPerk: form.memberPerk,
       notes: form.notes,
     };
     const pendingId = id ?? tempId();
@@ -556,6 +578,7 @@ export function PartnersManager() {
             enabled: false,
             decision_expiry_days: 0,
             reconciliation_enabled: false,
+            member_perk: null,
             notes: null,
             created_by: null,
             updated_by: null,

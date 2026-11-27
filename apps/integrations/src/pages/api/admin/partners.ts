@@ -101,6 +101,12 @@ function parsePartnerColumns(
     columns.reconciliation_enabled = body.reconciliationEnabled === true;
   }
 
+  if (body.memberPerk !== undefined) {
+    const perk = String(body.memberPerk ?? '').trim();
+    if (perk.length > 200) return 'Member perk must be 200 characters or fewer';
+    columns.member_perk = perk || null;
+  }
+
   if (body.notes !== undefined) {
     const notes = String(body.notes ?? '').trim();
     if (notes.length > 2000) return 'Notes must be 2000 characters or fewer';
